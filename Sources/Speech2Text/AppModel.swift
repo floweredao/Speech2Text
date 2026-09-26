@@ -7,11 +7,18 @@ final class AppModel {
     let speech = SpeechEngine()
     private let insertion = TextInsertion()
     @ObservationIgnored private var live: LiveTyper?
+    @ObservationIgnored private var awaitingTarget = false
     var feedback = ""
     var autoInsert = true
     var overlayVisible = true
     var accessibilityGranted = AXIsProcessTrusted()
     var settingsAction: (() -> Void)?
+    var inputDeviceUID: String? = UserDefaults.standard.string(forKey: "inputDeviceUID") {
+        didSet {
+            UserDefaults.standard.set(inputDeviceUID, forKey: "inputDeviceUID")
+            speech.inputDeviceUID = inputDeviceUID
+        }
+    }
     var transcript: String { speech.transcript }
     var status: String { speech.status }
     var isRecording: Bool { speech.isRecording }
@@ -26,11 +33,16 @@ final class AppModel {
     }
 
     init() {
+        speech.inputDeviceUID = inputDeviceUID
         speech.onLiveText = { [weak self] text in self?.mirror(text) }
         speech.onFinal = { [weak self] text in self?.complete(text) }
     }
 
     private func mirror(_ text: String) {
+        if live == nil, awaitingTarget {
+            guard acquireLiveTarget() else { return }
+            feedback = "선택한 칸에 실시간으로 입력해요."
+        }
         guard let live else { return }
         switch live.sync(text) {
         case .applied: break
@@ -46,6 +58,8 @@ final class AppModel {
     private func complete(_ text: String) {
         overlayVisible = true
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if live == nil, awaitingTarget, !empty { _ = acquireLiveTarget() }
+        awaitingTarget = false
         if let live {
             self.live = nil
             switch live.sync(text) {
@@ -63,18 +77,28 @@ final class AppModel {
     private func prepareLiveTyping() {
         accessibilityGranted = insertion.isTrusted
         live = nil
+        awaitingTarget = false
         feedback = ""
         guard autoInsert else { return }
         guard accessibilityGranted else {
             feedback = "기기 제어 권한이 없어 결과를 보관해요."
             return
         }
-        guard let target = insertion.currentTarget(), insertion.isEditable(target) else {
-            feedback = "선택된 입력 칸이 없어 결과를 보관해요."
-            return
+        // Started from our own settings window: give focus back to the app the user was typing in.
+        if NSApp.isActive { NSApp.deactivate() }
+        if acquireLiveTarget() {
+            feedback = "선택한 칸에 실시간으로 입력해요."
+        } else {
+            awaitingTarget = true
+            feedback = "입력할 칸을 클릭하면 그 칸에 바로 써요."
         }
+    }
+
+    private func acquireLiveTarget() -> Bool {
+        guard let target = insertion.currentTarget(), insertion.isEditable(target) else { return false }
         live = LiveTyper(target: target, insertion: insertion)
-        feedback = "선택한 칸에 실시간으로 입력해요."
+        awaitingTarget = false
+        return true
     }
 
     func toggleRecording() {
@@ -90,6 +114,7 @@ final class AppModel {
         let hadTyped = !(live?.typed.isEmpty ?? true)
         let removed = hadTyped && live?.sync("") == .applied
         live = nil
+        awaitingTarget = false
         speech.cancel()
         feedback = removed ? "취소해서 입력하던 내용을 지웠어요." : "취소했어요. 입력하지 않았어요."
     }
@@ -117,6 +142,5 @@ final class AppModel {
     }
     func saveKey() { Task { await speech.saveKey() } }
     func loadKey() { Task { await speech.loadKey() } }
-    func importSourceKey() { Task { await speech.importSourceKey() } }
     func openSettings() { settingsAction?() }
 }

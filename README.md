@@ -16,7 +16,7 @@ open build/Speech2Text.app
 
 ## 받아쓰기
 
-1. 설정에서 Soniox API 키를 입력합니다. **기존 앱에서 가져오기**는 `Speech-to-action`의 저장된 Soniox 키를 명시적으로 불러옵니다. 키체인 접근 창이 나타날 수 있습니다. 저장 버튼을 누르면 이 앱의 별도 키체인에 저장합니다.
+1. 설정에서 Soniox API 키를 붙여넣고 **저장**합니다. 키는 Speech2Text 전용 Keychain 항목(`com.speech2text.credentials`)에만 보관되고 다음 실행 때 자동으로 불러옵니다. 설정의 **사용할 마이크**에서 녹음에 쓸 마이크를 고릅니다(기본값은 시스템 기본 입력).
 2. 접근성 권한을 허용합니다. 처음 녹음을 시작할 때 마이크 권한도 허용합니다.
 3. 터미널·브라우저·메모 등 원하는 앱의 **입력 칸을 먼저 클릭**합니다.
 4. **Control+Option+D**로 시작하고 말합니다. 노치 아래에서 인식 중인 내용을 볼 수 있습니다.
@@ -71,6 +71,6 @@ codesign --verify --deep --strict build/Speech2Text.app
 open build/Speech2Text.app --args --audio-file /absolute/path/sample.aiff --no-auto-insert
 ```
 
-이 실행도 Soniox를 사용합니다. 자신의 앱 키체인 대신 원본 프로젝트의 키를 이번 실행에만 명시적으로 가져오려면 `--import-source-key`를 추가합니다. `--no-auto-insert`를 빼면 실행 당시 입력 칸이 그대로 유지되는 경우 자동 입력합니다.
+이 실행도 Soniox와 앱 전용 Keychain의 키를 사용합니다. `--no-auto-insert`를 빼면 실행 당시 입력 칸이 그대로 유지되는 경우 자동 입력합니다.
 
 빌드 앱은 로컬 ad-hoc 서명입니다. 공증·Applications 설치·로그인 시 실행·GitHub Actions는 설정하지 않습니다.

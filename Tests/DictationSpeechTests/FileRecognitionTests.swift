@@ -35,7 +35,7 @@ import Testing
         defer { try? FileManager.default.removeItem(at: file) }
         let socket = TestSocket()
         let engine = SpeechEngine(sessionFactory: { SonioxSession(transport: socket) },
-                                  audioFactory: { Issue.record("File recognition opened microphone"); return TestAudio() })
+                                  audioFactory: { _ in Issue.record("File recognition opened microphone"); return TestAudio() })
         engine.apiKey = "fixture"
         var finals: [String] = []
         engine.onFinal = { finals.append($0) }

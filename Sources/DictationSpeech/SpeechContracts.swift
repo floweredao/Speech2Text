@@ -31,7 +31,7 @@ protocol CredentialStoring: Sendable {
 enum AppError: Error, Sendable, Equatable, LocalizedError {
     case missingCredential(CredentialKind), invalidResponse(String)
     case provider(code: Int?, message: String)
-    case permissionDenied(String), audioOverflow, timeout(String), cancelled
+    case permissionDenied(String), audioOverflow, timeout(String), cancelled, inputDeviceUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -42,6 +42,7 @@ enum AppError: Error, Sendable, Equatable, LocalizedError {
         case .audioOverflow: "오디오 전송이 지연되어 녹음을 중단했습니다. 다시 시작해 주세요."
         case .timeout(let context): "응답 대기 시간이 초과됐습니다: \(context)"
         case .cancelled: "받아쓰기를 취소했습니다."
+        case .inputDeviceUnavailable: "선택한 마이크를 찾을 수 없습니다. 설정에서 다른 마이크를 고르세요."
         }
     }
 }

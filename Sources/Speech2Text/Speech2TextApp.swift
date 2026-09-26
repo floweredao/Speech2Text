@@ -46,13 +46,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model.autoInsert = !arguments.contains("--no-auto-insert")
             let url = URL(fileURLWithPath: arguments[index + 1])
             Task {
-                if arguments.contains("--import-source-key") { await model.speech.importSourceKey() }
-                else { await model.speech.loadKey() }
+                await model.speech.loadKey()
                 model.transcribeFile(url)
             }
         } else {
-            if arguments.contains("--import-source-key") { model.importSourceKey() }
-            else { model.loadKey() }
+            model.loadKey()
             showSettings()
         }
     }

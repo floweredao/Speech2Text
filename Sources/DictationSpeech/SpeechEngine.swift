@@ -13,6 +13,7 @@ public enum SpeechOutcome: Sendable {
 /// `onFinal` is called exactly once on successful session completion, including empty speech.
 @MainActor @Observable public final class SpeechEngine {
     public var apiKey = ""
+    public var inputDeviceUID: String?
     public private(set) var transcript = ""
     public private(set) var status = "받아쓰기 준비가 됐습니다."
     public private(set) var phase = SpeechPhase.idle
@@ -34,9 +35,8 @@ public enum SpeechOutcome: Sendable {
     @ObservationIgnored private var timerTask: Task<Void, Never>?
     @ObservationIgnored private var stopTask: Task<Void, Never>?
     @ObservationIgnored private let sessionFactory: @MainActor () -> any STTSession
-    @ObservationIgnored private let audioFactory: @MainActor () -> any AudioCapturing
+    @ObservationIgnored private let audioFactory: @MainActor (String?) -> any AudioCapturing
     @ObservationIgnored private let credentials: any CredentialStoring
-    @ObservationIgnored private let sourceCredentials: any CredentialStoring
     @ObservationIgnored private let startTimeout: Duration
     @ObservationIgnored private let recordingLimit: Duration
     @ObservationIgnored private let finishTimeout: Duration
@@ -44,17 +44,15 @@ public enum SpeechOutcome: Sendable {
     public convenience init() {
         self.init(
             sessionFactory: { SonioxSession() },
-            audioFactory: { AVAudioCapture() },
-            credentials: KeychainCredentialStore(),
-            sourceCredentials: KeychainCredentialStore(service: "local.speech-to-action.credentials")
+            audioFactory: { AVAudioCapture(deviceUID: $0) },
+            credentials: KeychainCredentialStore()
         )
     }
 
     init(
         sessionFactory: @escaping @MainActor () -> any STTSession,
-        audioFactory: @escaping @MainActor () -> any AudioCapturing,
+        audioFactory: @escaping @MainActor (String?) -> any AudioCapturing,
         credentials: any CredentialStoring = KeychainCredentialStore(),
-        sourceCredentials: any CredentialStoring = KeychainCredentialStore(service: "local.speech-to-action.credentials"),
         startTimeout: Duration = .seconds(12),
         recordingLimit: Duration = .seconds(60),
         finishTimeout: Duration = .seconds(12)
@@ -62,13 +60,12 @@ public enum SpeechOutcome: Sendable {
         self.sessionFactory = sessionFactory
         self.audioFactory = audioFactory
         self.credentials = credentials
-        self.sourceCredentials = sourceCredentials
         self.startTimeout = startTimeout
         self.recordingLimit = recordingLimit
         self.finishTimeout = finishTimeout
     }
 
-    public func start() { begin(audioFactory()) }
+    public func start() { begin(audioFactory(inputDeviceUID)) }
 
     /// Recognizes a local audio file through the same Soniox session as microphone audio.
     /// Supported AVAudioFile formats are converted; `.pcm` means mono 16 kHz s16le.
@@ -250,10 +247,6 @@ public enum SpeechOutcome: Sendable {
     }
 
     public func loadKey() async { await load(from: credentials) }
-
-    /// Call only from the explicit import button. Never called by init, loadKey, or start.
-    /// Import places the key in memory; saveKey persists it in Speech2Text's own service.
-    public func importSourceKey() async { await load(from: sourceCredentials) }
 
     private func load(from store: any CredentialStoring) async {
         let previous = apiKey

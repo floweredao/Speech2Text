@@ -103,7 +103,7 @@ actor TestCredentials: CredentialStoring {
                         finishTimeout: Duration = .seconds(12)) -> SpeechEngine {
         let engine = SpeechEngine(
             sessionFactory: { SonioxSession(transport: socket) },
-            audioFactory: { audio },
+            audioFactory: { _ in audio },
             recordingLimit: recordingLimit,
             finishTimeout: finishTimeout
         )
@@ -229,7 +229,7 @@ actor TestCredentials: CredentialStoring {
         var sessions = [SonioxSession(transport: first), SonioxSession(transport: second)]
         let audios = [TestAudio(), TestAudio()]
         var captures = audios
-        let engine = SpeechEngine(sessionFactory: { sessions.removeFirst() }, audioFactory: { captures.removeFirst() })
+        let engine = SpeechEngine(sessionFactory: { sessions.removeFirst() }, audioFactory: { _ in captures.removeFirst() })
         engine.apiKey = "fixture"
         for (socket, audio) in zip([first, second], audios) {
             audio.pair.continuation.finish()
@@ -248,7 +248,7 @@ actor TestCredentials: CredentialStoring {
         var sessions = [SonioxSession(transport: oldSocket), SonioxSession(transport: newSocket)]
         var captures = [oldAudio, newAudio]
         let engine = SpeechEngine(sessionFactory: { sessions.removeFirst() },
-                                  audioFactory: { captures.removeFirst() })
+                                  audioFactory: { _ in captures.removeFirst() })
         engine.apiKey = "fixture"
         var finals: [String] = []
         engine.onFinal = { finals.append($0) }
@@ -328,26 +328,34 @@ actor TestCredentials: CredentialStoring {
         #expect(finals == [""])
     }
 
-    @Test func credentialsAreOwnScopedUntilExplicitImport() async {
-        let own = TestCredentials("own"), source = TestCredentials("source")
-        let engine = SpeechEngine(sessionFactory: { SonioxSession() }, audioFactory: { TestAudio() },
-                                  credentials: own, sourceCredentials: source)
+    @Test func keyIsStoredOnlyInTheAppsOwnStore() async {
+        let own = TestCredentials("own")
+        let engine = SpeechEngine(sessionFactory: { SonioxSession() }, audioFactory: { _ in TestAudio() },
+                                  credentials: own)
         #expect(await own.loads == 0)
-        #expect(await source.loads == 0)
         await engine.loadKey()
         #expect(engine.apiKey == "own")
-        #expect(await source.loads == 0)
-        await engine.importSourceKey()
-        #expect(engine.apiKey == "source")
-        #expect(await own.value == "own")
+        engine.apiKey = "replacement"
         await engine.saveKey()
-        #expect(await own.value == "source")
+        #expect(await own.value == "replacement")
         #expect(!engine.hasError)
-        #expect(await source.saves == 0)
         engine.apiKey = " "
         await engine.saveKey()
-        #expect(await own.value == "source")
+        #expect(await own.value == "replacement")
         #expect(engine.hasError)
+    }
+
+    @Test func selectedMicrophoneIsPassedToCapture() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        var requested: [String?] = []
+        let engine = SpeechEngine(sessionFactory: { SonioxSession(transport: socket) },
+                                  audioFactory: { requested.append($0); return audio })
+        engine.apiKey = "fixture"
+        engine.inputDeviceUID = "BuiltInMicrophoneDevice"
+        engine.start()
+        engine.cancel()
+        await engine.runTask?.value
+        #expect(requested == ["BuiltInMicrophoneDevice"])
     }
 
     @Test func silentSessionRetainsPreviousTranscript() async throws {
@@ -356,7 +364,7 @@ actor TestCredentials: CredentialStoring {
         var sessions = [SonioxSession(transport: firstSocket), SonioxSession(transport: silentSocket)]
         var captures = [firstAudio, silentAudio]
         let engine = SpeechEngine(sessionFactory: { sessions.removeFirst() },
-                                  audioFactory: { captures.removeFirst() })
+                                  audioFactory: { _ in captures.removeFirst() })
         engine.apiKey = "fixture"
         var finals: [String] = []
         engine.onFinal = { finals.append($0) }
@@ -378,7 +386,7 @@ actor TestCredentials: CredentialStoring {
     @Test func credentialLoadDoesNotOverwriteRecordingStatus() async throws {
         let socket = TestSocket(), audio = TestAudio()
         let engine = SpeechEngine(sessionFactory: { SonioxSession(transport: socket) },
-                                  audioFactory: { audio }, credentials: TestCredentials("saved"))
+                                  audioFactory: { _ in audio }, credentials: TestCredentials("saved"))
         engine.apiKey = "fixture"
         audio.pair.continuation.yield(pcm)
         engine.start()

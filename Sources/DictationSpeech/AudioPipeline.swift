@@ -94,7 +94,8 @@ final class AudioPipeline: @unchecked Sendable {
     private var engine: AVAudioEngine?
     private var pipeline: AudioPipeline?
     private var generation = UUID()
-    init() {}
+    private let deviceUID: String?
+    init(deviceUID: String? = nil) { self.deviceUID = deviceUID }
     func start(format: CaptureFormat) async throws -> AsyncThrowingStream<Data, Error> {
         await stop()
         let id = UUID(); generation = id
@@ -104,6 +105,12 @@ final class AudioPipeline: @unchecked Sendable {
         guard permitted else { throw AppError.permissionDenied("Microphone") }
         let engine = AVAudioEngine()
         let node = engine.inputNode
+        if let deviceUID {
+            guard var device = AudioInputDevices.deviceID(forUID: deviceUID), let unit = node.audioUnit,
+                  AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                                       &device, UInt32(MemoryLayout<AudioDeviceID>.size)) == noErr
+            else { throw AppError.inputDeviceUnavailable }
+        }
         let input = node.outputFormat(forBus: 0)
         guard input.sampleRate > 0, input.channelCount > 0 else { throw AppError.permissionDenied("Microphone input device") }
         let pipeline = try AudioPipeline(format: format, input: input)

@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import DictationSpeech
 import SwiftUI
 
 /// The privacy pane that grants control of other apps (`AXIsProcessTrusted`). macOS 27 renamed
@@ -59,6 +60,8 @@ struct SettingsView: View {
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
     private let microphoneState = State(initialValue: MicrophoneAccess(AVCaptureDevice.authorizationStatus(for: .audio)))
     private var microphone: MicrophoneAccess { microphoneState.wrappedValue }
+    private let devicesState = State(initialValue: AudioInputDevices.all())
+    private let defaultDeviceState = State(initialValue: AudioInputDevices.defaultDevice())
 
     private let pane = ControlPermissionPane.current
     private var state: DictationDisplayState { DictationDisplayState(model: model) }
@@ -149,13 +152,9 @@ struct SettingsView: View {
                 Button("불러오기") { model.loadKey() }
                     .help("이 앱의 Keychain 항목에서 불러옵니다.")
                     .accessibilityIdentifier("settings-load-key")
-                Spacer(minLength: 8)
-                Button("Speech-to-action에서 가져오기") { model.importSourceKey() }
-                    .help("Speech-to-action이 저장한 Soniox 키를 이번 한 번만 입력 칸에 넣습니다. 계속 쓰려면 저장하세요.")
-                    .accessibilityIdentifier("settings-import-key")
             }
             if !hasKey {
-                Text("키가 없으면 받아쓰기를 시작할 수 없어요. 가져온 키는 저장해야 다음 실행에도 남아요.")
+                Text("키가 없으면 받아쓰기를 시작할 수 없어요. 저장하면 이 앱의 Keychain에 보관돼 다음 실행에도 남아요.")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -186,6 +185,20 @@ struct SettingsView: View {
                 Text("마이크")
                 Text("말하는 동안에만 Soniox로 음성을 보내요.")
             }
+
+            Picker(selection: $model.inputDeviceUID) {
+                Text(defaultDeviceLabel).tag(String?.none)
+                ForEach(devicesState.wrappedValue) { device in
+                    Text(device.name).tag(Optional(device.uid))
+                }
+                if let uid = model.inputDeviceUID, !devicesState.wrappedValue.contains(where: { $0.uid == uid }) {
+                    Text("연결 안 된 마이크").tag(Optional(uid))
+                }
+            } label: {
+                Text("사용할 마이크")
+                Text("선택한 마이크가 없으면 받아쓰기를 시작하지 않고 알려 드려요.")
+            }
+            .accessibilityIdentifier("settings-input-device")
 
             LabeledContent {
                 HStack {
@@ -233,6 +246,10 @@ struct SettingsView: View {
             .fixedSize()
     }
 
+    private var defaultDeviceLabel: String {
+        defaultDeviceState.wrappedValue.map { "시스템 기본값 (\($0.name))" } ?? "시스템 기본값"
+    }
+
     private var microphoneBadge: String {
         switch microphone {
         case .granted: "허용됨"
@@ -267,6 +284,8 @@ struct SettingsView: View {
     private func refreshPermissions() {
         model.accessibilityGranted = AXIsProcessTrusted()
         microphoneState.wrappedValue = MicrophoneAccess(AVCaptureDevice.authorizationStatus(for: .audio))
+        devicesState.wrappedValue = AudioInputDevices.all()
+        defaultDeviceState.wrappedValue = AudioInputDevices.defaultDevice()
     }
 
     private func openPrivacyPane(_ anchor: String) {
