@@ -84,7 +84,7 @@ struct DictationDisplayState: Equatable {
         }
         self.retained = retained
         retainedKind = retained.isEmpty ? nil : kind
-        noteText = phase == .idle ? "" : feedback
+        noteText = phase == .idle || phase == .error ? "" : feedback
     }
 
     var isBusy: Bool { phase == .connecting || phase == .finalizing }

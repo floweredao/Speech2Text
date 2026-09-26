@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import os
 
 struct LiveTextEdit: Equatable {
     let removed: String
@@ -25,9 +26,15 @@ struct LiveTextEdit: Equatable {
 @MainActor
 final class LiveTyper {
     enum Outcome: Equatable { case applied, targetChanged, failed }
+    private enum Mode { case accessibility, keyboard }
+    private enum Step { case applied, unsafe(String), unsupported(String) }
 
+    private static let log = Logger(subsystem: "local.speech2text.app", category: "live-typing")
     private let target: TextInsertion.Target
     private let insertion: TextInsertion
+    private var mode: Mode?
+    // UTF-16 offset where our text begins; edits are computed from it, not from a caret that may lag.
+    private var anchor: Int?
     private(set) var typed = ""
     private(set) var stopped = false
 
@@ -43,13 +50,31 @@ final class LiveTyper {
         guard !edit.isEmpty else { return .applied }
         guard let current = insertion.currentTarget(), current.pid == target.pid,
               CFEqual(current.element, target.element) else {
+            Self.log.notice("stopped: focus changed")
             stopped = true
             return .targetChanged
         }
-        let applied = supportsAccessibilityEditing(current.element)
-            ? replaceWithAccessibility(current.element, edit)
-            : typeWithKeyboard(edit, pid: current.pid)
-        guard applied else {
+        if mode == nil { mode = supportsAccessibilityEditing(current.element) ? .accessibility : .keyboard }
+        if mode == .accessibility {
+            switch replaceWithAccessibility(current.element, edit) {
+            case .applied:
+                typed = text
+                return .applied
+            case .unsafe(let stage):
+                Self.log.error("stopped: \(stage, privacy: .public)")
+                stopped = true
+                return .failed
+            case .unsupported(let stage):
+                Self.log.error("accessibility write failed: \(stage, privacy: .public)")
+                guard typed.isEmpty else {
+                    stopped = true
+                    return .failed
+                }
+                mode = .keyboard
+            }
+        }
+        guard typeWithKeyboard(edit, pid: current.pid) else {
+            Self.log.error("stopped: key event creation failed")
             stopped = true
             return .failed
         }
@@ -65,24 +90,38 @@ final class LiveTyper {
             && rangeSettable.boolValue
     }
 
-    private func replaceWithAccessibility(_ element: AXUIElement, _ edit: LiveTextEdit) -> Bool {
-        var rangeValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
-              let rangeValue, CFGetTypeID(rangeValue) == AXValueGetTypeID() else { return false }
-        var caret = CFRange()
+    private func replaceWithAccessibility(_ element: AXUIElement, _ edit: LiveTextEdit) -> Step {
+        if anchor == nil {
+            guard let caret = selectedRange(element) else { return .unsupported("read caret") }
+            guard caret.length == 0 else { return .unsafe("user selection at start") }
+            anchor = caret.location
+        }
+        guard let anchor else { return .unsupported("no anchor") }
         let removedLength = edit.removed.utf16.count
-        // A user selection or a caret moved before our text means we no longer own the tail.
-        guard AXValueGetValue(unsafeDowncast(rangeValue, to: AXValue.self), .cfRange, &caret),
-              caret.length == 0, caret.location >= removedLength else { return false }
-        var replace = CFRange(location: caret.location - removedLength, length: removedLength)
-        if removedLength > 0 {
-            guard text(of: element, in: replace) == edit.removed else { return false }
+        let start = anchor + typed.utf16.count - removedLength
+        var replace = CFRange(location: start, length: removedLength)
+        // Our own text must still be there before we overwrite it; an unreadable range is trusted like keystrokes.
+        if removedLength > 0, let present = text(of: element, in: replace), present != edit.removed {
+            return .unsafe("dictated text was edited")
         }
         guard let replaceValue = AXValueCreate(.cfRange, &replace),
-              AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, replaceValue) == .success,
-              AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, edit.insert as CFString) == .success
-        else { return false }
-        return true
+              AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, replaceValue) == .success
+        else { return .unsupported("set range") }
+        guard AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, edit.insert as CFString) == .success
+        else { return .unsupported("set text") }
+        var caret = CFRange(location: start + edit.insert.utf16.count, length: 0)
+        if let caretValue = AXValueCreate(.cfRange, &caret) {
+            AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, caretValue)
+        }
+        return .applied
+    }
+
+    private func selectedRange(_ element: AXUIElement) -> CFRange? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
+        var range = CFRange()
+        return AXValueGetValue(unsafeDowncast(value, to: AXValue.self), .cfRange, &range) ? range : nil
     }
 
     private func text(of element: AXUIElement, in range: CFRange) -> String? {

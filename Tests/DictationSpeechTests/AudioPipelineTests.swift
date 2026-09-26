@@ -29,6 +29,33 @@ struct AudioPipelineTests {
 }
 
 extension AudioPipelineTests {
+    @Test func realSignalIsReportedImmediately() async throws {
+        let pipeline = try AudioPipeline(format: .pcm16Mono16k)
+        pipeline.receivePCM(Data([0, 0, 3, 0]) + Data(repeating: 0, count: 636))
+        #expect(await pipeline.waitForSignal(timeout: .seconds(30)))
+    }
+
+    /// A device macOS refused (e.g. a Continuity mic already in use) delivers digital silence or nothing.
+    @Test func digitalSilenceIsNotASignal() async throws {
+        let pipeline = try AudioPipeline(format: .pcm16Mono16k)
+        pipeline.receivePCM(Data(repeating: 0, count: 640 * 3))
+        #expect(await pipeline.waitForSignal(timeout: .milliseconds(50)) == false)
+    }
+
+    @Test func finishingReleasesSignalWaiters() async throws {
+        let pipeline = try AudioPipeline(format: .pcm16Mono16k)
+        async let heard = pipeline.waitForSignal(timeout: .seconds(30))
+        pipeline.finish()
+        #expect(await heard == false)
+    }
+
+    @Test func deviceFailureEndsTheStreamWithThatError() async throws {
+        let pipeline = try AudioPipeline(format: .pcm16Mono16k)
+        pipeline.fail(AppError.inputDeviceUnavailable)
+        var iterator = pipeline.stream.makeAsyncIterator()
+        await #expect(throws: AppError.inputDeviceUnavailable) { _ = try await iterator.next() }
+    }
+
     @Test func boundedOverflowIsExplicit() async throws {
         let pipeline = try AudioPipeline(format: .pcm16Mono16k, capacity: 2)
         pipeline.receivePCM(Data(repeating: 7, count: 640 * 3))

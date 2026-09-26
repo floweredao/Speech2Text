@@ -1,5 +1,6 @@
 // Adapted from Speech-to-action; speech-only module, no command execution.
 import AVFoundation
+import os
 import Foundation
 
 final class PCMConverter {
@@ -49,6 +50,8 @@ final class AudioPipeline: @unchecked Sendable {
     private var converter: PCMConverter?
     private var pending = Data()
     private var finished = false
+    private var heardSignal = false
+    private var signalWaiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
     private let chunkBytes: Int
     init(format: CaptureFormat, input: AVAudioFormat? = nil, capacity: Int = 100) throws {
         let pair = AsyncThrowingStream<Data, Error>.makeStream(bufferingPolicy: .bufferingOldest(capacity))
@@ -72,6 +75,10 @@ final class AudioPipeline: @unchecked Sendable {
         catch { finished = true; pending.removeAll(); continuation.finish(throwing: error) }
     }
     private func enqueue(_ data: Data) throws {
+        if !heardSignal, data.contains(where: { $0 != 0 }) {
+            heardSignal = true
+            resumeWaiters()
+        }
         pending.append(data)
         while pending.count >= chunkBytes {
             let chunk = Data(pending.prefix(chunkBytes))
@@ -79,10 +86,48 @@ final class AudioPipeline: @unchecked Sendable {
             if case .dropped = continuation.yield(chunk) { throw AppError.audioOverflow }
         }
     }
+    /// True once audio other than digital silence arrives. A refused or dead device never gets there.
+    func waitForSignal(timeout: Duration) async -> Bool {
+        let id = UUID()
+        return await withCheckedContinuation { continuation in
+            lock.lock()
+            if heardSignal || finished {
+                let heard = heardSignal
+                lock.unlock()
+                continuation.resume(returning: heard)
+                return
+            }
+            signalWaiters[id] = continuation
+            lock.unlock()
+            let parts = timeout.components
+            let delay = Double(parts.seconds) + Double(parts.attoseconds) / 1e18
+            DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in self?.expireWaiter(id) }
+        }
+    }
+    private func expireWaiter(_ id: UUID) {
+        lock.lock()
+        let waiter = signalWaiters.removeValue(forKey: id)
+        lock.unlock()
+        waiter?.resume(returning: false)
+    }
+    private func resumeWaiters() {
+        let waiters = signalWaiters.values
+        signalWaiters.removeAll()
+        for waiter in waiters { waiter.resume(returning: heardSignal) }
+    }
+    func fail(_ error: Error) {
+        lock.lock(); defer { lock.unlock() }
+        guard !finished else { return }
+        finished = true
+        pending.removeAll()
+        continuation.finish(throwing: error)
+        resumeWaiters()
+    }
     func finish() {
         lock.lock(); defer { lock.unlock() }
         guard !finished else { return }
         finished = true
+        resumeWaiters()
         if !pending.isEmpty, case .dropped = continuation.yield(pending) {
             continuation.finish(throwing: AppError.audioOverflow)
         } else { continuation.finish() }
@@ -91,9 +136,11 @@ final class AudioPipeline: @unchecked Sendable {
 }
 
 @MainActor final class AVAudioCapture: AudioCapturing {
+    private static let log = Logger(subsystem: "local.speech2text.app", category: "audio")
     private var engine: AVAudioEngine?
     private var pipeline: AudioPipeline?
     private var generation = UUID()
+    private var configurationObserver: NSObjectProtocol?
     private let deviceUID: String?
     init(deviceUID: String? = nil) { self.deviceUID = deviceUID }
     func start(format: CaptureFormat) async throws -> AsyncThrowingStream<Data, Error> {
@@ -113,7 +160,7 @@ final class AudioPipeline: @unchecked Sendable {
         }
         let input = node.outputFormat(forBus: 0)
         guard input.sampleRate > 0, input.channelCount > 0 else { throw AppError.permissionDenied("Microphone input device") }
-        let pipeline = try AudioPipeline(format: format, input: input)
+        let pipeline = try AudioPipeline(format: format, input: input, capacity: 200)
         self.engine = engine; self.pipeline = pipeline
         pipeline.onTermination { [weak self] in
             Task { @MainActor in
@@ -124,7 +171,23 @@ final class AudioPipeline: @unchecked Sendable {
         node.installTap(onBus: 0, bufferSize: 960, format: input, block: Self.makeTap(pipeline))
         do { engine.prepare(); try engine.start() }
         catch { await stop(); throw AppError.permissionDenied("Microphone could not start") }
+        // The engine stops itself when the hardware changes; end the recording instead of hanging silent.
+        configurationObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil,
+            using: Self.makeConfigurationHandler(self, id))
+        let heard = await pipeline.waitForSignal(timeout: .seconds(3))
+        guard generation == id else { throw AppError.cancelled }
+        guard heard else { await stop(); throw AppError.microphoneSilent }
         return pipeline.stream
+    }
+    nonisolated static func makeConfigurationHandler(_ capture: AVAudioCapture, _ id: UUID) -> @Sendable (Notification) -> Void {
+        { [weak capture] _ in Task { @MainActor in capture?.configurationChanged(id) } }
+    }
+    private func configurationChanged(_ id: UUID) {
+        guard generation == id, let engine, let pipeline else { return }
+        Self.log.notice("audio configuration changed, running=\(engine.isRunning, privacy: .public)")
+        // Changes also fire at startup and for output devices; only a stopped engine means the input is gone.
+        if !engine.isRunning { pipeline.fail(AppError.microphoneInterrupted) }
     }
     nonisolated static func makeTap(_ pipeline: AudioPipeline) -> @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void {
         { buffer, _ in pipeline.receive(buffer) }
@@ -135,6 +198,8 @@ final class AudioPipeline: @unchecked Sendable {
     }
     func stop() async {
         generation = UUID()
+        if let configurationObserver { NotificationCenter.default.removeObserver(configurationObserver) }
+        configurationObserver = nil
         if let engine { engine.stop(); engine.inputNode.removeTap(onBus: 0); engine.reset() }
         engine = nil
         pipeline?.finish(); pipeline = nil
