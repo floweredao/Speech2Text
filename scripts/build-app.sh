@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Library/Developer/CommandLineTools}"
+SIGNING_IDENTITY="${SPEECH2TEXT_SIGNING_IDENTITY:-Apple Development}"
 ensure_stopped() {
   if pgrep -x Speech2Text >/dev/null; then
     printf '%s\n' 'Quit Speech2Text before replacing its signed app bundle.' >&2
@@ -24,7 +25,7 @@ trap cleanup EXIT
 mkdir -p "$STAGING/Speech2Text.app/Contents/MacOS"
 cp "$BIN_DIR/Speech2Text" "$STAGING/Speech2Text.app/Contents/MacOS/"
 cp Resources/Info.plist "$STAGING/Speech2Text.app/Contents/"
-codesign --force --sign - --options runtime --entitlements Resources/Entitlements.plist "$STAGING/Speech2Text.app"
+codesign --force --sign "$SIGNING_IDENTITY" --options runtime --entitlements Resources/Entitlements.plist "$STAGING/Speech2Text.app"
 codesign --verify --deep --strict "$STAGING/Speech2Text.app"
 ensure_stopped
 if [[ -e "$APP" ]]; then mv "$APP" "$STAGING/previous.app"; fi

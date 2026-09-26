@@ -6,7 +6,7 @@ import Observation
 final class AppModel {
     let speech = SpeechEngine()
     private let insertion = TextInsertion()
-    private var target: TextInsertion.Target?
+    @ObservationIgnored private var live: LiveTyper?
     var feedback = ""
     var autoInsert = true
     var overlayVisible = true
@@ -18,48 +18,85 @@ final class AppModel {
     var isBusy: Bool { speech.isBusy }
     var speechPhase: SpeechPhase { speech.phase }
     var hasError: Bool { speech.hasError }
+    var speechOutcome: SpeechOutcome { speech.outcome }
+    var hasCurrentTranscript: Bool { speech.hasCurrentTranscript }
     var apiKey: String {
         get { speech.apiKey }
         set { speech.apiKey = newValue }
     }
 
     init() {
-        speech.onFinal = { [weak self] text in
-            guard let self else { return }
-            self.overlayVisible = true
-            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                self.feedback = "인식된 음성이 없어 입력하지 않았어요."
-                self.target = nil
-                return
-            }
-            if self.autoInsert, let target = self.target {
-                self.feedback = self.insertion.insert(text, expected: target)
-            } else {
-                self.feedback = "받아쓰기를 보관했어요. 입력 칸을 선택한 뒤 붙여넣어 주세요."
-            }
-            self.target = nil
+        speech.onLiveText = { [weak self] text in self?.mirror(text) }
+        speech.onFinal = { [weak self] text in self?.complete(text) }
+    }
+
+    private func mirror(_ text: String) {
+        guard let live else { return }
+        switch live.sync(text) {
+        case .applied: break
+        case .targetChanged:
+            self.live = nil
+            feedback = "입력 위치가 바뀌어 실시간 입력을 멈췄어요. 결과는 여기에 보관해요."
+        case .failed:
+            self.live = nil
+            feedback = "이 칸에는 실시간 입력을 할 수 없어요. 결과는 여기에 보관해요."
         }
     }
+
+    private func complete(_ text: String) {
+        overlayVisible = true
+        let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if let live {
+            self.live = nil
+            switch live.sync(text) {
+            case .applied: feedback = empty ? "인식된 음성이 없어 입력하지 않았어요." : "입력 칸에 받아쓰기를 입력했어요."
+            case .targetChanged: feedback = "입력 위치가 바뀌어 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요."
+            case .failed: feedback = "마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요."
+            }
+        } else if empty {
+            feedback = "인식된 음성이 없어 입력하지 않았어요."
+        } else if feedback.isEmpty {
+            feedback = "받아쓰기를 보관했어요. 입력 칸을 선택한 뒤 붙여넣어 주세요."
+        }
+    }
+
+    private func prepareLiveTyping() {
+        accessibilityGranted = insertion.isTrusted
+        live = nil
+        feedback = ""
+        guard autoInsert else { return }
+        guard accessibilityGranted else {
+            feedback = "기기 제어 권한이 없어 결과를 보관해요."
+            return
+        }
+        guard let target = insertion.currentTarget(), insertion.isEditable(target) else {
+            feedback = "선택된 입력 칸이 없어 결과를 보관해요."
+            return
+        }
+        live = LiveTyper(target: target, insertion: insertion)
+        feedback = "선택한 칸에 실시간으로 입력해요."
+    }
+
     func toggleRecording() {
         overlayVisible = true
-        accessibilityGranted = insertion.isTrusted
         if isRecording { speech.finish() }
         else if !isBusy {
-            target = insertion.currentTarget()
-            feedback = ""
+            prepareLiveTyping()
             speech.start()
         }
     }
     func cancel() {
+        guard isBusy else { return }
+        let hadTyped = !(live?.typed.isEmpty ?? true)
+        let removed = hadTyped && live?.sync("") == .applied
+        live = nil
         speech.cancel()
-        target = nil
-        feedback = "취소했어요. 자동으로 입력하지 않았어요."
+        feedback = removed ? "취소해서 입력하던 내용을 지웠어요." : "취소했어요. 입력하지 않았어요."
     }
     func transcribeFile(_ url: URL) {
         guard !isBusy else { return }
-        target = insertion.currentTarget()
         overlayVisible = true
-        feedback = ""
+        prepareLiveTyping()
         speech.start(audioFile: url)
     }
     func copyTranscript() {

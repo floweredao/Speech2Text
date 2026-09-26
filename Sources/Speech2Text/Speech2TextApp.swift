@@ -51,21 +51,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 model.transcribeFile(url)
             }
         } else {
-            model.loadKey()
+            if arguments.contains("--import-source-key") { model.importSourceKey() }
+            else { model.loadKey() }
             showSettings()
         }
+    }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showSettings()
+        return true
     }
     @objc private func toggle() { model.toggleRecording(); overlay?.present() }
     @objc private func paste() { model.pasteTranscript(); overlay?.present() }
     @objc private func showOverlay() { model.overlayVisible = true; overlay?.present() }
     @objc private func showSettings() {
         if settings == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 580, height: 640),
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 540),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable],
                                   backing: .buffered, defer: false)
             window.title = "Speech2Text"
             window.contentView = NSHostingView(rootView: SettingsView(model: model))
-            window.minSize = NSSize(width: 520, height: 600)
+            window.minSize = NSSize(width: 440, height: 420)
             window.isReleasedWhenClosed = false
             window.center()
             settings = window

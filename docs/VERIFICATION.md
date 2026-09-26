@@ -39,3 +39,23 @@ No reviewer gate was triggered; this was a bare ultrawork run. Self-review check
 All build/test/recognition monitors have terminated. Temporary desktop captures and the UI worker's temporary typecheck stubs were removed. The app remains running for the user's requested setup, and the disposable TextEdit QA documents are left for their manual input tests. These are handed-off resources, not background QA jobs.
 
 Screenshots and generated audio remain local under the git-ignored `.omo/evidence` directory; they are not published to GitHub.
+
+
+# Verification — 2026-09-25 repair round (live typing, notch UI, error detail)
+
+## Passed
+
+- `bash scripts/test.sh`: 57 tests, 10 suites, zero skips. Evidence: `.omo/evidence/repair/final-tests.log`.
+- `bash scripts/build-app.sh`: release build signed with the stable Apple Development identity, `codesign --verify --deep --strict` exit 0. Rebuilds no longer invalidate the approved control permission (TCC requirement now matches the certificate, not a per-build hash).
+- Soniox error detail: a failing regression reproduced the old generic `Soniox server error`; the reducer now surfaces the provider code and message.
+- Live typing into TextEdit (signed app, production Soniox, real-time-paced audio through the same PCM pipeline as the microphone): 19 successive document states over ~8 s, text appeared while audio played, final sentence inserted exactly once with no double space. Evidence: `.omo/evidence/repair/live-clean-states.tsv`, `live-clean-final.png`.
+- Live cancel: mid-run text was removed and the document returned byte-for-byte to its pre-run content; notch reported the erase. Evidence: `.omo/evidence/repair/live-cancel.png`.
+- Focus-change guard: when focus moved to another app during a run, live typing stopped and the result stayed in the notch instead of typing into the new app.
+- Keyboard fallback (terminals, Korean 2-set IME active): per-process key events typed Hangul correctly and backspaces removed whole syllables at a zsh prompt.
+- Notch: compact capsule when idle, content-sized result panel (no fixed empty block).
+
+## Not claimed
+
+- Physical microphone accuracy (speaker/mic distance prevented acoustic playback tests; the microphone capture path was exercised only up to "listening").
+- An end-to-end app run into a terminal: the attempt was pre-empted by focus moving to the user's full-screen terminal, which exercised the guard instead.
+- The QA sample produced no mid-sentence recognition revisions; correction logic is covered by unit tests and by the real-surface cancel deletion, which uses the same replacement path.
