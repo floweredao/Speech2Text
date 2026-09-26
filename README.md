@@ -1,10 +1,48 @@
-# Speech2Text
+<p align="center">
+  <img src="Resources/AppIcon.png" width="128" alt="Speech2Text app icon">
+</p>
 
-Mac에서 말한 내용을 현재 입력 칸에 받아쓰는 네이티브 앱입니다. `Speech-to-action`의 Soniox 스트리밍 전사·오디오 변환·노치 창 구조를 재사용했습니다. 명령을 해석하거나 문장을 다시 작성하지 않습니다.
+<h1 align="center">Speech2Text</h1>
 
-## 실행
+<p align="center">
+  Native macOS dictation that types what you say into the field you're already in.
+  <br>
+  <b>English</b> · <a href="README-ko.md">한국어</a>
+</p>
 
-macOS 26 이상, Swift 6.2 이상이 필요합니다.
+<p align="center">
+  <img src="docs/images/hero-en.png" width="820" alt="Speech2Text listening under the menu bar while the transcript is typed live into a note">
+</p>
+
+Speech2Text is a menu bar app. Press a shortcut, speak, and your words appear in whatever text field you clicked, whether that's a terminal, a browser, or a notes app. A small overlay under the notch shows the live transcript. The app never reads your speech as commands and never rewrites it. It builds on the Soniox streaming transcription, audio conversion, and notch window structure from `Speech-to-action`.
+
+> The app's interface is currently in Korean. The screenshots below show it as it ships.
+
+## A look around
+
+<table>
+  <tr>
+    <td width="56%" valign="top">
+      <b>Idle</b>: one compact capsule under the notch<br><br>
+      <img src="docs/images/notch-idle.png" width="340" alt="Idle overlay"><br><br>
+      <b>Listening</b>: the transcript updates live as you speak<br><br>
+      <img src="docs/images/notch-recording-en.png" width="480" alt="Overlay while recording"><br><br>
+      <b>Done</b>: the result stays until you dismiss it, with Copy and Paste for recovery<br><br>
+      <img src="docs/images/notch-result-en.png" width="480" alt="Overlay after dictation finishes">
+    </td>
+    <td width="44%" valign="top">
+      <b>Settings</b>: API key, microphone, permissions, input, and shortcuts<br><br>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark.png">
+        <img src="docs/images/settings-light.png" width="360" alt="Settings window">
+      </picture>
+    </td>
+  </tr>
+</table>
+
+## Build and run
+
+Requires macOS 26 or later and Swift 6.2 or later.
 
 ```sh
 cd ~/Documents/Speech2Text
@@ -12,59 +50,59 @@ bash scripts/build-app.sh
 open build/Speech2Text.app
 ```
 
-현재 Mac에서는 Xcode 라이선스 승인과 별개로 사용 가능한 Command Line Tools를 사용합니다. 빌드 스크립트는 `DEVELOPER_DIR=/Library/Developer/CommandLineTools`을 기본으로 사용합니다.
+The build script uses the Command Line Tools (`DEVELOPER_DIR=/Library/Developer/CommandLineTools`) by default, so it works without accepting the Xcode license.
 
-## 받아쓰기
+## Dictating
 
-1. 설정에서 Soniox API 키를 붙여넣고 **저장**합니다. 키는 Speech2Text 전용 Keychain 항목(`com.speech2text.credentials`)에만 보관되고 다음 실행 때 자동으로 불러옵니다. 설정의 **사용할 마이크**에서 녹음에 쓸 마이크를 고릅니다(기본값은 시스템 기본 입력).
-2. 접근성 권한을 허용합니다. 처음 녹음을 시작할 때 마이크 권한도 허용합니다.
-3. 터미널·브라우저·메모 등 원하는 앱의 **입력 칸을 먼저 클릭**합니다.
-4. **Control+Option+D**(기본값, 아래 "단축키 바꾸기" 참고)로 시작하고 말합니다. 노치 아래에서 인식 중인 내용을 볼 수 있습니다.
-   - 마이크가 켜지는 즉시 녹음을 시작하므로 바로 말해도 됩니다. Soniox 연결은 뒤에서 이어지고, 그동안 노치에 "연결 중"이 보입니다. 연결이 한 번 실패하면 자동으로 한 번 더 시도합니다.
-   - 인터넷이 끊겨 있으면 녹음을 시작하지 않고 바로 알려 줍니다.
-5. 말하는 동안 처음 선택한 입력 칸에 바로 써집니다. 인식이 앞말을 고치면 바뀐 끝부분만 지우고 다시 씁니다. 같은 단축키 또는 마무리 버튼을 누르면 확정된 문장으로 맞춥니다. 녹음은 최대 60초입니다.
-   - 일반 Mac 입력 칸(메모, TextEdit, 대부분의 앱)은 접근성 텍스트 교체로, 터미널처럼 교체를 지원하지 않는 곳은 그 앱에만 보내는 키 입력으로 씁니다. 한국어 입력기가 켜져 있어도 동작합니다.
-   - 도중에 다른 칸이나 앱으로 옮기면 실시간 입력을 멈추고, 결과는 노치에 보관합니다. 취소하면 이번에 쓴 글자만 지웁니다. 줄바꿈이나 Return은 보내지 않습니다.
+1. In Settings, paste your Soniox API key and press **저장** (Save). The key is kept only in Speech2Text's own Keychain item (`com.speech2text.credentials`) and is loaded on the next launch. Pick a microphone under **사용할 마이크** (Microphone); the default is the system input.
+2. Grant the Accessibility permission. macOS also asks for microphone access the first time you record.
+3. **Click the text field** you want to type into first, in any app: terminal, browser, notes.
+4. Press **Control+Option+D** (the default; see "Changing shortcuts" below) and speak. The overlay under the notch shows what's being recognized.
+   - Recording starts as soon as the microphone is on, so you can talk right away. The Soniox connection finishes in the background, and the overlay shows "연결 중" (connecting) meanwhile. If the connection fails once, the app retries once automatically.
+   - With no internet connection, the app refuses to start and tells you so immediately.
+5. Text is typed into the field you picked as you speak. When recognition revises earlier words, only the changed tail is erased and retyped. Press the same shortcut or the finish button to settle on the final text. Recordings are limited to 60 seconds.
+   - Standard Mac text fields (Notes, TextEdit, most apps) are edited through accessibility text replacement. Where that isn't supported, such as terminals, the app sends key events to that app only. This works with a Korean input method active.
+   - If you switch to another field or app mid-way, live typing stops and the result is kept in the overlay. Cancelling erases only the text typed in this session. The app never sends newlines or Return.
 
-말하는 중의 불완전한 문장을 계속 입력하지 않습니다. 수정되는 부분 전사는 노치에서만 보여 주고 마무리된 결과를 입력합니다. 터미널에서 명령을 실행하는 Return 키는 누르지 않습니다.
+Partial, still-changing transcripts are shown only in the overlay. The field receives the settled result, and the app never presses the Return key that would run a command in a terminal.
 
-## 단축키 바꾸기
+## Changing shortcuts
 
-설정 › **단축키**에서 각 동작의 단축키 버튼을 누른 뒤 원하는 키를 누르면 저장됩니다. Esc를 누르면 기록을 취소하고, ✕는 그 단축키를 끕니다.
+In Settings › **단축키** (Shortcuts), click an action's shortcut button and press the keys you want. Esc cancels recording, and ✕ turns that shortcut off.
 
-- **키 조합**: ⌃·⌥·⌘ 중 하나 이상과 함께 누르는 키(예: ⌃⌥D, ⌘⇧K) 또는 F1–F20. 글자 입력을 막는 키(수식 키 없는 글자, ⇧+글자)는 쓸 수 없습니다.
-- **수정 키만**: 수정 키만 눌렀다 떼는 동작. 양쪽 ⇧을 함께 누르거나, 오른쪽 ⌘ 하나, 양쪽 ⌥, ⌘+⌥처럼 왼쪽·오른쪽을 구분해 기록합니다. 누르는 사이 다른 키를 치거나 클릭했거나 0.6초보다 오래 누르고 있었으면 단축키로 보지 않습니다. 이 방식은 기기 제어(손쉬운 사용) 권한이 있어야 동작합니다.
-- **여러 번 누르기**: 기록할 때 같은 키나 수정 키 조합을 0.5초 안에 두세 번 연달아 누르면 "두 번"·"세 번" 누르기로 저장됩니다. 같은 키의 한 번 누르기와 두 번 누르기를 서로 다른 동작에 지정하면 한 번 누르기는 0.5초 기다린 뒤 실행됩니다.
+- **Key chords**: a key pressed with at least one of ⌃, ⌥, or ⌘ (for example ⌃⌥D or ⌘⇧K), or F1–F20. Keys that would block typing (a letter with no modifier, or ⇧ plus a letter) aren't allowed.
+- **Modifiers only**: pressing and releasing modifiers alone, such as both ⇧ keys together, the right ⌘ by itself, both ⌥ keys, or ⌘+⌥. Left and right are recorded separately. It doesn't count as a shortcut if you type another key or click while holding, or hold for longer than 0.6 seconds. This mode needs the device control (Accessibility) permission.
+- **Multi-tap**: while recording, press the same key or modifier combination two or three times within 0.5 seconds to save it as a double or triple tap. If a single tap and a double tap of the same key are assigned to different actions, the single tap runs after a 0.5 second wait.
 
-## 입력되지 않았을 때
+## When text wasn't typed
 
-말하는 사이 다른 앱이나 입력 칸으로 이동하면 자동 입력을 중단합니다. 결과는 노치에 남습니다.
+If you move to another app or field while speaking, automatic typing stops. The result stays in the overlay.
 
-- **복사**: 현재 받아쓰기를 클립보드에 복사합니다. 원하는 칸에서 ⌘V로 붙여넣으세요.
-- **붙여넣기** 또는 **Control+Option+V**: 현재 선택한 입력 칸으로 다시 보냅니다. 버튼이 있는 노치 창은 키보드 포커스를 가져오지 않습니다.
-- 접근성이 지원되지 않는 칸은 복사 후 직접 붙여넣으세요.
+- **복사** (Copy): copies the current dictation to the clipboard. Paste it with ⌘V wherever you like.
+- **붙여넣기** (Paste) or **Control+Option+V**: sends it to the currently selected field. The overlay's buttons never take keyboard focus.
+- For fields that don't support accessibility, copy and paste by hand.
 
-일부 앱은 입력 성공 여부를 외부에 알려 주지 않습니다. 이 경우 앱은 **붙여넣기를 요청했어요**라고 표시하며 성공을 단정하지 않습니다. 기본 붙여넣기 경로는 클립보드 내용을 받아쓰기로 바꿉니다. 자동 입력이 지원되는 모든 타사 앱 조합을 보장하지는 않습니다.
+Some apps don't report whether input succeeded. In that case the app shows **붙여넣기를 요청했어요** (paste requested) instead of claiming success. The default paste path replaces the clipboard contents with the dictation. Automatic typing isn't guaranteed to work in every third-party app.
 
-## 사용자가 직접 완료하는 입력 설정
+## Input setup you finish yourself
 
-메뉴바 파형 아이콘 → **설정…**에서 아래 항목을 설정합니다.
+Open the menu bar waveform icon → **설정…** (Settings…) and set the following.
 
-1. **권한 → 손쉬운 사용 → 허용 요청**을 누릅니다. **시스템 설정 열기**를 눌러 macOS 목록에서 Speech2Text를 직접 허용합니다. 앱은 권한을 임의로 바꾸지 않습니다.
-2. 설정 창 아래로 스크롤해 **입력 → 말하는 동안 바로 입력**을 켜거나 끕니다. 끄면 전사를 보관하고 사용자가 원하는 시점에 복사·붙여넣기합니다.
-3. 원하는 앱의 입력 칸을 클릭한 뒤 노치의 **붙여넣기** 또는 **Control+Option+V**를 사용합니다. 권한 없이 사용하려면 **복사 → 직접 ⌘V**를 사용합니다.
+1. Under permissions, press **허용 요청** (Request access) for Accessibility, then **시스템 설정 열기** (Open System Settings) and allow Speech2Text in the macOS list yourself. The app never changes permissions on its own.
+2. Scroll down to **입력 → 말하는 동안 바로 입력** (Input → Type while speaking) to turn live typing on or off. When it's off, the transcript is kept and you copy or paste it when you choose.
+3. Click the field you want, then use the overlay's **붙여넣기** (Paste) or **Control+Option+V**. To avoid the permission entirely, use **복사** (Copy) and press ⌘V yourself.
 
-시스템 설정에서 돌아오면 권한 상태가 갱신됩니다. 비밀번호 입력이나 macOS 권한 승인은 사용자가 직접 합니다.
+Permission status refreshes when you come back from System Settings. You enter passwords and approve macOS permissions yourself.
 
-macOS 버전에 따라 개인정보 보호 및 보안의 해당 항목이 **Device Control and Data Management**로 표시될 수 있습니다. 왼쪽 사이드바의 확대·VoiceOver 등을 설정하는 **Accessibility** 화면과는 다릅니다.
+Depending on your macOS version, the relevant Privacy & Security item may be labelled **Device Control and Data Management**. That's different from the **Accessibility** screen in the sidebar that configures Zoom, VoiceOver, and so on.
 
-개발 빌드는 ad-hoc 서명이라 재빌드하면 서명 해시가 바뀝니다. 목록에서 이미 켜져 있는데도 권한이 없다고 나오면, 이전 Speech2Text 항목을 제거하고 **현재 `build/Speech2Text.app`**을 다시 추가해 허용하세요. 승인 후 같은 실행본을 사용해야 합니다.
+Development builds with ad-hoc signing change their signature hash on every rebuild. If the list shows Speech2Text as enabled but the app still reports no permission, remove the old Speech2Text entry, add the **current `build/Speech2Text.app`** again, and allow it. Keep using that same build after approving.
 
-## 데이터
+## Data
 
-녹음 중 오디오를 Soniox로 전송합니다. Soniox 사용 요금이 적용됩니다. 키는 소스·로그에 기록하지 않습니다. 전사는 메모리에만 남으며 앱 종료 시 사라집니다. 녹음 파일을 자동 저장하거나 화면을 수집하지 않습니다.
+Audio is sent to Soniox while recording, and Soniox usage charges apply. The key is never written to source or logs. Transcripts live only in memory and disappear when the app quits. The app doesn't save recordings or capture the screen.
 
-## 로컬 검증
+## Local verification
 
 ```sh
 bash scripts/test.sh
@@ -73,14 +111,14 @@ bash scripts/build-app.sh
 codesign --verify --deep --strict build/Speech2Text.app
 ```
 
-이 Mac의 Swift 6.4 Command Line Tools에서는 기본 테스트 명령이 `TestingMacros`/`Testing` 경로를 찾지 못합니다. `scripts/test.sh`는 설치된 프레임워크와 매크로 경로를 명시하며 테스트를 제외하지 않습니다. 현재 도구 체인은 `native` 빌드 백엔드의 사용 중단 예정 경고를 출력합니다.
+With the Swift 6.4 Command Line Tools on this Mac, the default test command can't find the `TestingMacros`/`Testing` paths. `scripts/test.sh` passes the installed framework and macro paths explicitly and doesn't skip any tests. The current toolchain prints a deprecation warning for the `native` build backend.
 
-실제 오디오 파일을 같은 인식 경로로 보내는 진단 실행도 지원합니다. 앱을 먼저 종료하세요.
+You can also run a diagnostic that sends a real audio file through the same recognition path. Quit the app first.
 
 ```sh
 open build/Speech2Text.app --args --audio-file /absolute/path/sample.aiff --no-auto-insert
 ```
 
-이 실행도 Soniox와 앱 전용 Keychain의 키를 사용합니다. `--no-auto-insert`를 빼면 실행 당시 입력 칸이 그대로 유지되는 경우 자동 입력합니다.
+This run also uses Soniox and the key in the app's own Keychain. Without `--no-auto-insert`, the result is typed automatically if the field that was focused at launch is still focused.
 
-빌드 앱은 로컬 ad-hoc 서명입니다. 공증·Applications 설치·로그인 시 실행·GitHub Actions는 설정하지 않습니다.
+The built app is signed locally. Notarization, installing into Applications, launch at login, and GitHub Actions aren't set up.
