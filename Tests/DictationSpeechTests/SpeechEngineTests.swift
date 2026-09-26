@@ -14,18 +14,44 @@ actor TestSocket: SocketTransport {
     private var sentWaiters: [(SocketFrame, CheckedContinuation<Void, Never>)] = []
     private var blockedSend: CheckedContinuation<Void, any Error>?
     private var blockEOF = false
+    private var blockConfig = false
+    private var refusing = false
+    private var connectWaiters: [CheckedContinuation<Void, Never>] = []
+    private var closeWaiters: [CheckedContinuation<Void, Never>] = []
 
-    func connect(url: URL) { connections += 1 }
+    func connect(url: URL) {
+        connections += 1
+        connectWaiters.forEach { $0.resume() }
+        connectWaiters.removeAll()
+    }
     func holdEOF() { blockEOF = true }
+    /// Stalls the first (configuration) frame the way a slow WebSocket handshake does.
+    func holdConfig() { blockConfig = true }
+    func releaseConfig() {
+        blockConfig = false
+        blockedSend?.resume()
+        blockedSend = nil
+    }
+    func refuseConnection() { refusing = true }
     func send(_ frame: SocketFrame) async throws {
         guard !closed else { throw AppError.cancelled }
+        if refusing { throw URLError(.notConnectedToInternet) }
+        let isConfig = sent.isEmpty
         sent.append(frame)
         let ready = sentWaiters.filter { $0.0 == frame }
         sentWaiters.removeAll { $0.0 == frame }
         for (_, waiter) in ready { waiter.resume() }
-        if blockEOF, frame == .text("") {
+        if (blockEOF && frame == .text("")) || (blockConfig && isConfig) {
             try await withCheckedThrowingContinuation { blockedSend = $0 }
         }
+    }
+    func waitUntilConnected() async {
+        if connections > 0 { return }
+        await withCheckedContinuation { connectWaiters.append($0) }
+    }
+    func waitUntilClosed() async {
+        if closed { return }
+        await withCheckedContinuation { closeWaiters.append($0) }
     }
     func waitUntilSent(_ frame: SocketFrame) async {
         if sent.contains(frame) { return }
@@ -48,6 +74,8 @@ actor TestSocket: SocketTransport {
         receiver = nil
         blockedSend?.resume(throwing: AppError.cancelled)
         blockedSend = nil
+        closeWaiters.forEach { $0.resume() }
+        closeWaiters.removeAll()
     }
 }
 
@@ -55,8 +83,20 @@ actor TestSocket: SocketTransport {
     let pair = AsyncThrowingStream<Data, Error>.makeStream()
     private(set) var starts = 0
     private(set) var stops = 0
+    var startError: AppError?
+    private var holdsStart = false
+    private var gate: CheckedContinuation<Void, Never>?
+    /// Keeps `start` pending, like a microphone that is still waking up.
+    func holdStart() { holdsStart = true }
+    func releaseStart() {
+        holdsStart = false
+        gate?.resume()
+        gate = nil
+    }
     func start(format: CaptureFormat) async throws -> AsyncThrowingStream<Data, Error> {
         starts += 1
+        if holdsStart { await withCheckedContinuation { gate = $0 } }
+        if let startError { throw startError }
         return pair.stream
     }
     func stop() async {
@@ -398,10 +438,146 @@ actor TestCredentials: CredentialStoring {
         engine.cancel()
         await engine.runTask?.value
     }
+
+    @Test func providerConnectsWhileMicrophoneStarts() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        audio.holdStart()
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        await socket.waitUntilConnected()
+        #expect(engine.phase == .preparing)
+        audio.releaseStart()
+        await socket.waitUntilSent(.binary(pcm))
+        #expect(engine.isRecording)
+        engine.cancel()
+        await engine.runTask?.value
+    }
+
+    @Test func recordingBuffersAudioUntilProviderIsReady() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        await socket.holdConfig()
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        try await waitUntil { engine.isRecording }
+        #expect(await socket.sent.contains(.binary(pcm)) == false)
+        await socket.releaseConfig()
+        await socket.waitUntilSent(.binary(pcm))
+        #expect(!engine.hasError)
+        engine.cancel()
+        await engine.runTask?.value
+    }
+
+    @Test func finishWhileConnectingSendsBufferedAudioThenEOF() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        var finals: [String] = []
+        engine.onFinal = { finals.append($0) }
+        await socket.holdConfig()
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        try await waitUntil { engine.isRecording }
+        engine.finish()
+        #expect(engine.phase == .finishing)
+        await socket.releaseConfig()
+        await socket.waitUntilSent(.text(""))
+        #expect(Array(await socket.sent.suffix(2)) == [.binary(pcm), .text("")])
+        await socket.push(.text(#"{"tokens":[{"text":"짧게","is_final":true}],"finished":true}"#))
+        await engine.runTask?.value
+        #expect(finals == ["짧게"])
+        #expect(!engine.hasError)
+    }
+
+    @Test func failedConnectionRetriesOnceOnAFreshSession() async throws {
+        let dead = TestSocket(), live = TestSocket(), audio = TestAudio()
+        await dead.refuseConnection()
+        var sessions = [SonioxSession(transport: dead), SonioxSession(transport: live)]
+        let engine = SpeechEngine(sessionFactory: { sessions.removeFirst() }, audioFactory: { _ in audio })
+        engine.apiKey = "fixture"
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        await live.waitUntilSent(.binary(pcm))
+        #expect(engine.isRecording)
+        #expect(!engine.hasError)
+        #expect(await dead.closed)
+        engine.cancel()
+        await engine.runTask?.value
+        await live.waitUntilClosed()
+    }
+
+    @Test func secondConnectionFailureEndsWithAnError() async throws {
+        let first = TestSocket(), second = TestSocket(), audio = TestAudio()
+        await first.refuseConnection()
+        await second.refuseConnection()
+        var sessions = [SonioxSession(transport: first), SonioxSession(transport: second)]
+        var created = 0
+        let engine = SpeechEngine(sessionFactory: { created += 1; return sessions.removeFirst() },
+                                  audioFactory: { _ in audio })
+        engine.apiKey = "fixture"
+        var finals: [String] = []
+        engine.onFinal = { finals.append($0) }
+        engine.start()
+        await engine.runTask?.value
+        #expect(engine.hasError)
+        #expect(engine.outcome == .failed)
+        #expect(!engine.isBusy)
+        #expect(created == 2)
+        #expect(finals.isEmpty)
+    }
+
+    @Test func microphoneFailureClosesThePendingConnection() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        await socket.holdConfig()
+        audio.holdStart()
+        audio.startError = .microphoneSilent
+        engine.start()
+        await socket.waitUntilConnected()
+        audio.releaseStart()
+        await engine.runTask?.value
+        #expect(engine.hasError)
+        await socket.waitUntilClosed()
+    }
+
+    @Test func offlineStartFailsBeforeTouchingMicrophoneOrNetwork() async {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = SpeechEngine(sessionFactory: { SonioxSession(transport: socket) },
+                                  audioFactory: { _ in audio }, isOffline: { true })
+        engine.apiKey = "fixture"
+        engine.start()
+        #expect(engine.hasError)
+        #expect(engine.outcome == .failed)
+        #expect(!engine.isBusy)
+        #expect(audio.starts == 0)
+        #expect(await socket.connections == 0)
+    }
 }
 
 @Suite(.timeLimit(.minutes(1)))
 struct SonioxTransportTests {
+    @Test func stalledHandshakeFailsWithinTheConnectBound() async throws {
+        let socket = TestSocket()
+        await socket.holdConfig()
+        let session = SonioxSession(transport: socket, connectTimeout: .milliseconds(30))
+        await #expect(throws: AppError.connectionFailed) { _ = try await session.open(apiKey: "fixture") }
+        #expect(await socket.closed)
+    }
+
+    @Test func refusedConnectionIsAConnectionFailure() async throws {
+        let socket = TestSocket()
+        await socket.refuseConnection()
+        await #expect(throws: AppError.connectionFailed) { _ = try await SonioxSession(transport: socket).open(apiKey: "fixture") }
+    }
+
+    @Test func cancelBeforeOpenNeverConnects() async throws {
+        let socket = TestSocket()
+        let session = SonioxSession(transport: socket)
+        await session.cancel()
+        await #expect(throws: AppError.cancelled) { _ = try await session.open(apiKey: "fixture") }
+        #expect(await socket.connections == 0)
+    }
+
     @Test func configurationPCMAndTextEOFUseProductionProtocol() async throws {
         let socket = TestSocket()
         let session = SonioxSession(transport: socket)

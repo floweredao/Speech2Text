@@ -37,15 +37,18 @@ public enum SpeechOutcome: Sendable {
     @ObservationIgnored private let sessionFactory: @MainActor () -> any STTSession
     @ObservationIgnored private let audioFactory: @MainActor (String?) -> any AudioCapturing
     @ObservationIgnored private let credentials: any CredentialStoring
+    @ObservationIgnored private let isOffline: @MainActor () -> Bool
     @ObservationIgnored private let startTimeout: Duration
     @ObservationIgnored private let recordingLimit: Duration
     @ObservationIgnored private let finishTimeout: Duration
 
     public convenience init() {
+        let network = NetworkPath()
         self.init(
             sessionFactory: { SonioxSession() },
             audioFactory: { AVAudioCapture(deviceUID: $0) },
-            credentials: KeychainCredentialStore()
+            credentials: KeychainCredentialStore(),
+            isOffline: { network.isOffline }
         )
     }
 
@@ -53,6 +56,7 @@ public enum SpeechOutcome: Sendable {
         sessionFactory: @escaping @MainActor () -> any STTSession,
         audioFactory: @escaping @MainActor (String?) -> any AudioCapturing,
         credentials: any CredentialStoring = KeychainCredentialStore(),
+        isOffline: @escaping @MainActor () -> Bool = { false },
         startTimeout: Duration = .seconds(12),
         recordingLimit: Duration = .seconds(60),
         finishTimeout: Duration = .seconds(12)
@@ -60,6 +64,7 @@ public enum SpeechOutcome: Sendable {
         self.sessionFactory = sessionFactory
         self.audioFactory = audioFactory
         self.credentials = credentials
+        self.isOffline = isOffline
         self.startTimeout = startTimeout
         self.recordingLimit = recordingLimit
         self.finishTimeout = finishTimeout
@@ -75,11 +80,12 @@ public enum SpeechOutcome: Sendable {
     private func begin(_ capture: any AudioCapturing) {
         guard !isBusy else { return }
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else {
+        let refusal: AppError? = key.isEmpty ? .missingCredential(.soniox) : isOffline() ? .offline : nil
+        if let refusal {
             hasError = true
             outcome = .failed
             hasCurrentTranscript = false
-            status = AppError.missingCredential(.soniox).localizedDescription
+            status = refusal.localizedDescription
             return
         }
         let epoch = UUID()
@@ -94,33 +100,40 @@ public enum SpeechOutcome: Sendable {
         session = client
         audio = capture
         phase = .preparing
-        status = "음성 인식 연결을 준비하고 있습니다."
+        status = "마이크를 준비하고 있습니다."
         armTimeout(startTimeout, context: "음성 인식 시작", epoch: epoch)
         runTask = Task { [weak self] in
             guard let self else { return }
             do {
                 guard generation == epoch, !Task.isCancelled else { return }
-                let events = try await client.open(apiKey: key)
-                guard generation == epoch, !Task.isCancelled else { return }
+                // The microphone starts at once and buffers while the provider connects, so the first
+                // words are kept. A pending permission prompt comes first: Soniox drops idle sockets.
+                let early = capture.promptsForPermission ? nil : connect(client, apiKey: key, epoch: epoch)
                 let chunks = try await capture.start(format: .pcm16Mono16k)
                 guard generation == epoch, !Task.isCancelled else { return }
                 phase = .recording
-                status = "듣고 있습니다."
-                timerTask?.cancel()
-                timerTask = Task { [weak self, recordingLimit] in
-                    do { try await Task.sleep(for: recordingLimit) } catch { return }
-                    guard let self, self.generation == epoch else { return }
-                    self.finish()
+                status = "듣고 있습니다 · 연결 중…"
+                let (provider, events) = try await (early ?? connect(client, apiKey: key, epoch: epoch)).value
+                guard generation == epoch, !Task.isCancelled else { return }
+                // Finishing while connecting already armed its own timeout; keep it.
+                if phase == .recording {
+                    status = "듣고 있습니다."
+                    timerTask?.cancel()
+                    timerTask = Task { [weak self, recordingLimit] in
+                        do { try await Task.sleep(for: recordingLimit) } catch { return }
+                        guard let self, self.generation == epoch else { return }
+                        self.finish()
+                    }
                 }
                 senderTask = Task { [weak self] in
                     do {
                         for try await chunk in chunks {
                             guard let self, self.generation == epoch, !Task.isCancelled else { return }
-                            if !chunk.isEmpty { try await client.sendAudio(chunk) }
+                            if !chunk.isEmpty { try await provider.sendAudio(chunk) }
                         }
                         guard let self, self.generation == epoch, !Task.isCancelled else { return }
                         self.beginFinishing(epoch: epoch)
-                        try await client.finish()
+                        try await provider.finish()
                     } catch { self?.fail(error, epoch: epoch) }
                 }
                 var completed = false
@@ -154,6 +167,24 @@ public enum SpeechOutcome: Sendable {
                 status = result.isEmpty ? "인식된 음성이 없습니다." : "받아쓰기를 마쳤습니다."
                 onFinal?(result)
             } catch { fail(error, epoch: epoch) }
+        }
+    }
+
+    /// Opens the provider while audio buffers. A failed connection is retried once on a fresh session:
+    /// no audio has been sent yet, so the retry loses nothing.
+    private func connect(_ first: any STTSession, apiKey key: String, epoch: UUID)
+        -> Task<(any STTSession, AsyncThrowingStream<TranscriptEvent, Error>), Error> {
+        Task {
+            guard generation == epoch else { throw AppError.cancelled }
+            do {
+                return (first, try await first.open(apiKey: key))
+            } catch AppError.connectionFailed {
+                guard generation == epoch else { throw AppError.cancelled }
+                let retry = sessionFactory()
+                session = retry
+                if phase == .recording { status = "듣고 있습니다 · 다시 연결 중…" }
+                return (retry, try await retry.open(apiKey: key))
+            }
         }
     }
 

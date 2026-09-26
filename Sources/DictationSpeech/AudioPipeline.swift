@@ -143,6 +143,7 @@ final class AudioPipeline: @unchecked Sendable {
     private var configurationObserver: NSObjectProtocol?
     private let deviceUID: String?
     init(deviceUID: String? = nil) { self.deviceUID = deviceUID }
+    var promptsForPermission: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined }
     func start(format: CaptureFormat) async throws -> AsyncThrowingStream<Data, Error> {
         await stop()
         let id = UUID(); generation = id
@@ -160,7 +161,8 @@ final class AudioPipeline: @unchecked Sendable {
         }
         let input = node.outputFormat(forBus: 0)
         guard input.sampleRate > 0, input.channelCount > 0 else { throw AppError.permissionDenied("Microphone input device") }
-        let pipeline = try AudioPipeline(format: format, input: input, capacity: 200)
+        // Recording starts before the provider connects: hold the full 12 s start window (20 ms chunks).
+        let pipeline = try AudioPipeline(format: format, input: input, capacity: 600)
         self.engine = engine; self.pipeline = pipeline
         pipeline.onTermination { [weak self] in
             Task { @MainActor in

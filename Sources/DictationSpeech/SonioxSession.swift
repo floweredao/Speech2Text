@@ -47,6 +47,7 @@ actor URLSocketTransport: SocketTransport {
 actor SonioxSession: STTSession {
     private let socket: any SocketTransport
     private let timeout: Duration
+    private let connectTimeout: Duration
     private var continuation: AsyncThrowingStream<TranscriptEvent, Error>.Continuation?
     private var receiver: Task<Void, Never>?
     private var reducer = SonioxTranscriptReducer()
@@ -55,15 +56,19 @@ actor SonioxSession: STTSession {
     private var finishing = false
     private var failure: AppError?
 
-    init(transport: any SocketTransport = URLSocketTransport(), timeout: Duration = .seconds(10)) {
+    /// `connectTimeout` bounds the handshake plus configuration send. The microphone is already
+    /// recording by then, so a dead network must surface within seconds rather than the socket's 10.
+    init(transport: any SocketTransport = URLSocketTransport(), timeout: Duration = .seconds(10),
+         connectTimeout: Duration = .seconds(3)) {
         socket = transport
         self.timeout = timeout
+        self.connectTimeout = connectTimeout
     }
 
     func open(apiKey: String) async throws -> AsyncThrowingStream<TranscriptEvent, Error> {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw AppError.missingCredential(.soniox) }
-        guard !used else { throw AppError.invalidResponse("Session already used") }
+        guard !used else { throw failure ?? AppError.invalidResponse("Session already used") }
         used = true
         active = true
         let pair = AsyncThrowingStream<TranscriptEvent, Error>.makeStream()
@@ -79,13 +84,14 @@ actor SonioxSession: STTSession {
                 "endpoint_sensitivity": 0.3, "max_endpoint_delay_ms": 1500
             ]
             let text = String(decoding: try JSONSerialization.data(withJSONObject: config), as: UTF8.self)
-            try await sendWithTimeout(.text(text))
+            try await sendWithTimeout(.text(text), limit: connectTimeout)
             continuation?.yield(.status(.configSent))
             receiver = Task { [weak self] in await self?.readLoop() }
             return pair.stream
         } catch {
             await terminate(error: failure ?? (error as? AppError) ?? .invalidResponse("Provider connection"))
-            throw failure ?? .cancelled
+            let reason = failure ?? .cancelled
+            throw reason == .cancelled ? reason : AppError.connectionFailed
         }
     }
 
@@ -128,9 +134,9 @@ actor SonioxSession: STTSession {
         try await sendWithTimeout(.text(""))
     }
 
-    private func sendWithTimeout(_ frame: SocketFrame) async throws {
+    private func sendWithTimeout(_ frame: SocketFrame, limit: Duration? = nil) async throws {
         let timer = Task { [weak self, timeout] in
-            do { try await Task.sleep(for: timeout) } catch { return }
+            do { try await Task.sleep(for: limit ?? timeout) } catch { return }
             await self?.terminate(error: .timeout("Provider send"))
         }
         defer { timer.cancel() }
@@ -143,7 +149,14 @@ actor SonioxSession: STTSession {
         }
     }
 
-    func cancel() async { await terminate(error: .cancelled) }
+    func cancel() async {
+        // A session cancelled before it opened must never connect afterwards.
+        if !used {
+            used = true
+            failure = .cancelled
+        }
+        await terminate(error: .cancelled)
+    }
 
     private func terminate(error: AppError?) async {
         guard active else { return }
