@@ -24,8 +24,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.overlay = overlay
         overlay.start()
         overlay.present()
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Speech2Text")
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.button?.image = MenuBarIcon.image
         let menu = NSMenu()
         toggleItem = menu.addItem(withTitle: "", action: #selector(toggle), keyEquivalent: "")
         pasteItem = menu.addItem(withTitle: "", action: #selector(paste), keyEquivalent: "")
