@@ -62,6 +62,8 @@ struct SettingsView: View {
     private var microphone: MicrophoneAccess { microphoneState.wrappedValue }
     private let devicesState = State(initialValue: AudioInputDevices.all())
     private let defaultDeviceState = State(initialValue: AudioInputDevices.defaultDevice())
+    private let recorderState = State(initialValue: ShortcutRecorder())
+    private var recorder: ShortcutRecorder { recorderState.wrappedValue }
 
     private let pane = ControlPermissionPane.current
     private var state: DictationDisplayState { DictationDisplayState(model: model) }
@@ -75,10 +77,15 @@ struct SettingsView: View {
             statusSection
             setupSection
             inputSection
+            shortcutSection
         }
         .formStyle(.grouped)
         .frame(minWidth: 440, idealWidth: 480, maxWidth: 640, minHeight: 420, idealHeight: 540)
         .onAppear(perform: refreshPermissions)
+        .onDisappear { recorder.cancel() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
+            recorder.cancel()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissions()
         }
@@ -225,15 +232,81 @@ struct SettingsView: View {
                 Text("시작할 때 선택한 입력 칸에 실시간으로 쓰고, 인식이 고쳐지면 그 부분도 바로 고쳐요. 칸이 바뀌면 멈추고 결과를 보관해요.")
             }
             .accessibilityIdentifier("settings-auto-insert")
-            LabeledContent("받아쓰기 시작 / 마무리") {
-                Text("⌃⌥D").font(.body.monospaced()).accessibilityLabel("Control Option D")
-            }
-            LabeledContent("마지막 결과 붙여넣기") {
-                Text("⌃⌥V").font(.body.monospaced()).accessibilityLabel("Control Option V")
-            }
             LabeledContent("화면 위쪽 표시") {
                 Button("열기") { model.overlayVisible = true }
                     .accessibilityIdentifier("settings-show-overlay")
+            }
+        }
+    }
+
+    private var shortcutSection: some View {
+        Section("단축키") {
+            ForEach(ShortcutAction.allCases, id: \.self) { action in
+                shortcutRow(action)
+            }
+            if !model.shortcutNote.isEmpty {
+                Text(model.shortcutNote)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("settings-shortcut-note")
+            }
+            if !model.shortcutProblem.isEmpty {
+                Text(model.shortcutProblem)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("settings-shortcut-problem")
+            }
+            if model.shortcuts.usesModifierOnlyTrigger && !model.accessibilityGranted {
+                Text("수정 키만 누르는 단축키는 '\(pane.title)' 권한이 있어야 동작해요.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("settings-shortcut-permission")
+            }
+            if model.shortcuts != .standard {
+                Button("기본값으로 되돌리기") {
+                    recorder.cancel()
+                    model.shortcutNote = ""
+                    model.shortcuts = .standard
+                }
+                .accessibilityIdentifier("settings-shortcut-reset")
+            }
+        }
+    }
+
+    private func shortcutRow(_ action: ShortcutAction) -> some View {
+        let recording = model.capturingShortcut == action
+        let shortcut = model.shortcuts[action]
+        return LabeledContent {
+            HStack(spacing: 6) {
+                Button {
+                    if recording { recorder.cancel() } else { recorder.begin(action, model: model) }
+                } label: {
+                    Text(recording ? (model.shortcutPreview.isEmpty ? "키를 누르세요…" : model.shortcutPreview)
+                                   : (shortcut?.label ?? "없음"))
+                        .frame(minWidth: 120)
+                }
+                .buttonStyle(.bordered)
+                .tint(recording ? .accentColor : nil)
+                .help(recording ? "누르면 기록을 취소해요." : "눌러서 새 단축키를 기록해요.")
+                .accessibilityLabel(recording ? "단축키 기록 중" : (shortcut?.spokenLabel ?? "단축키 없음"))
+                .accessibilityHint("눌러서 새 단축키를 기록해요.")
+                .accessibilityIdentifier("settings-shortcut-\(action.rawValue)")
+                if shortcut != nil && !recording {
+                    Button("단축키 끄기", systemImage: "xmark.circle.fill") { model.shortcuts[action] = nil }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .help("이 단축키를 꺼요.")
+                        .accessibilityIdentifier("settings-shortcut-clear-\(action.rawValue)")
+                }
+            }
+        } label: {
+            Text(action.title)
+            if recording {
+                Text("누르면 기록돼요. 두세 번 연달아 누르면 여러 번 누르기로, 양쪽 ⇧처럼 수정 키만 눌러도 돼요. Esc는 취소.")
             }
         }
     }

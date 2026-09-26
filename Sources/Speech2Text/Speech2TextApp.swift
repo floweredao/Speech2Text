@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import SwiftUI
 
 @main
@@ -14,7 +13,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlay: NotchOverlayController?
     private var settings: NSWindow?
     private var statusItem: NSStatusItem?
-    private let hotkeys = DictationHotkeys()
+    private let shortcuts = GlobalShortcutMonitor()
+    private var toggleItem: NSMenuItem?
+    private var pasteItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -26,8 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Speech2Text")
         let menu = NSMenu()
-        menu.addItem(withTitle: "받아쓰기 시작 / 마무리  ⌃⌥D", action: #selector(toggle), keyEquivalent: "")
-        menu.addItem(withTitle: "마지막 받아쓰기 붙여넣기  ⌃⌥V", action: #selector(paste), keyEquivalent: "")
+        toggleItem = menu.addItem(withTitle: "", action: #selector(toggle), keyEquivalent: "")
+        pasteItem = menu.addItem(withTitle: "", action: #selector(paste), keyEquivalent: "")
         menu.addItem(withTitle: "받아쓰기 표시", action: #selector(showOverlay), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "설정…", action: #selector(showSettings), keyEquivalent: ",")
@@ -35,12 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for item in menu.items { item.target = self }
         item.menu = menu
         statusItem = item
-        do {
-            try hotkeys.register { [weak self] id in
-                guard let self else { return }
-                if id == 1 { self.toggle() } else { self.paste() }
-            }
-        } catch { model.feedback = error.localizedDescription }
+        model.shortcutsChanged = { [weak self] in self?.applyShortcuts() }
+        applyShortcuts()
         let arguments = ProcessInfo.processInfo.arguments
         if let index = arguments.firstIndex(of: "--audio-file"), arguments.indices.contains(index + 1) {
             model.autoInsert = !arguments.contains("--no-auto-insert")
@@ -57,6 +54,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showSettings()
         return true
+    }
+    private func applyShortcuts() {
+        toggleItem?.title = menuTitle("받아쓰기 시작 / 마무리", .toggleDictation)
+        pasteItem?.title = menuTitle("마지막 받아쓰기 붙여넣기", .pasteTranscript)
+        guard model.capturingShortcut == nil else {
+            shortcuts.stop()
+            return
+        }
+        let refused = shortcuts.start(model.shortcuts) { [weak self] action in
+            switch action {
+            case .toggleDictation: self?.toggle()
+            case .pasteTranscript: self?.paste()
+            }
+        }
+        model.shortcutProblem = refused.isEmpty ? ""
+            : "\(refused.map { "'\($0.title)'" }.joined(separator: ", ")) 단축키를 등록하지 못했어요. 다른 앱이 쓰고 있을 수 있어요. 다른 키를 골라 주세요."
+    }
+    private func menuTitle(_ title: String, _ action: ShortcutAction) -> String {
+        model.shortcuts[action].map { "\(title)  \($0.label)" } ?? title
     }
     @objc private func toggle() { model.toggleRecording(); overlay?.present() }
     @objc private func paste() { model.pasteTranscript(); overlay?.present() }
@@ -81,55 +97,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         model.cancel()
         overlay?.stop()
-        hotkeys.unregister()
-    }
-}
-
-@MainActor
-final class DictationHotkeys {
-    private var references: [EventHotKeyRef] = []
-    private var handler: EventHandlerRef?
-    private var callback: (@MainActor (UInt32) -> Void)?
-
-    func register(callback: @escaping @MainActor (UInt32) -> Void) throws {
-        unregister()
-        self.callback = callback
-        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        guard InstallEventHandler(GetApplicationEventTarget(), Self.receive, 1, &spec,
-                                  Unmanaged.passUnretained(self).toOpaque(), &handler) == noErr else {
-            throw HotkeyError.conflict
-        }
-        for (id, key) in [(UInt32(1), kVK_ANSI_D), (UInt32(2), kVK_ANSI_V)] {
-            var reference: EventHotKeyRef?
-            let result = RegisterEventHotKey(UInt32(key), UInt32(controlKey | optionKey),
-                                            EventHotKeyID(signature: 0x53325458, id: id),
-                                            GetApplicationEventTarget(), 0, &reference)
-            guard result == noErr, let reference else {
-                unregister()
-                throw HotkeyError.conflict
-            }
-            references.append(reference)
-        }
-    }
-    nonisolated private static let receive: EventHandlerUPP = { _, event, context in
-        guard let event, let context else { return OSStatus(eventNotHandledErr) }
-        var id = EventHotKeyID()
-        guard GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
-                                nil, MemoryLayout<EventHotKeyID>.size, nil, &id) == noErr,
-              id.signature == 0x53325458 else { return OSStatus(eventNotHandledErr) }
-        let owner = Unmanaged<DictationHotkeys>.fromOpaque(context).takeUnretainedValue()
-        MainActor.assumeIsolated { owner.callback?(id.id) }
-        return noErr
-    }
-    func unregister() {
-        references.forEach { UnregisterEventHotKey($0) }
-        references.removeAll()
-        if let handler { RemoveEventHandler(handler) }
-        handler = nil
-        callback = nil
-    }
-    enum HotkeyError: LocalizedError {
-        case conflict
-        var errorDescription: String? { "단축키를 등록하지 못했어요. 메뉴바에서 받아쓰기를 시작해 주세요." }
+        shortcuts.stop()
     }
 }

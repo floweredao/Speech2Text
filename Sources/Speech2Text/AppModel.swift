@@ -11,8 +11,24 @@ final class AppModel {
     var feedback = ""
     var autoInsert = true
     var overlayVisible = true
-    var accessibilityGranted = AXIsProcessTrusted()
+    var accessibilityGranted = AXIsProcessTrusted() {
+        didSet { if accessibilityGranted, !oldValue { shortcutsChanged?() } }
+    }
     var settingsAction: (() -> Void)?
+    var shortcuts = ShortcutSettings.load() {
+        didSet {
+            shortcuts.save()
+            shortcutsChanged?()
+        }
+    }
+    /// While set, global shortcuts are paused so the settings window can record keys.
+    var capturingShortcut: ShortcutAction? {
+        didSet { if capturingShortcut != oldValue { shortcutsChanged?() } }
+    }
+    var shortcutPreview = ""
+    var shortcutNote = ""
+    var shortcutProblem = ""
+    @ObservationIgnored var shortcutsChanged: (() -> Void)?
     var inputDeviceUID: String? = UserDefaults.standard.string(forKey: "inputDeviceUID") {
         didSet {
             UserDefaults.standard.set(inputDeviceUID, forKey: "inputDeviceUID")

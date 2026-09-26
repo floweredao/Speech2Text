@@ -36,11 +36,12 @@ struct DictationDisplayState: Equatable {
         self.init(speechPhase: model.speechPhase, hasError: model.hasError, status: model.status,
                   transcript: model.transcript, feedback: model.feedback,
                   session: DictationSession(outcome: model.speechOutcome,
-                                            hasCurrentTranscript: model.hasCurrentTranscript))
+                                            hasCurrentTranscript: model.hasCurrentTranscript),
+                  toggleShortcut: model.shortcuts[.toggleDictation]?.label)
     }
 
     init(speechPhase: SpeechPhase, hasError: Bool, status: String, transcript: String, feedback: String,
-         session: DictationSession = DictationSession()) {
+         session: DictationSession = DictationSession(), toggleShortcut: String? = "⌃⌥D") {
         let fresh = session.freshTranscript(transcript)
         let phase: Phase
         switch speechPhase {
@@ -56,7 +57,7 @@ struct DictationDisplayState: Equatable {
         }
         self.phase = phase
         switch phase {
-        case .idle: title = "⌃⌥D로 받아쓰기"
+        case .idle: title = toggleShortcut.map { "\($0) 눌러 받아쓰기" } ?? "받아쓰기"
         case .error: title = "받아쓰기 오류"
         default: title = status
         }
@@ -464,7 +465,7 @@ private struct NotchOverlayView: View {
         if !state.recoveryActions.isEmpty {
             HStack(spacing: 8) {
                 ForEach(state.recoveryActions, id: \.self) { action in
-                    OverlayTextButton(title: action == .start ? "다시 시도 ⌃⌥D" : "설정 확인",
+                    OverlayTextButton(title: action == .start ? "다시 시도" + shortcutSuffix(.toggleDictation) : "설정 확인",
                                       symbol: action == .start ? "arrow.clockwise" : "gearshape",
                                       id: action == .start ? "notch-retry" : "notch-open-settings") {
                         perform(action)
@@ -491,7 +492,8 @@ private struct NotchOverlayView: View {
         } else if state.offersTranscriptActions {
             HStack(spacing: 8) {
                 OverlayTextButton(title: "복사", symbol: "doc.on.doc", id: "notch-copy") { model.copyTranscript() }
-                OverlayTextButton(title: "붙여넣기 ⌃⌥V", symbol: "arrow.down.doc", id: "notch-paste") {
+                OverlayTextButton(title: "붙여넣기" + shortcutSuffix(.pasteTranscript), symbol: "arrow.down.doc",
+                                  id: "notch-paste") {
                     model.pasteTranscript()
                 }
                 Spacer(minLength: 0)
@@ -519,7 +521,7 @@ private struct NotchOverlayView: View {
             OverlayIconButton(symbol: "doc.on.doc", label: "복사", id: "notch-copy", prominent: false) {
                 model.copyTranscript()
             }
-            OverlayIconButton(symbol: "arrow.down.doc", label: "붙여넣기 (⌃⌥V)", id: "notch-paste",
+            OverlayIconButton(symbol: "arrow.down.doc", label: "붙여넣기" + shortcutHint(.pasteTranscript), id: "notch-paste",
                               prominent: false) {
                 model.pasteTranscript()
             }
@@ -547,12 +549,20 @@ private struct NotchOverlayView: View {
 
     private func label(for action: DictationDisplayState.Action, _ state: DictationDisplayState) -> String {
         switch action {
-        case .start: "받아쓰기 시작 (⌃⌥D)"
-        case .finish: "녹음 마치기 (⌃⌥D)"
+        case .start: "받아쓰기 시작" + shortcutHint(.toggleDictation)
+        case .finish: "녹음 마치기" + shortcutHint(.toggleDictation)
         case .cancel: state.phase == .recording ? "녹음 취소" : "받아쓰기 취소"
         case .settings: "설정 열기"
         case .dismiss: "닫기"
         }
+    }
+
+    private func shortcutSuffix(_ action: ShortcutAction) -> String {
+        model.shortcuts[action].map { " \($0.label)" } ?? ""
+    }
+
+    private func shortcutHint(_ action: ShortcutAction) -> String {
+        model.shortcuts[action].map { " (\($0.label))" } ?? ""
     }
 
     private func identifier(for action: DictationDisplayState.Action) -> String {
