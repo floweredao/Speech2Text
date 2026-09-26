@@ -174,6 +174,74 @@ actor TestCredentials: CredentialStoring {
         #expect(!engine.hasError)
     }
 
+    @Test func cancelDiscardsUnconfirmedTextFromPasteSurface() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        await socket.waitUntilSent(.binary(pcm))
+        await socket.push(.text(#"{"tokens":[{"text":"must not paste cancelled text","is_final":false}]}"#))
+        try await waitUntil { !engine.transcript.isEmpty }
+        engine.cancel()
+        await engine.runTask?.value
+        #expect(engine.transcript.isEmpty)
+        #expect(engine.outcome == .cancelled)
+        #expect(!engine.hasCurrentTranscript)
+    }
+
+    @Test func liveTextFollowsEveryRevisionAndStopsAfterCancel() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        var live: [String] = []
+        engine.onLiveText = { live.append($0) }
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        await socket.waitUntilSent(.binary(pcm))
+        await socket.push(.text(#"{"tokens":[{"text":"메모 열어","is_final":false}]}"#))
+        try await waitUntil { engine.transcript == "메모 열어" }
+        await socket.push(.text(#"{"tokens":[{"text":"메모장 ","is_final":true},{"text":"열어 줘","is_final":false}]}"#))
+        try await waitUntil { engine.transcript == "메모장 열어 줘" }
+        #expect(live == ["메모 열어", "메모장 열어 줘"])
+        engine.cancel()
+        await socket.push(.text(#"{"tokens":[{"text":"late","is_final":false}]}"#))
+        await engine.runTask?.value
+        #expect(live.count == 2)
+    }
+
+    @Test func turnsAreJoinedWithASingleSpace() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        var live: [String] = []
+        engine.onLiveText = { live.append($0) }
+        audio.pair.continuation.finish()
+        engine.start()
+        await socket.waitUntilSent(.text(""))
+        await socket.push(.text(#"{"tokens":[{"text":"첫 문장.","is_final":true},{"text":"<end>","is_final":true},{"text":" 둘째","is_final":false}]}"#))
+        try await waitUntil { live.count == 2 || engine.transcript.hasSuffix("둘째") }
+        #expect(live.last == "첫 문장. 둘째")
+        await socket.push(.text(#"{"tokens":[{"text":" 둘째 문장.","is_final":true}],"finished":true}"#))
+        await engine.runTask?.value
+        #expect(engine.transcript == "첫 문장. 둘째 문장.")
+    }
+
+    @Test func repeatingTheSameSentenceIsReportedAsCurrent() async throws {
+        let first = TestSocket(), second = TestSocket()
+        var sessions = [SonioxSession(transport: first), SonioxSession(transport: second)]
+        let audios = [TestAudio(), TestAudio()]
+        var captures = audios
+        let engine = SpeechEngine(sessionFactory: { sessions.removeFirst() }, audioFactory: { captures.removeFirst() })
+        engine.apiKey = "fixture"
+        for (socket, audio) in zip([first, second], audios) {
+            audio.pair.continuation.finish()
+            engine.start()
+            await socket.waitUntilSent(.text(""))
+            await socket.push(.text(#"{"tokens":[{"text":"같은 문장","is_final":true}],"finished":true}"#))
+            await engine.runTask?.value
+            #expect(engine.outcome == .completed)
+            #expect(engine.hasCurrentTranscript)
+        }
+    }
+
     @Test func cancelThenRestartRejectsOldSessionAndLateFinal() async throws {
         let oldSocket = TestSocket(), newSocket = TestSocket()
         let oldAudio = TestAudio(), newAudio = TestAudio()

@@ -5,6 +5,10 @@ public enum SpeechPhase: Sendable {
     case idle, preparing, recording, finishing
 }
 
+public enum SpeechOutcome: Sendable {
+    case none, completed, empty, cancelled, failed
+}
+
 /// Native Soniox dictation. An endpoint finalizes a turn, not the whole recording.
 /// `onFinal` is called exactly once on successful session completion, including empty speech.
 @MainActor @Observable public final class SpeechEngine {
@@ -13,12 +17,16 @@ public enum SpeechPhase: Sendable {
     public private(set) var status = "받아쓰기 준비가 됐습니다."
     public private(set) var phase = SpeechPhase.idle
     public private(set) var hasError = false
+    public private(set) var outcome = SpeechOutcome.none
+    public private(set) var hasCurrentTranscript = false
     public var isRecording: Bool { phase == .recording }
     public var isBusy: Bool { phase != .idle }
     public var onFinal: (@MainActor (String) -> Void)?
+    public var onLiveText: (@MainActor (String) -> Void)?
 
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var turns: [TranscriptUpdate] = []
+    @ObservationIgnored private var lastFinalTranscript = ""
     @ObservationIgnored private var session: (any STTSession)?
     @ObservationIgnored private var audio: (any AudioCapturing)?
     @ObservationIgnored private(set) var runTask: Task<Void, Never>?
@@ -72,14 +80,18 @@ public enum SpeechPhase: Sendable {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
             hasError = true
+            outcome = .failed
+            hasCurrentTranscript = false
             status = AppError.missingCredential(.soniox).localizedDescription
             return
         }
         let epoch = UUID()
         generation = epoch
         hasError = false
+        outcome = .none
+        hasCurrentTranscript = false
         turns = []
-        let previousTranscript = transcript
+        let previousTranscript = lastFinalTranscript
         // Keep the previous transcript until new speech arrives, even if startup fails.
         let client = sessionFactory()
         session = client
@@ -131,9 +143,11 @@ public enum SpeechPhase: Sendable {
                 guard generation == epoch, !Task.isCancelled else { return }
                 await capture.stop()
                 guard generation == epoch, !Task.isCancelled else { return }
-                let result = turns.filter(\.isFinal).map(\.text).filter { !$0.isEmpty }.joined(separator: " ")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let result = Self.joined(turns.filter(\.isFinal))
                 transcript = result.isEmpty ? previousTranscript : result
+                if !result.isEmpty { lastFinalTranscript = result }
+                hasCurrentTranscript = !result.isEmpty
+                outcome = result.isEmpty ? .empty : .completed
                 generation = UUID()
                 timerTask?.cancel()
                 session = nil
@@ -153,8 +167,15 @@ public enum SpeechPhase: Sendable {
         } else {
             turns.append(update)
         }
-        transcript = turns.map(\.text).filter { !$0.isEmpty }.joined(separator: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        transcript = Self.joined(turns)
+        hasCurrentTranscript = !transcript.isEmpty
+        onLiveText?(transcript)
+    }
+
+    private static func joined(_ turns: [TranscriptUpdate]) -> String {
+        turns.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     public func finish() {
@@ -174,12 +195,16 @@ public enum SpeechPhase: Sendable {
     public func cancel() {
         hasError = false
         guard isBusy else { return }
+        transcript = lastFinalTranscript
+        hasCurrentTranscript = false
+        outcome = .cancelled
         stop(with: AppError.cancelled.localizedDescription)
     }
 
     private func fail(_ error: Error, epoch: UUID) {
         guard generation == epoch else { return }
         hasError = true
+        outcome = .failed
         stop(with: error.localizedDescription)
     }
 

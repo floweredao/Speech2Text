@@ -10,10 +10,12 @@ import Foundation
     private var audioFile: AVAudioFile?
     private var converter: PCMConverter?
     private var stopped = false
+    private let realTime: Bool
 
-    init(url: URL, maximumSeconds: Double = 60) {
+    init(url: URL, maximumSeconds: Double = 60, realTime: Bool = true) {
         self.url = url
         self.maximumSeconds = maximumSeconds
+        self.realTime = realTime
     }
 
     func start(format: CaptureFormat) async throws -> AsyncThrowingStream<Data, Error> {
@@ -37,8 +39,11 @@ import Foundation
             audioFile = file
             converter = try PCMConverter(input: file.processingFormat, format: format)
         }
-        return AsyncThrowingStream(unfolding: { [weak self] in
-            try await self?.nextChunk()
+        // Each chunk is 20 ms of audio; pacing reproduces microphone timing and live partial revisions.
+        return AsyncThrowingStream(unfolding: { [weak self, realTime] in
+            guard let chunk = try await self?.nextChunk() else { return nil }
+            if realTime { try await Task.sleep(for: .milliseconds(20)) }
+            return chunk
         })
     }
 

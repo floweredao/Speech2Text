@@ -19,7 +19,7 @@ import Testing
             buffer.frameLength = buffer.frameCapacity
             try file.write(from: buffer)
         }
-        let capture = FileAudioCapture(url: url)
+        let capture = FileAudioCapture(url: url, realTime: false)
         let stream = try await capture.start(format: .pcm16Mono16k)
         var bytes = 0
         for try await chunk in stream { bytes += chunk.count }

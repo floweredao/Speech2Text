@@ -30,12 +30,14 @@ protocol CredentialStoring: Sendable {
 }
 enum AppError: Error, Sendable, Equatable, LocalizedError {
     case missingCredential(CredentialKind), invalidResponse(String)
+    case provider(code: Int?, message: String)
     case permissionDenied(String), audioOverflow, timeout(String), cancelled
 
     var errorDescription: String? {
         switch self {
         case .missingCredential: "Soniox API 키를 입력해 주세요."
         case .invalidResponse(let context): "음성 인식 응답을 처리할 수 없습니다: \(context)"
+        case .provider(let code, let message): "Soniox\(code.map { " (\($0))" } ?? ""): \(message)"
         case .permissionDenied(let context): "접근 권한이 필요합니다: \(context)"
         case .audioOverflow: "오디오 전송이 지연되어 녹음을 중단했습니다. 다시 시작해 주세요."
         case .timeout(let context): "응답 대기 시간이 초과됐습니다: \(context)"
