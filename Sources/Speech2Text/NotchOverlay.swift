@@ -146,6 +146,17 @@ enum NotchOverlayGeometry {
         return CGRect(x: screen.midX - width / 2, y: screen.maxY - topInset - topGap - height,
                       width: width, height: height)
     }
+
+    /// Where the user dragged the panel: `anchor` is its top-center point. The top edge stays at the
+    /// anchor while the height changes, and the frame is kept inside `screen`.
+    static func frame(anchor: CGPoint, screen: CGRect, expanded: Bool, contentHeight: CGFloat) -> CGRect {
+        let width = width(screenWidth: screen.width, expanded: expanded)
+        let wanted = expanded ? max(contentHeight, compactHeight) : compactHeight
+        let height = min(wanted, screen.height)
+        let x = min(max(anchor.x - width / 2, screen.minX), screen.maxX - width)
+        let top = min(max(anchor.y, screen.minY + height), screen.maxY)
+        return CGRect(x: x, y: top - height, width: width, height: height)
+    }
 }
 
 /// Never key or main: the dictation target keeps keyboard focus while the overlay is visible.
@@ -169,6 +180,11 @@ final class NotchOverlayController: NSObject {
     private var expanded = false
     private var contentHeight = NotchOverlayGeometry.compactHeight
     private var announcedPhase: DictationDisplayState.Phase?
+    /// Top-center point the user dragged the panel to. Kept in memory only, so a relaunch starts
+    /// at the default position below the notch.
+    private var userAnchor: CGPoint?
+    /// Pointer and anchor, in screen coordinates, where the current drag began.
+    private var dragStart: (mouse: CGPoint, anchor: CGPoint)?
 
     init(model: AppModel) {
         self.model = model
@@ -223,6 +239,7 @@ final class NotchOverlayController: NSObject {
         guard model.overlayVisible else {
             panel?.orderOut(nil)
             announcedPhase = nil
+            dragStart = nil
             return
         }
         let resized = expanded != state.isExpanded
@@ -272,7 +289,9 @@ final class NotchOverlayController: NSObject {
                 onContentHeight: { [weak self] height in
                     // Resize after the current SwiftUI layout pass, never inside it.
                     Task { @MainActor [weak self] in self?.contentHeightChanged(height) }
-                })
+                },
+                onDragChanged: { [weak self] translation in self?.dragChanged(translation) },
+                onDragEnded: { [weak self] in self?.dragStart = nil })
             let hosting = FirstClickHostingView(rootView: view)
             hosting.sizingOptions = []
             window.contentView = hosting
@@ -297,17 +316,45 @@ final class NotchOverlayController: NSObject {
         place(panel, animated: false)
     }
 
+    /// Moves the panel with the pointer. Screen coordinates are used because the view's own
+    /// coordinate space moves with the panel; only the first translation predates any move.
+    private func dragChanged(_ translation: CGSize) {
+        guard let panel else { return }
+        let mouse = NSEvent.mouseLocation
+        let start = dragStart ?? (mouse: CGPoint(x: mouse.x - translation.width, y: mouse.y + translation.height),
+                                  anchor: CGPoint(x: panel.frame.midX, y: panel.frame.maxY))
+        dragStart = start
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? selectedScreen
+        else { return }
+        let wanted = CGPoint(x: start.anchor.x + mouse.x - start.mouse.x, y: start.anchor.y + mouse.y - start.mouse.y)
+        let frame = NotchOverlayGeometry.frame(anchor: wanted, screen: screen.frame, expanded: expanded,
+                                               contentHeight: contentHeight)
+        userAnchor = CGPoint(x: frame.midX, y: frame.maxY)
+        place(panel, animated: false)
+    }
+
     private func place(_ panel: NSPanel, animated: Bool) {
-        let screen = selectedScreen.flatMap { selected in NSScreen.screens.first { $0 == selected } }
-            ?? NSScreen.main ?? NSScreen.screens.first
-        guard let screen else { return }
-        selectedScreen = screen
-        let auxiliaryTop = max(screen.auxiliaryTopLeftArea?.height ?? 0,
-                               screen.auxiliaryTopRightArea?.height ?? 0)
-        let frame = NotchOverlayGeometry.frame(screen: screen.frame, visible: screen.visibleFrame,
+        let frame: CGRect
+        // The point just below the anchor decides its display; the top edge itself is outside `frame`.
+        if let anchor = userAnchor,
+           let screen = NSScreen.screens.first(where: { $0.frame.contains(CGPoint(x: anchor.x, y: anchor.y - 1)) }) {
+            selectedScreen = screen
+            frame = NotchOverlayGeometry.frame(anchor: anchor, screen: screen.frame, expanded: expanded,
+                                               contentHeight: contentHeight)
+        } else {
+            // The dragged-to display is gone: fall back to the default position.
+            userAnchor = nil
+            let screen = selectedScreen.flatMap { selected in NSScreen.screens.first { $0 == selected } }
+                ?? NSScreen.main ?? NSScreen.screens.first
+            guard let screen else { return }
+            selectedScreen = screen
+            let auxiliaryTop = max(screen.auxiliaryTopLeftArea?.height ?? 0,
+                                   screen.auxiliaryTopRightArea?.height ?? 0)
+            frame = NotchOverlayGeometry.frame(screen: screen.frame, visible: screen.visibleFrame,
                                                safeTop: screen.safeAreaInsets.top,
                                                auxiliaryTop: auxiliaryTop, expanded: expanded,
                                                contentHeight: contentHeight)
+        }
         guard panel.frame != frame else { return }
         if animated {
             NSAnimationContext.runAnimationGroup { context in
@@ -325,6 +372,8 @@ private struct NotchOverlayView: View {
     let model: AppModel
     let onCancel: () -> Void
     let onContentHeight: (CGFloat) -> Void
+    let onDragChanged: (CGSize) -> Void
+    let onDragEnded: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -345,6 +394,10 @@ private struct NotchOverlayView: View {
         .background(Color(white: 0.11), in: shape)
         .overlay(shape.strokeBorder(.white.opacity(contrast == .increased ? 0.7 : 0.12), lineWidth: 1))
         .clipShape(shape)
+        // Drag anywhere outside the buttons to move the panel; buttons keep their clicks.
+        .gesture(DragGesture(minimumDistance: 3)
+            .onChanged { onDragChanged($0.translation) }
+            .onEnded { _ in onDragEnded() })
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onContentHeight($0) }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.colorScheme, .dark)

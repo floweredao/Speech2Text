@@ -70,6 +70,31 @@ private let notchVisible = CGRect(x: 0, y: 0, width: 1512, height: 950)
                 == NotchOverlayGeometry.maxTranscriptHeight)
         #expect(NotchOverlayGeometry.transcriptViewportHeight(textHeight: -5) == 0)
     }
+
+    @Test func draggedPanelKeepsItsTopCenterWhileHeightChanges() {
+        let anchor = CGPoint(x: 400, y: 600)
+        let compact = NotchOverlayGeometry.frame(anchor: anchor, screen: notchScreen, expanded: false,
+                                                 contentHeight: 0)
+        let expanded = NotchOverlayGeometry.frame(anchor: anchor, screen: notchScreen, expanded: true,
+                                                  contentHeight: 180)
+        for frame in [compact, expanded] {
+            #expect(frame.midX == anchor.x)
+            #expect(frame.maxY == anchor.y)
+        }
+        #expect(expanded.height == 180)
+    }
+
+    @Test func draggedPanelStaysOnScreenNearEdges() {
+        let corner = NotchOverlayGeometry.frame(anchor: CGPoint(x: 10, y: 20), screen: notchScreen,
+                                                expanded: true, contentHeight: 180)
+        #expect(corner.minX == notchScreen.minX)
+        #expect(corner.minY == notchScreen.minY)
+        #expect(corner.height == 180)
+        let above = NotchOverlayGeometry.frame(anchor: CGPoint(x: 1510, y: 2000), screen: notchScreen,
+                                               expanded: false, contentHeight: 0)
+        #expect(above.maxX == notchScreen.maxX)
+        #expect(above.maxY == notchScreen.maxY)
+    }
 }
 
 // MARK: Display state
