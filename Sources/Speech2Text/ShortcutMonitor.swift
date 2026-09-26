@@ -165,7 +165,7 @@ final class ShortcutRecorder {
         } else if chord.isAllowed {
             tap(.key(chord), at: event.timestamp)
         } else {
-            model?.shortcutNote = "\(chord.label)은 글자 입력을 막아서 쓸 수 없어요. ⌃·⌥·⌘와 함께 누르거나, 수정 키만 누르거나, F1–F20을 써 주세요."
+            model?.shortcutNote = String(localized: "\(chord.label)은 글자 입력을 막아서 쓸 수 없어요. ⌃·⌥·⌘와 함께 누르거나, 수정 키만 누르거나, F1–F20을 써 주세요.")
         }
         return true
     }
@@ -197,7 +197,7 @@ final class ShortcutRecorder {
         let shortcut = Shortcut(trigger: trigger, taps: taps)
         end()
         if let owner = model.shortcuts.action(using: shortcut, except: action) {
-            model.shortcutNote = "\(shortcut.label)은 이미 '\(owner.title)'에 쓰고 있어요."
+            model.shortcutNote = String(localized: "\(shortcut.label)은 이미 '\(owner.title)'에 쓰고 있어요.")
         } else {
             model.shortcuts[action] = shortcut
         }

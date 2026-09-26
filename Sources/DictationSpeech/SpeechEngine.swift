@@ -15,7 +15,7 @@ public enum SpeechOutcome: Sendable {
     public var apiKey = ""
     public var inputDeviceUID: String?
     public private(set) var transcript = ""
-    public private(set) var status = "받아쓰기 준비가 됐습니다."
+    public private(set) var status = String(localized: "받아쓰기 준비가 됐습니다.")
     public private(set) var phase = SpeechPhase.idle
     public private(set) var hasError = false
     public private(set) var outcome = SpeechOutcome.none
@@ -100,8 +100,8 @@ public enum SpeechOutcome: Sendable {
         session = client
         audio = capture
         phase = .preparing
-        status = "마이크를 준비하고 있습니다."
-        armTimeout(startTimeout, context: "음성 인식 시작", epoch: epoch)
+        status = String(localized: "마이크를 준비하고 있습니다.")
+        armTimeout(startTimeout, context: String(localized: "음성 인식 시작"), epoch: epoch)
         runTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -112,12 +112,12 @@ public enum SpeechOutcome: Sendable {
                 let chunks = try await capture.start(format: .pcm16Mono16k)
                 guard generation == epoch, !Task.isCancelled else { return }
                 phase = .recording
-                status = "듣고 있습니다 · 연결 중…"
+                status = String(localized: "듣고 있습니다 · 연결 중…")
                 let (provider, events) = try await (early ?? connect(client, apiKey: key, epoch: epoch)).value
                 guard generation == epoch, !Task.isCancelled else { return }
                 // Finishing while connecting already armed its own timeout; keep it.
                 if phase == .recording {
-                    status = "듣고 있습니다."
+                    status = String(localized: "듣고 있습니다.")
                     timerTask?.cancel()
                     timerTask = Task { [weak self, recordingLimit] in
                         do { try await Task.sleep(for: recordingLimit) } catch { return }
@@ -164,7 +164,7 @@ public enum SpeechOutcome: Sendable {
                 audio = nil
                 phase = .idle
                 hasError = false
-                status = result.isEmpty ? "인식된 음성이 없습니다." : "받아쓰기를 마쳤습니다."
+                status = result.isEmpty ? String(localized: "인식된 음성이 없습니다.") : String(localized: "받아쓰기를 마쳤습니다.")
                 onFinal?(result)
             } catch { fail(error, epoch: epoch) }
         }
@@ -182,7 +182,7 @@ public enum SpeechOutcome: Sendable {
                 guard generation == epoch else { throw AppError.cancelled }
                 let retry = sessionFactory()
                 session = retry
-                if phase == .recording { status = "듣고 있습니다 · 다시 연결 중…" }
+                if phase == .recording { status = String(localized: "듣고 있습니다 · 다시 연결 중…") }
                 return (retry, try await retry.open(apiKey: key))
             }
         }
@@ -216,8 +216,8 @@ public enum SpeechOutcome: Sendable {
     private func beginFinishing(epoch: UUID) {
         guard phase != .finishing else { return }
         phase = .finishing
-        status = "남은 음성을 마무리하고 있습니다."
-        armTimeout(finishTimeout, context: "음성 인식 마무리", epoch: epoch)
+        status = String(localized: "남은 음성을 마무리하고 있습니다.")
+        armTimeout(finishTimeout, context: String(localized: "음성 인식 마무리"), epoch: epoch)
     }
 
     public func cancel() {
@@ -267,7 +267,7 @@ public enum SpeechOutcome: Sendable {
             try await credentials.save(apiKey.trimmingCharacters(in: .whitespacesAndNewlines), for: .soniox)
             if !isBusy, generation == epoch {
                 hasError = false
-                status = "API 키를 저장했습니다."
+                status = String(localized: "API 키를 저장했습니다.")
             }
         } catch {
             if !isBusy, generation == epoch {
@@ -288,7 +288,7 @@ public enum SpeechOutcome: Sendable {
             if let value { apiKey = value }
             if !isBusy, generation == epoch {
                 hasError = false
-                status = value == nil ? "저장된 API 키가 없습니다." : "API 키를 불러왔습니다."
+                status = value == nil ? String(localized: "저장된 API 키가 없습니다.") : String(localized: "API 키를 불러왔습니다.")
             }
         } catch {
             if !isBusy, generation == epoch {

@@ -57,8 +57,8 @@ struct DictationDisplayState: Equatable {
         }
         self.phase = phase
         switch phase {
-        case .idle: title = toggleShortcut.map { "\($0) 눌러 받아쓰기" } ?? "받아쓰기"
-        case .error: title = "받아쓰기 오류"
+        case .idle: title = toggleShortcut.map { String(localized: "\($0) 눌러 받아쓰기") } ?? String(localized: "받아쓰기")
+        case .error: title = String(localized: "받아쓰기 오류")
         default: title = status
         }
         message = phase == .error ? status : ""
@@ -465,7 +465,7 @@ private struct NotchOverlayView: View {
         if !state.recoveryActions.isEmpty {
             HStack(spacing: 8) {
                 ForEach(state.recoveryActions, id: \.self) { action in
-                    OverlayTextButton(title: action == .start ? "다시 시도" + shortcutSuffix(.toggleDictation) : "설정 확인",
+                    OverlayTextButton(title: action == .start ? String(localized: "다시 시도") + shortcutSuffix(.toggleDictation) : String(localized: "설정 확인"),
                                       symbol: action == .start ? "arrow.clockwise" : "gearshape",
                                       id: action == .start ? "notch-retry" : "notch-open-settings") {
                         perform(action)
@@ -491,8 +491,8 @@ private struct NotchOverlayView: View {
             retainedLine(state.retained, kind: kind)
         } else if state.offersTranscriptActions {
             HStack(spacing: 8) {
-                OverlayTextButton(title: "복사", symbol: "doc.on.doc", id: "notch-copy") { model.copyTranscript() }
-                OverlayTextButton(title: "붙여넣기" + shortcutSuffix(.pasteTranscript), symbol: "arrow.down.doc",
+                OverlayTextButton(title: String(localized: "복사"), symbol: "doc.on.doc", id: "notch-copy") { model.copyTranscript() }
+                OverlayTextButton(title: String(localized: "붙여넣기") + shortcutSuffix(.pasteTranscript), symbol: "arrow.down.doc",
                                   id: "notch-paste") {
                     model.pasteTranscript()
                 }
@@ -505,7 +505,7 @@ private struct NotchOverlayView: View {
     private func retainedLine(_ text: String, kind: DictationDisplayState.RetainedKind) -> some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(kind == .previous ? "이전 받아쓰기" : "중단 전 받은 텍스트 · 확정 아님")
+                Text(kind == .previous ? String(localized: "이전 받아쓰기") : String(localized: "중단 전 받은 텍스트 · 확정 아님"))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.5))
                 Text(text)
@@ -518,10 +518,10 @@ private struct NotchOverlayView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("notch-retained")
-            OverlayIconButton(symbol: "doc.on.doc", label: "복사", id: "notch-copy", prominent: false) {
+            OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "복사"), id: "notch-copy", prominent: false) {
                 model.copyTranscript()
             }
-            OverlayIconButton(symbol: "arrow.down.doc", label: "붙여넣기" + shortcutHint(.pasteTranscript), id: "notch-paste",
+            OverlayIconButton(symbol: "arrow.down.doc", label: String(localized: "붙여넣기") + shortcutHint(.pasteTranscript), id: "notch-paste",
                               prominent: false) {
                 model.pasteTranscript()
             }
@@ -549,11 +549,11 @@ private struct NotchOverlayView: View {
 
     private func label(for action: DictationDisplayState.Action, _ state: DictationDisplayState) -> String {
         switch action {
-        case .start: "받아쓰기 시작" + shortcutHint(.toggleDictation)
-        case .finish: "녹음 마치기" + shortcutHint(.toggleDictation)
-        case .cancel: state.phase == .recording ? "녹음 취소" : "받아쓰기 취소"
-        case .settings: "설정 열기"
-        case .dismiss: "닫기"
+        case .start: String(localized: "받아쓰기 시작") + shortcutHint(.toggleDictation)
+        case .finish: String(localized: "녹음 마치기") + shortcutHint(.toggleDictation)
+        case .cancel: state.phase == .recording ? String(localized: "녹음 취소") : String(localized: "받아쓰기 취소")
+        case .settings: String(localized: "설정 열기")
+        case .dismiss: String(localized: "닫기")
         }
     }
 

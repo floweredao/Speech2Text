@@ -15,17 +15,17 @@ enum ControlPermissionPane: Equatable {
 
     var title: String {
         switch self {
-        case .deviceControl: "기기 제어 및 데이터 관리"
-        case .accessibility: "손쉬운 사용"
+        case .deviceControl: String(localized: "기기 제어 및 데이터 관리")
+        case .accessibility: String(localized: "손쉬운 사용")
         }
     }
 
     var guidance: String {
         switch self {
         case .deviceControl:
-            "시스템 설정 › 개인정보 보호 및 보안 › Device Control and Data Management에서 Speech2Text를 켜세요. macOS 26 이하의 '손쉬운 사용'과 같은 권한이에요."
+            String(localized: "시스템 설정 › 개인정보 보호 및 보안 › Device Control and Data Management에서 Speech2Text를 켜세요. macOS 26 이하의 '손쉬운 사용'과 같은 권한이에요.")
         case .accessibility:
-            "시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 Speech2Text를 켜세요. macOS 27부터는 'Device Control and Data Management'라는 이름이에요."
+            String(localized: "시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 Speech2Text를 켜세요. macOS 27부터는 'Device Control and Data Management'라는 이름이에요.")
         }
     }
 }
@@ -209,7 +209,7 @@ struct SettingsView: View {
 
             LabeledContent {
                 HStack {
-                    statusBadge(model.accessibilityGranted ? "허용됨" : "필요함", granted: model.accessibilityGranted)
+                    statusBadge(model.accessibilityGranted ? String(localized: "허용됨") : String(localized: "필요함"), granted: model.accessibilityGranted)
                         .accessibilityIdentifier("settings-accessibility-status")
                     if !model.accessibilityGranted {
                         Button("허용 요청") { model.requestAccessibility() }
@@ -284,14 +284,14 @@ struct SettingsView: View {
                 Button {
                     if recording { recorder.cancel() } else { recorder.begin(action, model: model) }
                 } label: {
-                    Text(recording ? (model.shortcutPreview.isEmpty ? "키를 누르세요…" : model.shortcutPreview)
-                                   : (shortcut?.label ?? "없음"))
+                    Text(recording ? (model.shortcutPreview.isEmpty ? String(localized: "키를 누르세요…") : model.shortcutPreview)
+                                   : (shortcut?.label ?? String(localized: "없음")))
                         .frame(minWidth: 120)
                 }
                 .buttonStyle(.bordered)
                 .tint(recording ? .accentColor : nil)
-                .help(recording ? "누르면 기록을 취소해요." : "눌러서 새 단축키를 기록해요.")
-                .accessibilityLabel(recording ? "단축키 기록 중" : (shortcut?.spokenLabel ?? "단축키 없음"))
+                .help(recording ? String(localized: "누르면 기록을 취소해요.") : String(localized: "눌러서 새 단축키를 기록해요."))
+                .accessibilityLabel(recording ? String(localized: "단축키 기록 중") : (shortcut?.spokenLabel ?? String(localized: "단축키 없음")))
                 .accessibilityHint("눌러서 새 단축키를 기록해요.")
                 .accessibilityIdentifier("settings-shortcut-\(action.rawValue)")
                 if shortcut != nil && !recording {
@@ -320,21 +320,21 @@ struct SettingsView: View {
     }
 
     private var defaultDeviceLabel: String {
-        defaultDeviceState.wrappedValue.map { "시스템 기본값 (\($0.name))" } ?? "시스템 기본값"
+        defaultDeviceState.wrappedValue.map { String(localized: "시스템 기본값 (\($0.name))") } ?? String(localized: "시스템 기본값")
     }
 
     private var microphoneBadge: String {
         switch microphone {
-        case .granted: "허용됨"
-        case .notDetermined: "아직 묻지 않음"
-        case .denied: "거부됨"
+        case .granted: String(localized: "허용됨")
+        case .notDetermined: String(localized: "아직 묻지 않음")
+        case .denied: String(localized: "거부됨")
         }
     }
 
     private var recordButtonTitle: String {
-        if model.isRecording { return "마무리" }
+        if model.isRecording { return String(localized: "마무리") }
         if model.isBusy { return state.title }
-        return "받아쓰기 시작"
+        return String(localized: "받아쓰기 시작")
     }
 
     private var statusSymbol: String {

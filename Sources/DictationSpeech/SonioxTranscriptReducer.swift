@@ -15,7 +15,7 @@ struct SonioxTranscriptReducer: Sendable {
         do { frame = try JSONDecoder().decode(Frame.self, from: data) }
         catch { throw AppError.invalidResponse("Soniox schema") }
         guard frame.error_code == nil, frame.error_message == nil else {
-            throw AppError.provider(code: frame.error_code, message: frame.error_message ?? "음성 인식 요청이 거절됐습니다.")
+            throw AppError.provider(code: frame.error_code, message: frame.error_message ?? String(localized: "음성 인식 요청이 거절됐습니다."))
         }
         guard !ended else { return [] }
         var events: [TranscriptEvent] = []

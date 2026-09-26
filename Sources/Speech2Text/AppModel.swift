@@ -57,17 +57,17 @@ final class AppModel {
     private func mirror(_ text: String) {
         if live == nil, awaitingTarget {
             guard acquireLiveTarget() else { return }
-            feedback = "선택한 칸에 실시간으로 입력해요."
+            feedback = String(localized: "선택한 칸에 실시간으로 입력해요.")
         }
         guard let live else { return }
         switch live.sync(text) {
         case .applied: break
         case .targetChanged:
             self.live = nil
-            feedback = "입력 위치가 바뀌어 실시간 입력을 멈췄어요. 결과는 여기에 보관해요."
+            feedback = String(localized: "입력 위치가 바뀌어 실시간 입력을 멈췄어요. 결과는 여기에 보관해요.")
         case .failed:
             self.live = nil
-            feedback = "이 칸에는 실시간 입력을 할 수 없어요. 결과는 여기에 보관해요."
+            feedback = String(localized: "이 칸에는 실시간 입력을 할 수 없어요. 결과는 여기에 보관해요.")
         }
     }
 
@@ -79,14 +79,14 @@ final class AppModel {
         if let live {
             self.live = nil
             switch live.sync(text) {
-            case .applied: feedback = empty ? "인식된 음성이 없어 입력하지 않았어요." : "입력 칸에 받아쓰기를 입력했어요."
-            case .targetChanged: feedback = "입력 위치가 바뀌어 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요."
-            case .failed: feedback = "마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요."
+            case .applied: feedback = empty ? String(localized: "인식된 음성이 없어 입력하지 않았어요.") : String(localized: "입력 칸에 받아쓰기를 입력했어요.")
+            case .targetChanged: feedback = String(localized: "입력 위치가 바뀌어 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
+            case .failed: feedback = String(localized: "마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
             }
         } else if empty {
-            feedback = "인식된 음성이 없어 입력하지 않았어요."
+            feedback = String(localized: "인식된 음성이 없어 입력하지 않았어요.")
         } else if feedback.isEmpty {
-            feedback = "받아쓰기를 보관했어요. 입력 칸을 선택한 뒤 붙여넣어 주세요."
+            feedback = String(localized: "받아쓰기를 보관했어요. 입력 칸을 선택한 뒤 붙여넣어 주세요.")
         }
     }
 
@@ -97,16 +97,16 @@ final class AppModel {
         feedback = ""
         guard autoInsert else { return }
         guard accessibilityGranted else {
-            feedback = "기기 제어 권한이 없어 결과를 보관해요."
+            feedback = String(localized: "기기 제어 권한이 없어 결과를 보관해요.")
             return
         }
         // Started from our own settings window: give focus back to the app the user was typing in.
         if NSApp.isActive { NSApp.deactivate() }
         if acquireLiveTarget() {
-            feedback = "선택한 칸에 실시간으로 입력해요."
+            feedback = String(localized: "선택한 칸에 실시간으로 입력해요.")
         } else {
             awaitingTarget = true
-            feedback = "입력할 칸을 클릭하면 그 칸에 바로 써요."
+            feedback = String(localized: "입력할 칸을 클릭하면 그 칸에 바로 써요.")
         }
     }
 
@@ -132,7 +132,7 @@ final class AppModel {
         live = nil
         awaitingTarget = false
         speech.cancel()
-        feedback = removed ? "취소해서 입력하던 내용을 지웠어요." : "취소했어요. 입력하지 않았어요."
+        feedback = removed ? String(localized: "취소해서 입력하던 내용을 지웠어요.") : String(localized: "취소했어요. 입력하지 않았어요.")
     }
     func transcribeFile(_ url: URL) {
         guard !isBusy else { return }
@@ -141,11 +141,11 @@ final class AppModel {
         speech.start(audioFile: url)
     }
     func copyTranscript() {
-        feedback = insertion.copy(transcript) ? "복사했어요. 원하는 곳에서 ⌘V를 누르세요." : "복사할 텍스트가 없어요."
+        feedback = insertion.copy(transcript) ? String(localized: "복사했어요. 원하는 곳에서 ⌘V를 누르세요.") : String(localized: "복사할 텍스트가 없어요.")
     }
     func pasteTranscript() {
         guard !isBusy else {
-            feedback = "받아쓰기를 마무리한 다음 붙여넣어 주세요."
+            feedback = String(localized: "받아쓰기를 마무리한 다음 붙여넣어 주세요.")
             return
         }
         accessibilityGranted = insertion.isTrusted

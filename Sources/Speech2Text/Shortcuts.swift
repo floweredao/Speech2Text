@@ -6,8 +6,8 @@ enum ShortcutAction: String, CaseIterable, Codable, Sendable {
 
     var title: String {
         switch self {
-        case .toggleDictation: "받아쓰기 시작 / 마무리"
-        case .pasteTranscript: "마지막 결과 붙여넣기"
+        case .toggleDictation: String(localized: "받아쓰기 시작 / 마무리")
+        case .pasteTranscript: String(localized: "마지막 결과 붙여넣기")
         }
     }
 }
@@ -144,9 +144,9 @@ enum ShortcutTrigger: Codable, Hashable, Sendable {
             let right = group.right.map(keys.contains) ?? false
             let name = group[keyPath: name]
             switch (left, right) {
-            case (true, true): return "양쪽 \(name)"
-            case (true, false): return group.right == nil ? name : "왼쪽 \(name)"
-            case (false, true): return "오른쪽 \(name)"
+            case (true, true): return String(localized: "양쪽 \(name)")
+            case (true, false): return group.right == nil ? name : String(localized: "왼쪽 \(name)")
+            case (false, true): return String(localized: "오른쪽 \(name)")
             case (false, false): return nil
             }
         }.joined(separator: " + ")
@@ -163,8 +163,8 @@ struct Shortcut: Codable, Hashable, Sendable {
 
     private static func tapSuffix(_ taps: Int) -> String {
         switch taps {
-        case 2: " 두 번"
-        case 3: " 세 번"
+        case 2: String(localized: " 두 번")
+        case 3: String(localized: " 세 번")
         default: ""
         }
     }
@@ -322,5 +322,5 @@ enum KeyNames {
     ]
 
     static func isFunctionKey(_ code: UInt16) -> Bool { functionKeys[code] != nil }
-    static func name(_ code: UInt16) -> String { functionKeys[code] ?? names[code] ?? "키 \(code)" }
+    static func name(_ code: UInt16) -> String { functionKeys[code] ?? names[code] ?? String(localized: "키 \(Int(code))") }
 }
