@@ -26,7 +26,7 @@ The interface comes in English and Korean and follows your macOS language: Syste
   <tr>
     <td width="56%" valign="top">
       <b>Idle</b>: one compact capsule under the notch<br><br>
-      <img src="docs/images/notch-idle.png" width="340" alt="Idle overlay"><br><br>
+      <img src="docs/images/notch-idle-en.png" width="340" alt="Idle overlay"><br><br>
       <b>Listening</b>: the transcript updates live as you speak<br><br>
       <img src="docs/images/notch-recording-en.png" width="480" alt="Overlay while recording"><br><br>
       <b>Done</b>: the result stays until you dismiss it, with Copy and Paste for recovery<br><br>
@@ -35,8 +35,8 @@ The interface comes in English and Korean and follows your macOS language: Syste
     <td width="44%" valign="top">
       <b>Settings</b>: API key, microphone, permissions, input, and shortcuts<br><br>
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark.png">
-        <img src="docs/images/settings-light.png" width="360" alt="Settings window">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark-en.png">
+        <img src="docs/images/settings-light-en.png" width="360" alt="Settings window">
       </picture>
     </td>
   </tr>

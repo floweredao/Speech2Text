@@ -26,7 +26,7 @@ Mac에서 말한 내용을 현재 입력 칸에 받아쓰는 네이티브 앱입
   <tr>
     <td width="56%" valign="top">
       <b>대기</b>: 노치 아래 한 줄 캡슐<br><br>
-      <img src="docs/images/notch-idle.png" width="340" alt="대기 중인 오버레이"><br><br>
+      <img src="docs/images/notch-idle-ko.png" width="340" alt="대기 중인 오버레이"><br><br>
       <b>듣는 중</b>: 말하는 동안 전사가 실시간으로 바뀝니다<br><br>
       <img src="docs/images/notch-recording-ko.png" width="480" alt="녹음 중인 오버레이"><br><br>
       <b>완료</b>: 닫을 때까지 결과가 남고, 복사·붙여넣기로 되살릴 수 있습니다<br><br>
@@ -35,8 +35,8 @@ Mac에서 말한 내용을 현재 입력 칸에 받아쓰는 네이티브 앱입
     <td width="44%" valign="top">
       <b>설정</b>: API 키, 마이크, 권한, 입력, 단축키<br><br>
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark.png">
-        <img src="docs/images/settings-light.png" width="360" alt="설정 창">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark-ko.png">
+        <img src="docs/images/settings-light-ko.png" width="360" alt="설정 창">
       </picture>
     </td>
   </tr>
