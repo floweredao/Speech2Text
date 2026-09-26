@@ -24,7 +24,7 @@
 
 ## 상태 모델
 
-화면 상태는 형식이 정해진 값에서만 파생한다. 문구를 해석해 상태를 정하지 않는다. `status`는 엔진이 만든 한국어 문구라 그대로 표시만 한다.
+화면 상태는 형식이 정해진 값에서만 파생한다. 문구를 해석해 상태를 정하지 않는다. `status`는 엔진이 만든 현지화 문구라 그대로 표시만 한다. 화면 문구는 한국어 원문을 키로 쓰고 `Resources/en.lproj`·`ko.lproj`의 `Localizable.strings`에서 시스템 언어에 맞춰 고른다(그 밖의 언어는 영어).
 
 입력: `model.speechPhase`(idle, preparing, recording, finishing), `model.hasError`, `transcript`, `feedback`, 그리고 `DictationSession`.
 
@@ -58,7 +58,7 @@
 - 이동: 버튼이 아닌 곳을 드래그하면 패널이 포인터를 따라 움직이고 화면 안에 머문다. 옮긴 뒤에는 위쪽 가운데 점을 기준으로 삼아, 높이가 바뀌어도 위쪽 모서리는 그대로 두고 아래로 늘어난다. 옮긴 위치는 메모리에만 두므로 앱을 다시 켜면 기본 위치에서 시작한다. 옮긴 화면이 사라져도 기본 위치로 돌아간다.
 - 레벨 `.statusBar`, 모든 스페이스와 전체 화면 보조 창에 참여한다. 앱이 비활성화돼도 숨지 않는다.
 - 모션: 나타날 때 0.16초 페이드, 크기 변화는 0.18초. Reduce Motion이면 페이드·크기 애니메이션·녹음 점 맥박을 끈다. 상태는 아이콘과 문구로 전달하므로 모션 없이도 구분된다.
-- 접근성: 상태 아이콘에 상태 이름 라벨. 식별자: `notch-transcript`, `notch-error`, `notch-retained`, `notch-feedback`, `notch-start`, `notch-finish`, `notch-cancel`, `notch-settings`, `notch-dismiss`, `notch-retry`, `notch-open-settings`, `notch-copy`, `notch-paste`. 모든 아이콘 버튼에 한국어 라벨과 도움말. 상태 종류가 바뀌면 VoiceOver 알림을 보내고, 오류는 제목과 오류 문구를 함께 읽는다. 실시간 전사 변화는 알리지 않는다.
+- 접근성: 상태 아이콘에 상태 이름 라벨. 식별자: `notch-transcript`, `notch-error`, `notch-retained`, `notch-feedback`, `notch-start`, `notch-finish`, `notch-cancel`, `notch-settings`, `notch-dismiss`, `notch-retry`, `notch-open-settings`, `notch-copy`, `notch-paste`. 모든 아이콘 버튼에 현지화된 라벨과 도움말. 상태 종류가 바뀌면 VoiceOver 알림을 보내고, 오류는 제목과 오류 문구를 함께 읽는다. 실시간 전사 변화는 알리지 않는다.
 
 ## 설정 창
 
