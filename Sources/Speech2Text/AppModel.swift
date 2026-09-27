@@ -90,6 +90,17 @@ final class AppModel {
         }
     }
 
+    /// A start the engine will refuse (no key, offline) must not take focus from Settings or claim live typing.
+    private func startLiveTypingIfAdmitted() {
+        if speech.refusesStart {
+            live = nil
+            awaitingTarget = false
+            feedback = ""
+        } else {
+            prepareLiveTyping()
+        }
+    }
+
     private func prepareLiveTyping() {
         accessibilityGranted = insertion.isTrusted
         live = nil
@@ -121,7 +132,7 @@ final class AppModel {
         overlayVisible = true
         if isRecording { speech.finish() }
         else if !isBusy {
-            prepareLiveTyping()
+            startLiveTypingIfAdmitted()
             speech.start()
         }
     }
@@ -137,7 +148,7 @@ final class AppModel {
     func transcribeFile(_ url: URL) {
         guard !isBusy else { return }
         overlayVisible = true
-        prepareLiveTyping()
+        startLiveTypingIfAdmitted()
         speech.start(audioFile: url)
     }
     func copyTranscript() {

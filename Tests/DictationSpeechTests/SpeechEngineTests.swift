@@ -551,6 +551,19 @@ actor TestCredentials: CredentialStoring {
         #expect(audio.starts == 0)
         #expect(await socket.connections == 0)
     }
+
+    /// The app asks before it hands focus back to the target app, so a refused start leaves Settings in front.
+    @Test func startRefusalIsKnownBeforeStarting() {
+        let engine = SpeechEngine(sessionFactory: { SonioxSession(transport: TestSocket()) },
+                                  audioFactory: { _ in TestAudio() }, isOffline: { false })
+        #expect(engine.refusesStart)
+        engine.apiKey = "fixture"
+        #expect(!engine.refusesStart)
+        let offline = SpeechEngine(sessionFactory: { SonioxSession(transport: TestSocket()) },
+                                   audioFactory: { _ in TestAudio() }, isOffline: { true })
+        offline.apiKey = "fixture"
+        #expect(offline.refusesStart)
+    }
 }
 
 @Suite(.timeLimit(.minutes(1)))

@@ -77,11 +77,18 @@ public enum SpeechOutcome: Sendable {
     /// Files are limited to 60 seconds and finish automatically at EOF.
     public func start(audioFile: URL) { begin(FileAudioCapture(url: audioFile)) }
 
+    /// True when `start()` would fail at once (no API key, or no network route).
+    public var refusesStart: Bool { startRefusal != nil }
+
+    private var startRefusal: AppError? {
+        apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .missingCredential(.soniox)
+            : isOffline() ? .offline : nil
+    }
+
     private func begin(_ capture: any AudioCapturing) {
         guard !isBusy else { return }
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let refusal: AppError? = key.isEmpty ? .missingCredential(.soniox) : isOffline() ? .offline : nil
-        if let refusal {
+        if let refusal = startRefusal {
             hasError = true
             outcome = .failed
             hasCurrentTranscript = false
