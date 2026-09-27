@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Observation
+import Security
 import Testing
 @testable import DictationSpeech
 
@@ -108,12 +109,22 @@ actor TestCredentials: CredentialStoring {
     private(set) var loads = 0
     private(set) var saves = 0
     private(set) var value: String?
+    private var gate: CheckedContinuation<Void, Never>?
+    private var holding = false
     init(_ value: String? = nil) { self.value = value }
     func load(_ kind: CredentialKind) -> String? { loads += 1; return value }
-    func save(_ value: String, for kind: CredentialKind) throws {
+    func save(_ value: String, for kind: CredentialKind) async throws {
         guard !value.isEmpty else { throw AppError.missingCredential(kind) }
+        if holding { await withCheckedContinuation { gate = $0 } }
         saves += 1
         self.value = value
+    }
+    func delete(_ kind: CredentialKind) { value = nil }
+    func holdSave() { holding = true }
+    func releaseSave() {
+        holding = false
+        gate?.resume()
+        gate = nil
     }
 }
 
@@ -381,7 +392,62 @@ actor TestCredentials: CredentialStoring {
         engine.apiKey = " "
         await engine.saveKey()
         #expect(await own.value == "replacement")
-        #expect(engine.hasError)
+        #expect(engine.keyFailed)
+        // A key problem belongs to the key row, not to dictation.
+        #expect(!engine.hasError)
+    }
+
+    @Test func deletingTheKeyRemovesItFromTheStoreAndTheField() async {
+        let own = TestCredentials("own")
+        let engine = SpeechEngine(sessionFactory: { SonioxSession() }, audioFactory: { _ in TestAudio() },
+                                  credentials: own)
+        await engine.loadKey()
+        await engine.deleteKey()
+        #expect(await own.value == nil)
+        #expect(engine.apiKey.isEmpty)
+        #expect(!engine.keyFailed)
+        #expect(engine.keyActivity == .idle)
+    }
+
+    @Test func keyActivityIsVisibleWhileTheStoreWorks() async throws {
+        let own = TestCredentials()
+        let engine = SpeechEngine(sessionFactory: { SonioxSession() }, audioFactory: { _ in TestAudio() },
+                                  credentials: own)
+        engine.apiKey = "new"
+        await own.holdSave()
+        let saving = Task { await engine.saveKey() }
+        try await waitUntil { engine.keyActivity == .saving }
+        await engine.loadKey()
+        #expect(await own.loads == 0)
+        await own.releaseSave()
+        await saving.value
+        #expect(engine.keyActivity == .idle)
+        #expect(await own.value == "new")
+    }
+
+    @Test func keychainStatusesAreNotReportedAsPermissions() {
+        #expect(KeychainCredentialStore.error(for: errSecInteractionNotAllowed) == .keychain(errSecInteractionNotAllowed))
+        #expect(KeychainCredentialStore.error(for: errSecUserCanceled) == .keychainDenied)
+        #expect(KeychainCredentialStore.error(for: errSecAuthFailed) == .keychainDenied)
+    }
+
+    @Test func configurationFailuresAskForSettingsNotARetry() async throws {
+        let blank = SpeechEngine(sessionFactory: { SonioxSession(transport: TestSocket()) },
+                                 audioFactory: { _ in TestAudio() }, isOffline: { false })
+        blank.start()
+        #expect(blank.hasError)
+        #expect(blank.needsSettings)
+        let offline = SpeechEngine(sessionFactory: { SonioxSession(transport: TestSocket()) },
+                                   audioFactory: { _ in TestAudio() }, isOffline: { true })
+        offline.apiKey = "fixture"
+        offline.start()
+        #expect(offline.hasError)
+        #expect(!offline.needsSettings)
+        #expect(SpeechEngine.needsSettings(AppError.microphoneSilent))
+        #expect(SpeechEngine.needsSettings(AppError.inputDeviceUnavailable))
+        #expect(SpeechEngine.needsSettings(AppError.provider(code: 401, message: "Invalid API key")))
+        #expect(!SpeechEngine.needsSettings(AppError.connectionFailed))
+        #expect(!SpeechEngine.needsSettings(AppError.provider(code: 503, message: "busy")))
     }
 
     @Test func selectedMicrophoneIsPassedToCapture() async throws {

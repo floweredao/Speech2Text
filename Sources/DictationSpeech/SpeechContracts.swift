@@ -31,12 +31,14 @@ enum CredentialKind: String, Sendable { case soniox }
 protocol CredentialStoring: Sendable {
     func load(_ kind: CredentialKind) async throws -> String?
     func save(_ value: String, for kind: CredentialKind) async throws
+    func delete(_ kind: CredentialKind) async throws
 }
 enum AppError: Error, Sendable, Equatable, LocalizedError {
     case missingCredential(CredentialKind), invalidResponse(String)
     case provider(code: Int?, message: String)
     case permissionDenied(String), audioOverflow, timeout(String), cancelled, inputDeviceUnavailable
     case microphoneSilent, microphoneInterrupted, offline, connectionFailed
+    case keychain(Int32), keychainDenied
 
     var errorDescription: String? {
         switch self {
@@ -52,6 +54,8 @@ enum AppError: Error, Sendable, Equatable, LocalizedError {
         case .microphoneInterrupted: String(localized: "녹음 중 마이크 연결이 바뀌어 받아쓰기를 멈췄습니다. 다시 시작해 주세요.")
         case .offline: String(localized: "인터넷에 연결되어 있지 않습니다. 연결을 확인한 뒤 다시 시작해 주세요.")
         case .connectionFailed: String(localized: "Soniox에 연결하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.")
+        case .keychain(let status): String(localized: "Keychain 작업에 실패했습니다 (OSStatus \(Int(status))).")
+        case .keychainDenied: String(localized: "Keychain 접근을 허용하지 않아 키를 처리하지 못했습니다.")
         }
     }
 }

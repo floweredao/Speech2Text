@@ -9,6 +9,11 @@ public enum SpeechOutcome: Sendable {
     case none, completed, empty, cancelled, failed
 }
 
+/// What the credential store is doing for the settings key row.
+public enum KeyActivity: Sendable {
+    case idle, saving, loading, deleting
+}
+
 /// Native Soniox dictation. An endpoint finalizes a turn, not the whole recording.
 /// `onFinal` is called exactly once on successful session completion, including empty speech.
 @MainActor @Observable public final class SpeechEngine {
@@ -17,7 +22,15 @@ public enum SpeechOutcome: Sendable {
     public private(set) var transcript = ""
     public private(set) var status = String(localized: "받아쓰기 준비가 됐습니다.")
     public private(set) var phase = SpeechPhase.idle
-    public private(set) var hasError = false
+    public private(set) var hasError = false {
+        didSet { if !hasError { needsSettings = false } }
+    }
+    /// The current error can only be fixed in Settings (key, microphone, permission); retrying repeats it.
+    public private(set) var needsSettings = false
+    public private(set) var keyActivity = KeyActivity.idle
+    /// Result of the last save, load, or delete, shown next to the key field rather than as a dictation error.
+    public private(set) var keyMessage = ""
+    public private(set) var keyFailed = false
     public private(set) var outcome = SpeechOutcome.none
     public private(set) var hasCurrentTranscript = false
     public var isRecording: Bool { phase == .recording }
@@ -90,6 +103,7 @@ public enum SpeechOutcome: Sendable {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if let refusal = startRefusal {
             hasError = true
+            needsSettings = Self.needsSettings(refusal)
             outcome = .failed
             hasCurrentTranscript = false
             status = refusal.localizedDescription
@@ -239,8 +253,17 @@ public enum SpeechOutcome: Sendable {
     private func fail(_ error: Error, epoch: UUID) {
         guard generation == epoch else { return }
         hasError = true
+        needsSettings = Self.needsSettings(error)
         outcome = .failed
         stop(with: error.localizedDescription)
+    }
+
+    static func needsSettings(_ error: Error) -> Bool {
+        switch error as? AppError {
+        case .missingCredential, .inputDeviceUnavailable, .microphoneSilent, .permissionDenied: true
+        case .provider(let code, _): code == 401 || code == 403
+        default: false
+        }
     }
 
     private func stop(with message: String) {
@@ -269,39 +292,41 @@ public enum SpeechOutcome: Sendable {
     }
 
     public func saveKey() async {
-        let epoch = generation
+        guard keyActivity == .idle else { return }
+        keyActivity = .saving
+        defer { keyActivity = .idle }
         do {
             try await credentials.save(apiKey.trimmingCharacters(in: .whitespacesAndNewlines), for: .soniox)
-            if !isBusy, generation == epoch {
-                hasError = false
-                status = String(localized: "API 키를 저장했습니다.")
-            }
-        } catch {
-            if !isBusy, generation == epoch {
-                hasError = true
-                status = error.localizedDescription
-            }
-        }
+            reportKey(String(localized: "API 키를 저장했습니다."))
+        } catch { reportKey(error.localizedDescription, failed: true) }
     }
 
-    public func loadKey() async { await load(from: credentials) }
-
-    private func load(from store: any CredentialStoring) async {
+    public func loadKey() async {
+        guard keyActivity == .idle else { return }
+        keyActivity = .loading
+        defer { keyActivity = .idle }
         let previous = apiKey
-        let epoch = generation
         do {
-            let value = try await store.load(.soniox)
+            let value = try await credentials.load(.soniox)
             guard apiKey == previous, !Task.isCancelled else { return }
             if let value { apiKey = value }
-            if !isBusy, generation == epoch {
-                hasError = false
-                status = value == nil ? String(localized: "저장된 API 키가 없습니다.") : String(localized: "API 키를 불러왔습니다.")
-            }
-        } catch {
-            if !isBusy, generation == epoch {
-                hasError = true
-                status = error.localizedDescription
-            }
-        }
+            reportKey(value == nil ? String(localized: "저장된 API 키가 없습니다.") : String(localized: "API 키를 불러왔습니다."))
+        } catch { reportKey(error.localizedDescription, failed: true) }
+    }
+
+    public func deleteKey() async {
+        guard keyActivity == .idle else { return }
+        keyActivity = .deleting
+        defer { keyActivity = .idle }
+        do {
+            try await credentials.delete(.soniox)
+            apiKey = ""
+            reportKey(String(localized: "저장된 API 키를 지웠습니다."))
+        } catch { reportKey(error.localizedDescription, failed: true) }
+    }
+
+    private func reportKey(_ message: String, failed: Bool = false) {
+        keyMessage = message
+        keyFailed = failed
     }
 }

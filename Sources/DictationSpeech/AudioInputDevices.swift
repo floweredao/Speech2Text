@@ -28,6 +28,12 @@ public enum AudioInputDevices {
         return AudioInputDevice(uid: uid, name: name)
     }
 
+    /// Calls `onChange` on the main thread when a device is added or removed or the default input changes.
+    /// Listening stops when the returned observation is released.
+    public static func observe(_ onChange: @escaping @MainActor () -> Void) -> AudioInputDevicesObservation {
+        AudioInputDevicesObservation(onChange)
+    }
+
     static func deviceID(forUID uid: String) -> AudioDeviceID? {
         deviceIDs().first { hasInput($0) && string($0, kAudioDevicePropertyDeviceUID) == uid }
     }
@@ -60,5 +66,30 @@ public enum AudioInputDevices {
         guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr,
               let value else { return nil }
         return value.takeRetainedValue() as String
+    }
+}
+
+public final class AudioInputDevicesObservation: @unchecked Sendable {
+    private static let selectors = [kAudioHardwarePropertyDevices, kAudioHardwarePropertyDefaultInputDevice]
+    private let block: AudioObjectPropertyListenerBlock
+
+    init(_ onChange: @escaping @MainActor () -> Void) {
+        block = { _, _ in MainActor.assumeIsolated { onChange() } }
+        for selector in Self.selectors {
+            var address = Self.address(selector)
+            AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main, block)
+        }
+    }
+
+    deinit {
+        for selector in Self.selectors {
+            var address = Self.address(selector)
+            AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, .main, block)
+        }
+    }
+
+    private static func address(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
+                                   mElement: kAudioObjectPropertyElementMain)
     }
 }

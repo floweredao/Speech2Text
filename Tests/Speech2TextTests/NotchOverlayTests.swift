@@ -179,6 +179,12 @@ private func display(_ phase: SpeechPhase, error: Bool = false, transcript: Stri
         #expect(state.recoveryActions == [.start, .settings])
     }
 
+    @Test func configurationErrorOffersSettingsInsteadOfRetry() {
+        let state = DictationDisplayState(speechPhase: .idle, hasError: true, needsSettings: true, status: "키 없음",
+                                          transcript: "", feedback: "", session: session(.failed))
+        #expect(state.recoveryActions == [.settings])
+    }
+
     @Test func errorMidRecordingMarksPartialTextUnfinished() {
         let state = display(.idle, error: true, transcript: live, session: session(.failed, current: true))
         #expect(state.retained == live)

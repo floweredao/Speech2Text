@@ -60,13 +60,21 @@ struct SettingsView: View {
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
     private let microphoneState = State(initialValue: MicrophoneAccess(AVCaptureDevice.authorizationStatus(for: .audio)))
     private var microphone: MicrophoneAccess { microphoneState.wrappedValue }
-    private let devicesState = State(initialValue: AudioInputDevices.all())
-    private let defaultDeviceState = State(initialValue: AudioInputDevices.defaultDevice())
+    private let confirmDeleteState = State(initialValue: false)
     private let recorderState = State(initialValue: ShortcutRecorder())
     private var recorder: ShortcutRecorder { recorderState.wrappedValue }
 
     private let pane = ControlPermissionPane.current
     private var state: DictationDisplayState { DictationDisplayState(model: model) }
+    private var keyBusy: Bool { model.speech.keyActivity != .idle }
+    private var keyActivityText: String? {
+        switch model.speech.keyActivity {
+        case .idle: nil
+        case .saving: String(localized: "Keychain에 저장하는 중…")
+        case .loading: String(localized: "Keychain에서 불러오는 중…")
+        case .deleting: String(localized: "Keychain에서 지우는 중…")
+        }
+    }
     private var hasKey: Bool { !model.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var readiness: SetupReadiness {
         SetupReadiness(hasKey: hasKey, microphone: microphone, controlGranted: model.accessibilityGranted)
@@ -150,15 +158,45 @@ struct SettingsView: View {
         Section("준비") {
             SecureField("Soniox API 키", text: $model.apiKey, prompt: Text("키를 붙여넣으세요"))
                 .textContentType(.password)
+                .disabled(keyBusy)
                 .accessibilityIdentifier("settings-api-key")
             HStack {
                 Button("저장") { model.saveKey() }
-                    .disabled(!hasKey)
+                    .disabled(!hasKey || keyBusy)
                     .help("이 앱 전용 Keychain 항목에 저장합니다.")
                     .accessibilityIdentifier("settings-save-key")
                 Button("불러오기") { model.loadKey() }
+                    .disabled(keyBusy)
                     .help("이 앱의 Keychain 항목에서 불러옵니다.")
                     .accessibilityIdentifier("settings-load-key")
+                Spacer()
+                Button("저장된 키 삭제", role: .destructive) { confirmDeleteState.wrappedValue = true }
+                    .disabled(keyBusy)
+                    .help("이 Mac의 Keychain에서 Soniox API 키를 지웁니다.")
+                    .accessibilityIdentifier("settings-delete-key")
+            }
+            .confirmationDialog("저장된 API 키를 지울까요?", isPresented: confirmDeleteState.projectedValue) {
+                Button("삭제", role: .destructive) { model.deleteKey() }
+                    .accessibilityIdentifier("settings-confirm-delete-key")
+            } message: {
+                Text("다시 받아쓰려면 키를 새로 붙여넣고 저장해야 해요.")
+            }
+            if let activity = keyActivityText {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text(activity)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("settings-key-activity")
+            } else if !model.speech.keyMessage.isEmpty {
+                Text(model.speech.keyMessage)
+                    .font(.caption)
+                    .foregroundStyle(model.speech.keyFailed ? Color.orange : Color.secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("settings-key-message")
             }
             if !hasKey {
                 Text("키가 없으면 받아쓰기를 시작할 수 없어요. 저장하면 이 앱의 Keychain에 보관돼 다음 실행에도 남아요.")
@@ -195,10 +233,10 @@ struct SettingsView: View {
 
             Picker(selection: $model.inputDeviceUID) {
                 Text(defaultDeviceLabel).tag(String?.none)
-                ForEach(devicesState.wrappedValue) { device in
+                ForEach(model.inputDevices) { device in
                     Text(device.name).tag(Optional(device.uid))
                 }
-                if let uid = model.inputDeviceUID, !devicesState.wrappedValue.contains(where: { $0.uid == uid }) {
+                if let uid = model.inputDeviceUID, !model.inputDevices.contains(where: { $0.uid == uid }) {
                     Text("연결 안 된 마이크").tag(Optional(uid))
                 }
             } label: {
@@ -322,7 +360,7 @@ struct SettingsView: View {
     }
 
     private var defaultDeviceLabel: String {
-        defaultDeviceState.wrappedValue.map { String(localized: "시스템 기본값 (\($0.name))") } ?? String(localized: "시스템 기본값")
+        model.defaultInputDevice.map { String(localized: "시스템 기본값 (\($0.name))") } ?? String(localized: "시스템 기본값")
     }
 
     private var microphoneBadge: String {
@@ -359,8 +397,7 @@ struct SettingsView: View {
     private func refreshPermissions() {
         model.accessibilityGranted = AXIsProcessTrusted()
         microphoneState.wrappedValue = MicrophoneAccess(AVCaptureDevice.authorizationStatus(for: .audio))
-        devicesState.wrappedValue = AudioInputDevices.all()
-        defaultDeviceState.wrappedValue = AudioInputDevices.defaultDevice()
+        model.refreshInputDevices()
     }
 
     private func openPrivacyPane(_ anchor: String) {

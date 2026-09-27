@@ -41,8 +41,10 @@ actor KeychainCredentialStore: CredentialStoring {
         if status != errSecItemNotFound { try check(status) }
     }
     private func check(_ status: OSStatus) throws {
-        guard status == errSecSuccess else {
-            throw AppError.permissionDenied("Keychain (OSStatus \(status))")
-        }
+        guard status == errSecSuccess else { throw Self.error(for: status) }
+    }
+    /// Only a refused access prompt is a denial; locked keychains and storage failures are not permissions.
+    static func error(for status: OSStatus) -> AppError {
+        status == errSecUserCanceled || status == errSecAuthFailed ? .keychainDenied : .keychain(status)
     }
 }

@@ -35,12 +35,17 @@ final class AppModel {
             speech.inputDeviceUID = inputDeviceUID
         }
     }
+    /// Kept current by a CoreAudio listener, so Settings reflects plugged-in or removed microphones at once.
+    private(set) var inputDevices = AudioInputDevices.all()
+    private(set) var defaultInputDevice = AudioInputDevices.defaultDevice()
+    @ObservationIgnored private var deviceObservation: AudioInputDevicesObservation?
     var transcript: String { speech.transcript }
     var status: String { speech.status }
     var isRecording: Bool { speech.isRecording }
     var isBusy: Bool { speech.isBusy }
     var speechPhase: SpeechPhase { speech.phase }
     var hasError: Bool { speech.hasError }
+    var needsSettings: Bool { speech.needsSettings }
     var speechOutcome: SpeechOutcome { speech.outcome }
     var hasCurrentTranscript: Bool { speech.hasCurrentTranscript }
     var apiKey: String {
@@ -52,6 +57,12 @@ final class AppModel {
         speech.inputDeviceUID = inputDeviceUID
         speech.onLiveText = { [weak self] text in self?.mirror(text) }
         speech.onFinal = { [weak self] text in self?.complete(text) }
+        deviceObservation = AudioInputDevices.observe { [weak self] in self?.refreshInputDevices() }
+    }
+
+    func refreshInputDevices() {
+        inputDevices = AudioInputDevices.all()
+        defaultInputDevice = AudioInputDevices.defaultDevice()
     }
 
     private func mirror(_ text: String) {
@@ -177,5 +188,6 @@ final class AppModel {
     }
     func saveKey() { Task { await speech.saveKey() } }
     func loadKey() { Task { await speech.loadKey() } }
+    func deleteKey() { Task { await speech.deleteKey() } }
     func openSettings() { settingsAction?() }
 }

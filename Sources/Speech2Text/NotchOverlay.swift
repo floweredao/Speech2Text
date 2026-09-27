@@ -31,17 +31,21 @@ struct DictationDisplayState: Equatable {
     let retained: String
     let retainedKind: RetainedKind?
     let noteText: String
+    /// The error comes from setup (key, microphone, permission), so retrying without a change repeats it.
+    let needsSettings: Bool
 
     @MainActor init(model: AppModel) {
-        self.init(speechPhase: model.speechPhase, hasError: model.hasError, status: model.status,
+        self.init(speechPhase: model.speechPhase, hasError: model.hasError, needsSettings: model.needsSettings,
+                  status: model.status,
                   transcript: model.transcript, feedback: model.feedback,
                   session: DictationSession(outcome: model.speechOutcome,
                                             hasCurrentTranscript: model.hasCurrentTranscript),
                   toggleShortcut: model.shortcuts[.toggleDictation]?.label)
     }
 
-    init(speechPhase: SpeechPhase, hasError: Bool, status: String, transcript: String, feedback: String,
-         session: DictationSession = DictationSession(), toggleShortcut: String? = "⌃⌥D") {
+    init(speechPhase: SpeechPhase, hasError: Bool, needsSettings: Bool = false, status: String, transcript: String,
+         feedback: String, session: DictationSession = DictationSession(), toggleShortcut: String? = "⌃⌥D") {
+        self.needsSettings = needsSettings
         let fresh = session.freshTranscript(transcript)
         let phase: Phase
         switch speechPhase {
@@ -104,7 +108,10 @@ struct DictationDisplayState: Equatable {
     }
 
     /// Recovery actions shown as labelled buttons below an error message.
-    var recoveryActions: [Action] { phase == .error ? [.start, .settings] : [] }
+    var recoveryActions: [Action] {
+        guard phase == .error else { return [] }
+        return needsSettings ? [.settings] : [.start, .settings]
+    }
 
     var symbol: String {
         switch phase {
