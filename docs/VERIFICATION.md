@@ -5,7 +5,7 @@
 - `bash scripts/test.sh`: 29 tests, 6 suites, zero skips, exit 0. Evidence: `.omo/evidence/tests-aiff-fixed.log`.
 - `bash scripts/build-app.sh`: release build and staged app signing, exit 0. Evidence: `.omo/evidence/build-aiff-fixed.log`.
 - `codesign --verify --deep --strict build/Speech2Text.app`: exit 0.
-- Actual signed app, production `--audio-file` route, explicit source-key import: Soniox recognized the generated Korean speech as **안녕하세요, 오늘은 맥에서 음성으로 글을 쓰고 있습니다.** No fixture response or synthetic transcript was injected. Evidence: `.omo/evidence/recognition-midpoint.png`.
+- Actual signed app, production `--audio-file` route, key saved in the app's Keychain: Soniox recognized the generated Korean speech as **안녕하세요, 오늘은 맥에서 음성으로 글을 쓰고 있습니다.** No fixture response or synthetic transcript was injected. Evidence: `.omo/evidence/recognition-midpoint.png`.
 - Actual notch Copy button: clipboard matched the recognized text exactly; frontmost app remained Ghostty. Evidence: `.omo/evidence/copy-result.png`.
 - Actual notch Paste without current-binary permission: permission explanation appeared, transcript remained available, no text was sent. Evidence: `.omo/evidence/paste-no-permission.png`.
 - Native settings and notch rendered on the real desktop. Settings expose permission request, privacy settings links, automatic-input toggle, recording and paste shortcuts. Evidence: `.omo/evidence/app-initial.png`.

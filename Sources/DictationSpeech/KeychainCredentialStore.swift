@@ -1,4 +1,3 @@
-// Adapted from Speech-to-action; speech-only module, no command execution.
 import Foundation
 import Security
 

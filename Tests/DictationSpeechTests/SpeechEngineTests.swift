@@ -4,7 +4,6 @@ import Observation
 import Testing
 @testable import DictationSpeech
 
-// Adapted from Speech-to-action's FakeSocket; exact event subscriptions replace sleeps.
 actor TestSocket: SocketTransport {
     private(set) var sent: [SocketFrame] = []
     private(set) var closed = false

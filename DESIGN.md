@@ -4,7 +4,6 @@
 
 ## 참고한 자료
 
-- Speech-to-action/DESIGN.md, Sources/SpeechToAction/NotchOverlay.swift: 어두운 캡슐, 비활성 NSPanel, 노치 안전 배치, 화면 변경 재배치, Reduce Motion과 대비 증가 처리. 가져온 것은 구조와 배치 방식이다. 명령 실행, Jev, 타이머 자동 숨김은 가져오지 않았다.
 - StyleGallery `platform-guides/apple-interaction.md`: 빠른 반응, 취소·복구 가능성, 적응형 표시를 비교 질문으로 사용했다. Apple 수치를 그대로 옮기지 않는다.
 - StyleGallery `platform-guides/preferences-and-accessibility.md`: 모션, 대비, 투명도, 글자 크기를 서로 다른 설정으로 본다. Reduce Motion에서도 대기 상태가 보여야 한다.
 - StyleGallery `platform-guides/input-and-focus.md`: 단축키는 눈에 보이는 동작을 빠르게 하는 수단이다. 취소는 주인이 하나여야 한다.

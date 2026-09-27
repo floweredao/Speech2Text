@@ -1,6 +1,5 @@
 import Foundation
 
-// Speech-only subset of Speech-to-action/SpeechToActionCore/Contracts.swift.
 enum CaptureFormat: Sendable { case pcm16Mono16k }
 enum SessionStatus: Sendable, Equatable { case configSent }
 struct TranscriptUpdate: Sendable, Equatable {

@@ -3,7 +3,6 @@ import Foundation
 import Testing
 @testable import DictationSpeech
 
-// Adapted from Speech-to-action/CallbackIsolationTests.swift.
 struct CallbackIsolationTests {
     @Test @MainActor func captureTapRunsOffMainAndRejectsLateBuffers() async throws {
         let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1))

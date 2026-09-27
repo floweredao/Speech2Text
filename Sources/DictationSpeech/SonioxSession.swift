@@ -1,6 +1,5 @@
 import Foundation
 
-// Transport and Soniox configuration adapted from Speech-to-action/ProviderSessions.swift.
 enum SocketFrame: Sendable, Equatable { case text(String), binary(Data), closed(Int) }
 protocol SocketTransport: Sendable {
     func connect(url: URL) async throws
