@@ -51,7 +51,7 @@ Requires macOS 26 or later on Apple Silicon.
 
 ## Dictating
 
-1. In Settings, paste your Soniox API key and press **Save**. The key is kept only in Speech2Text's own Keychain item (`com.speech2text.credentials`) and is loaded on the next launch. Pick a microphone under **Input Microphone**; the default is the system input.
+1. In Settings, paste your Soniox API key and press **Save**. The key is kept only in Speech2Text's own Keychain item (`com.speech2text.credentials`) and is loaded on the next launch. **Remove Saved Key** deletes it from this Mac. Pick a microphone under **Input Microphone**; the default is the system input.
 2. Grant the Accessibility permission. macOS also asks for microphone access the first time you record.
 3. **Click the text field** you want to type into first, in any app: terminal, browser, notes.
 4. Press **Control+Option+D** (the default; see "Changing shortcuts" below) and speak. The overlay under the notch shows what's being recognized.
@@ -59,7 +59,7 @@ Requires macOS 26 or later on Apple Silicon.
    - With no internet connection, the app refuses to start and tells you so immediately.
 5. Text is typed into the field you picked as you speak. When recognition revises earlier words, only the changed tail is erased and retyped. Press the same shortcut or the finish button to settle on the final text. Recordings are limited to 60 seconds.
    - Standard Mac text fields (Notes, TextEdit, most apps) are edited through accessibility text replacement. Where that isn't supported, such as terminals, the app sends key events to that app only. This works with a Korean input method active.
-   - If you switch to another field or app mid-way, live typing stops and the result is kept in the overlay. Cancelling erases only the text typed in this session. The app never sends newlines or Return, so it can't run a command in a terminal.
+   - If you switch to another field or app mid-way, live typing stops and the result is kept in the overlay. In terminals, typing or clicking in the field while dictating also stops it, because terminals don't report where the cursor is. Cancelling erases only the text typed in this session. The app never sends newlines or Return, so it can't run a command in a terminal.
 
 ## Changing shortcuts
 
