@@ -50,7 +50,7 @@
 "시스템 설정 › 개인정보 보호 및 보안 › Device Control and Data Management에서 Speech2Text를 켜세요. macOS 26 이하의 '손쉬운 사용'과 같은 권한이에요." = "Turn on Speech2Text in System Settings › Privacy & Security › Device Control and Data Management. It's the same permission as Accessibility on macOS 26 and earlier.";
 "시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 Speech2Text를 켜세요. macOS 27부터는 'Device Control and Data Management'라는 이름이에요." = "Turn on Speech2Text in System Settings › Privacy & Security › Accessibility. From macOS 27 it's called Device Control and Data Management.";
 "취소" = "Cancel";
-"아래 준비 항목 %lld개를 확인해 주세요." = "Setup items to check below: %lld";
+"아래 준비 항목 %lld개를 확인해 주세요." = "Check the setup items below (%lld).";
 "준비" = "Setup";
 "Soniox API 키" = "Soniox API Key";
 "키를 붙여넣으세요" = "Paste your key";
@@ -62,7 +62,7 @@
 "허용 요청" = "Request Access";
 "시스템 설정 열기" = "Open System Settings";
 "마이크" = "Microphone";
-"말하는 동안에만 Soniox로 음성을 보내요." = "Audio goes to Soniox only while you speak.";
+"받아쓰는 동안에만 Soniox로 음성을 보내요." = "Audio goes to Soniox only while dictation is running.";
 "연결 안 된 마이크" = "Disconnected microphone";
 "사용할 마이크" = "Input Microphone";
 "선택한 마이크가 없으면 받아쓰기를 시작하지 않고 알려 드려요." = "If the selected microphone is missing, dictation won't start and you'll be told why.";

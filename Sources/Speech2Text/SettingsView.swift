@@ -190,7 +190,7 @@ struct SettingsView: View {
                 }
             } label: {
                 Text("마이크")
-                Text("말하는 동안에만 Soniox로 음성을 보내요.")
+                Text("받아쓰는 동안에만 Soniox로 음성을 보내요.")
             }
 
             Picker(selection: $model.inputDeviceUID) {
@@ -220,7 +220,9 @@ struct SettingsView: View {
                 }
             } label: {
                 Text(pane.title)
-                Text(pane.guidance)
+                if !model.accessibilityGranted {
+                    Text(pane.guidance)
+                }
             }
         }
     }
