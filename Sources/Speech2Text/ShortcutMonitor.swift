@@ -95,7 +95,8 @@ final class GlobalShortcutMonitor {
     }
 
     private func handle(_ event: NSEvent) {
-        if event.type == .flagsChanged {
+        // Caps Lock arrives as flagsChanged but is not a tracked modifier: it spoils a tap like any other key.
+        if event.type == .flagsChanged, event.keyCode != UInt16(kVK_CapsLock) {
             let held = ModifierKey.held(inRawFlags: event.modifierFlags.rawValue)
             if let tapped = detector.update(held: held, at: event.timestamp) {
                 deliver(recognizer.press(.modifiers(tapped), at: event.timestamp))
@@ -153,6 +154,10 @@ final class ShortcutRecorder {
 
     private func handle(_ event: NSEvent) -> Bool {
         if event.type == .flagsChanged {
+            guard event.keyCode != UInt16(kVK_CapsLock) else {
+                detector.otherInput()
+                return false
+            }
             let held = ModifierKey.held(inRawFlags: event.modifierFlags.rawValue)
             if let tapped = detector.update(held: held, at: event.timestamp) { tap(.modifiers(tapped), at: event.timestamp) }
             return false
@@ -165,6 +170,12 @@ final class ShortcutRecorder {
         } else if chord.isAllowed {
             tap(.key(chord), at: event.timestamp)
         } else {
+            // Drop a pending earlier tap so the rejected key doesn't silently commit it.
+            commitTask?.cancel()
+            commitTask = nil
+            trigger = nil
+            taps = 0
+            model?.shortcutPreview = ""
             model?.shortcutNote = String(localized: "\(chord.label)은 글자 입력을 막아서 쓸 수 없어요. ⌃·⌥·⌘와 함께 누르거나, 수정 키만 누르거나, F1–F20을 써 주세요.")
         }
         return true
