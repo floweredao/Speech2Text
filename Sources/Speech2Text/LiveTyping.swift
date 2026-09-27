@@ -25,7 +25,7 @@ struct LiveTextEdit: Equatable {
 
 @MainActor
 final class LiveTyper {
-    enum Outcome: Equatable { case applied, targetChanged, failed }
+    enum Outcome: Equatable { case applied, targetChanged, failed, userEdited }
     private enum Mode { case accessibility, keyboard }
     private enum Step { case applied, unsafe(String), unsupported(String) }
 
@@ -37,14 +37,56 @@ final class LiveTyper {
     private var anchor: Int?
     private(set) var typed = ""
     private(set) var stopped = false
+    private var userEdited = false
+    private let isShortcut: (KeyChord) -> Bool
+    private var inputMonitor: Any?
 
-    init(target: TextInsertion.Target, insertion: TextInsertion) {
+    /// Tags our own key events so the input guard can tell them from the user's.
+    nonisolated static let eventMarker: Int64 = 0x5332_5420
+
+    init(target: TextInsertion.Target, insertion: TextInsertion, isShortcut: @escaping (KeyChord) -> Bool = { _ in false }) {
         self.target = target
         self.insertion = insertion
+        self.isShortcut = isShortcut
+    }
+
+    isolated deinit { removeInputGuard() }
+
+    /// Keyboard-mode fields (terminals) report no usable caret, so a key or click the user makes there
+    /// could move the insertion point without us knowing. Our own events and our shortcuts don't count.
+    nonisolated static func isUserEdit(type: NSEvent.EventType, sourceUserData: Int64, isShortcut: Bool) -> Bool {
+        guard sourceUserData != eventMarker, !isShortcut else { return false }
+        switch type {
+        case .keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown: return true
+        default: return false
+        }
+    }
+
+    private func installInputGuard() {
+        guard inputMonitor == nil else { return }
+        inputMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]) {
+            [weak self] event in MainActor.assumeIsolated { self?.observe(event) }
+        }
+    }
+
+    private func removeInputGuard() {
+        if let inputMonitor { NSEvent.removeMonitor(inputMonitor) }
+        inputMonitor = nil
+    }
+
+    private func observe(_ event: NSEvent) {
+        let shortcut = event.type == .keyDown
+            && isShortcut(KeyChord(keyCode: event.keyCode, modifiers: KeyModifiers(rawFlags: event.modifierFlags.rawValue)))
+        let marker = event.cgEvent?.getIntegerValueField(.eventSourceUserData) ?? 0
+        guard !typed.isEmpty, Self.isUserEdit(type: event.type, sourceUserData: marker, isShortcut: shortcut) else { return }
+        Self.log.notice("stopped: user input in keyboard-mode field")
+        stopped = true
+        userEdited = true
+        removeInputGuard()
     }
 
     func sync(_ recognized: String) -> Outcome {
-        guard !stopped else { return .targetChanged }
+        guard !stopped else { return userEdited ? .userEdited : .targetChanged }
         let text = LiveTextEdit.sanitize(recognized)
         let edit = LiveTextEdit.between(typed, text)
         guard !edit.isEmpty else { return .applied }
@@ -73,6 +115,7 @@ final class LiveTyper {
                 mode = .keyboard
             }
         }
+        installInputGuard()
         guard typeWithKeyboard(edit, pid: current.pid) else {
             Self.log.error("stopped: key event creation failed")
             stopped = true
@@ -157,6 +200,7 @@ final class LiveTyper {
               let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) else { return false }
         for event in [down, up] {
             event.flags = []
+            event.setIntegerValueField(.eventSourceUserData, value: Self.eventMarker)
             if let text {
                 let units = Array(text.utf16)
                 event.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)

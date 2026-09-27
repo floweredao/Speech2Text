@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 @testable import Speech2Text
 
@@ -24,6 +25,15 @@ import Testing
     @Test func revisionReplacesOnlyTheChangedTail() {
         #expect(LiveTextEdit.between("메모 열어", "메모장 열어") == LiveTextEdit(removed: " 열어", insert: "장 열어"))
         #expect(LiveTextEdit.between("같은 문장", "같은 문장").isEmpty)
+    }
+
+    /// Keyboard-mode fields hide their caret, so any key or click the user makes there ends live typing.
+    @Test func userKeysAndClicksCountAsEditsButOurOwnEventsAndShortcutsDoNot() {
+        #expect(LiveTyper.isUserEdit(type: .keyDown, sourceUserData: 0, isShortcut: false))
+        #expect(LiveTyper.isUserEdit(type: .leftMouseDown, sourceUserData: 0, isShortcut: false))
+        #expect(!LiveTyper.isUserEdit(type: .keyDown, sourceUserData: LiveTyper.eventMarker, isShortcut: false))
+        #expect(!LiveTyper.isUserEdit(type: .keyDown, sourceUserData: 0, isShortcut: true))
+        #expect(!LiveTyper.isUserEdit(type: .flagsChanged, sourceUserData: 0, isShortcut: false))
     }
 
     @Test func lineBreaksNeverReachTheTarget() {

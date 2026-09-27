@@ -68,6 +68,9 @@ final class AppModel {
         case .failed:
             self.live = nil
             feedback = String(localized: "이 칸에는 실시간 입력을 할 수 없어요. 결과는 여기에 보관해요.")
+        case .userEdited:
+            self.live = nil
+            feedback = String(localized: "입력 칸에서 키를 누르거나 클릭해서 실시간 입력을 멈췄어요. 결과는 여기에 보관해요.")
         }
     }
 
@@ -82,6 +85,7 @@ final class AppModel {
             case .applied: feedback = empty ? String(localized: "인식된 음성이 없어 입력하지 않았어요.") : String(localized: "입력 칸에 받아쓰기를 입력했어요.")
             case .targetChanged: feedback = String(localized: "입력 위치가 바뀌어 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
             case .failed: feedback = String(localized: "마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
+            case .userEdited: feedback = String(localized: "입력 칸을 직접 건드려서 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
             }
         } else if empty {
             feedback = String(localized: "인식된 음성이 없어 입력하지 않았어요.")
@@ -123,7 +127,9 @@ final class AppModel {
 
     private func acquireLiveTarget() -> Bool {
         guard let target = insertion.currentTarget(), insertion.isEditable(target) else { return false }
-        live = LiveTyper(target: target, insertion: insertion)
+        live = LiveTyper(target: target, insertion: insertion) { [weak self] chord in
+            self?.shortcuts.bindings.keys.contains { $0.trigger == .key(chord) } ?? false
+        }
         awaitingTarget = false
         return true
     }
@@ -143,7 +149,9 @@ final class AppModel {
         live = nil
         awaitingTarget = false
         speech.cancel()
-        feedback = removed ? String(localized: "취소해서 입력하던 내용을 지웠어요.") : String(localized: "취소했어요. 입력하지 않았어요.")
+        feedback = removed ? String(localized: "취소해서 입력하던 내용을 지웠어요.")
+            : hadTyped ? String(localized: "취소했어요. 이미 입력한 글자는 지우지 못했어요.")
+            : String(localized: "취소했어요. 입력하지 않았어요.")
     }
     func transcribeFile(_ url: URL) {
         guard !isBusy else { return }
