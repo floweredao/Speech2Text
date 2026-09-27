@@ -51,6 +51,9 @@ final class AudioPipeline: @unchecked Sendable {
     private var finished = false
     private var heardSignal = false
     private var signalWaiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
+    private var terminalError: Error?
+    /// The error that ended the stream early, if any.
+    var failure: Error? { lock.lock(); defer { lock.unlock() }; return terminalError }
     private let chunkBytes: Int
     init(format: CaptureFormat, input: AVAudioFormat? = nil, capacity: Int = 100) throws {
         let pair = AsyncThrowingStream<Data, Error>.makeStream(bufferingPolicy: .bufferingOldest(capacity))
@@ -65,13 +68,21 @@ final class AudioPipeline: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         guard !finished, let converter else { return }
         do { try enqueue(converter.convert(buffer)) }
-        catch { finished = true; pending.removeAll(); continuation.finish(throwing: error) }
+        catch { end(throwing: error) }
     }
     func receivePCM(_ data: Data) {
         lock.lock(); defer { lock.unlock() }
         guard !finished else { return }
         do { try enqueue(data) }
-        catch { finished = true; pending.removeAll(); continuation.finish(throwing: error) }
+        catch { end(throwing: error) }
+    }
+    /// Caller holds the lock.
+    private func end(throwing error: Error) {
+        finished = true
+        terminalError = error
+        pending.removeAll()
+        continuation.finish(throwing: error)
+        resumeWaiters()
     }
     private func enqueue(_ data: Data) throws {
         if !heardSignal, data.contains(where: { $0 != 0 }) {
@@ -117,10 +128,7 @@ final class AudioPipeline: @unchecked Sendable {
     func fail(_ error: Error) {
         lock.lock(); defer { lock.unlock() }
         guard !finished else { return }
-        finished = true
-        pending.removeAll()
-        continuation.finish(throwing: error)
-        resumeWaiters()
+        end(throwing: error)
     }
     func finish() {
         lock.lock(); defer { lock.unlock() }
@@ -180,7 +188,11 @@ final class AudioPipeline: @unchecked Sendable {
             using: Self.makeConfigurationHandler(self, id))
         let heard = await pipeline.waitForSignal(timeout: .seconds(3))
         guard generation == id else { throw AppError.cancelled }
-        guard heard else { await stop(); throw AppError.microphoneSilent }
+        guard heard else {
+            let failure = pipeline.failure
+            await stop()
+            throw failure ?? AppError.microphoneSilent
+        }
         return pipeline.stream
     }
     nonisolated static func makeConfigurationHandler(_ capture: AVAudioCapture, _ id: UUID) -> @Sendable (Notification) -> Void {

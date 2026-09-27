@@ -49,6 +49,15 @@ extension AudioPipelineTests {
         #expect(await heard == false)
     }
 
+    /// A conversion or overflow failure must surface as itself, not as a silent microphone after the signal wait.
+    @Test func pipelineFailureReleasesSignalWaitersWithItsError() async throws {
+        let pipeline = try AudioPipeline(format: .pcm16Mono16k, capacity: 2)
+        async let heard = pipeline.waitForSignal(timeout: .seconds(30))
+        pipeline.receivePCM(Data(repeating: 0, count: 640 * 3))
+        #expect(await heard == false)
+        #expect(pipeline.failure as? AppError == .audioOverflow)
+    }
+
     @Test func deviceFailureEndsTheStreamWithThatError() async throws {
         let pipeline = try AudioPipeline(format: .pcm16Mono16k)
         pipeline.fail(AppError.inputDeviceUnavailable)
