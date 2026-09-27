@@ -159,7 +159,9 @@ final class AudioPipeline: @unchecked Sendable {
                                        &device, UInt32(MemoryLayout<AudioDeviceID>.size)) == noErr
             else { throw AppError.inputDeviceUnavailable }
         }
-        let input = node.outputFormat(forBus: 0)
+        // After switching devices the output side still reports the previous device's format; a tap in that
+        // format never fires when the sample rates differ. The input side reflects the selected hardware.
+        let input = node.inputFormat(forBus: 0)
         guard input.sampleRate > 0, input.channelCount > 0 else { throw AppError.permissionDenied("Microphone input device") }
         // Recording starts before the provider connects: hold the full 12 s start window (20 ms chunks).
         let pipeline = try AudioPipeline(format: format, input: input, capacity: 600)
