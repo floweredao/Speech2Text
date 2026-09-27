@@ -100,8 +100,10 @@ final class LiveTyper {
         let removedLength = edit.removed.utf16.count
         let start = anchor + typed.utf16.count - removedLength
         var replace = CFRange(location: start, length: removedLength)
-        // Our own text must still be there before we overwrite it; an unreadable range is trusted like keystrokes.
-        if removedLength > 0, let present = text(of: element, in: replace), present != edit.removed {
+        // All of our text must still sit at the anchor before any edit, appends included; an unreadable range
+        // is trusted like keystrokes.
+        if !typed.isEmpty, let present = text(of: element, in: CFRange(location: anchor, length: typed.utf16.count)),
+           present != typed {
             return .unsafe("dictated text was edited")
         }
         guard let replaceValue = AXValueCreate(.cfRange, &replace),
