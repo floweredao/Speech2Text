@@ -14,11 +14,11 @@
   <img src="docs/images/hero-ko.png" width="820" alt="메뉴 막대 아래에서 받아쓰는 동안 메모에 실시간으로 입력되는 모습">
 </p>
 
-Mac에서 말한 내용을 현재 입력 칸에 받아쓰는 네이티브 앱입니다. `Speech-to-action`의 Soniox 스트리밍 전사·오디오 변환·노치 창 구조를 재사용했습니다. 명령을 해석하거나 문장을 다시 작성하지 않습니다.
+Mac에서 말한 내용을 현재 입력 칸에 받아쓰는 메뉴바 앱입니다. 단축키를 누르고 말하면 터미널·브라우저·메모 등 클릭해 둔 입력 칸에 바로 써지고, 노치 아래 작은 창에 실시간 전사가 보입니다. 명령을 해석하거나 문장을 다시 작성하지 않습니다.
 
-## 앱 언어
-
-화면은 한국어와 영어를 지원하며 macOS 언어 설정을 따릅니다. 시스템 설정 › 일반 › 언어 및 지역의 선호 언어, 또는 그 아래 **응용 프로그램**에서 Speech2Text만 따로 고른 언어가 적용됩니다. 두 언어가 아닌 경우 영어로 표시됩니다. 언어를 바꾼 뒤에는 앱을 다시 실행하세요.
+<p align="center">
+  <a href="https://github.com/floweredao/Speech2Text/releases/latest"><b>최신 릴리스 내려받기</b></a>
+</p>
 
 ## 둘러보기
 
@@ -42,17 +42,12 @@ Mac에서 말한 내용을 현재 입력 칸에 받아쓰는 네이티브 앱입
   </tr>
 </table>
 
-## 실행
+## 설치
 
-macOS 26 이상, Swift 6.2 이상이 필요합니다.
+macOS 26 이상, Apple Silicon Mac이 필요합니다.
 
-```sh
-cd ~/Documents/Speech2Text
-bash scripts/build-app.sh
-open build/Speech2Text.app
-```
-
-현재 Mac에서는 Xcode 라이선스 승인과 별개로 사용 가능한 Command Line Tools를 사용합니다. 빌드 스크립트는 `DEVELOPER_DIR=/Library/Developer/CommandLineTools`을 기본으로 사용합니다.
+1. [최신 릴리스](https://github.com/floweredao/Speech2Text/releases/latest)에서 `.zip`을 내려받아 압축을 풀고 `Speech2Text.app`을 응용 프로그램 폴더로 옮깁니다.
+2. 앱을 엽니다. 열 수 없다는 안내가 나오면 시스템 설정 › 개인정보 보호 및 보안에서 아래 **보안** 항목의 Speech2Text 옆 **그래도 열기**를 누릅니다. 버전마다 한 번만 하면 됩니다.
 
 ## 받아쓰기
 
@@ -64,9 +59,7 @@ open build/Speech2Text.app
    - 인터넷이 끊겨 있으면 녹음을 시작하지 않고 바로 알려 줍니다.
 5. 말하는 동안 처음 선택한 입력 칸에 바로 써집니다. 인식이 앞말을 고치면 바뀐 끝부분만 지우고 다시 씁니다. 같은 단축키 또는 마무리 버튼을 누르면 확정된 문장으로 맞춥니다. 녹음은 최대 60초입니다.
    - 일반 Mac 입력 칸(메모, TextEdit, 대부분의 앱)은 접근성 텍스트 교체로, 터미널처럼 교체를 지원하지 않는 곳은 그 앱에만 보내는 키 입력으로 씁니다. 한국어 입력기가 켜져 있어도 동작합니다.
-   - 도중에 다른 칸이나 앱으로 옮기면 실시간 입력을 멈추고, 결과는 노치에 보관합니다. 취소하면 이번에 쓴 글자만 지웁니다. 줄바꿈이나 Return은 보내지 않습니다.
-
-말하는 중의 불완전한 문장을 계속 입력하지 않습니다. 수정되는 부분 전사는 노치에서만 보여 주고 마무리된 결과를 입력합니다. 터미널에서 명령을 실행하는 Return 키는 누르지 않습니다.
+   - 도중에 다른 칸이나 앱으로 옮기면 실시간 입력을 멈추고, 결과는 노치에 보관합니다. 취소하면 이번에 쓴 글자만 지웁니다. 줄바꿈이나 Return은 보내지 않으므로 터미널에서 명령이 실행되지 않습니다.
 
 ## 단축키 바꾸기
 
@@ -98,7 +91,7 @@ open build/Speech2Text.app
 
 macOS 버전에 따라 개인정보 보호 및 보안의 해당 항목이 **Device Control and Data Management**로 표시될 수 있습니다. 왼쪽 사이드바의 확대·VoiceOver 등을 설정하는 **Accessibility** 화면과는 다릅니다.
 
-개발 빌드는 ad-hoc 서명이라 재빌드하면 서명 해시가 바뀝니다. 목록에서 이미 켜져 있는데도 권한이 없다고 나오면, 이전 Speech2Text 항목을 제거하고 **현재 `build/Speech2Text.app`**을 다시 추가해 허용하세요. 승인 후 같은 실행본을 사용해야 합니다.
+목록에서 이미 켜져 있는데도 권한이 없다고 나오면, Speech2Text 항목을 **−**로 지우고 **+**로 `/Applications/Speech2Text.app`을 다시 추가해 허용하세요.
 
 ## 데이터
 
@@ -122,5 +115,3 @@ open build/Speech2Text.app --args --audio-file /absolute/path/sample.aiff --no-a
 ```
 
 이 실행도 Soniox와 앱 전용 Keychain의 키를 사용합니다. `--no-auto-insert`를 빼면 실행 당시 입력 칸이 그대로 유지되는 경우 자동 입력합니다.
-
-빌드 앱은 로컬 ad-hoc 서명입니다. 공증·Applications 설치·로그인 시 실행·GitHub Actions는 설정하지 않습니다.

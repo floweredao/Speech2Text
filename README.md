@@ -14,11 +14,11 @@
   <img src="docs/images/hero-en.png" width="820" alt="Speech2Text listening under the menu bar while the transcript is typed live into a note">
 </p>
 
-Speech2Text is a menu bar app. Press a shortcut, speak, and your words appear in whatever text field you clicked, whether that's a terminal, a browser, or a notes app. A small overlay under the notch shows the live transcript. The app never reads your speech as commands and never rewrites it. It builds on the Soniox streaming transcription, audio conversion, and notch window structure from `Speech-to-action`.
+Speech2Text is a menu bar app. Press a shortcut, speak, and your words appear in whatever text field you clicked, whether that's a terminal, a browser, or a notes app. A small overlay under the notch shows the live transcript. The app never reads your speech as commands and never rewrites it.
 
-## Language
-
-The interface comes in English and Korean and follows your macOS language: System Settings › General › Language & Region, including a per-app language for Speech2Text under Applications. Any other language falls back to English. Restart the app after changing it.
+<p align="center">
+  <a href="https://github.com/floweredao/Speech2Text/releases/latest"><b>Download the latest release</b></a>
+</p>
 
 ## A look around
 
@@ -42,17 +42,12 @@ The interface comes in English and Korean and follows your macOS language: Syste
   </tr>
 </table>
 
-## Build and run
+## Install
 
-Requires macOS 26 or later and Swift 6.2 or later.
+Requires macOS 26 or later on Apple Silicon.
 
-```sh
-cd ~/Documents/Speech2Text
-bash scripts/build-app.sh
-open build/Speech2Text.app
-```
-
-The build script uses the Command Line Tools (`DEVELOPER_DIR=/Library/Developer/CommandLineTools`) by default, so it works without accepting the Xcode license.
+1. Download the `.zip` from the [latest release](https://github.com/floweredao/Speech2Text/releases/latest), unzip it, and move `Speech2Text.app` to Applications.
+2. Open it. If macOS says it can't open the app, go to System Settings › Privacy & Security, scroll to Security, and click **Open Anyway** next to Speech2Text. You only need to do this once per version.
 
 ## Dictating
 
@@ -64,9 +59,7 @@ The build script uses the Command Line Tools (`DEVELOPER_DIR=/Library/Developer/
    - With no internet connection, the app refuses to start and tells you so immediately.
 5. Text is typed into the field you picked as you speak. When recognition revises earlier words, only the changed tail is erased and retyped. Press the same shortcut or the finish button to settle on the final text. Recordings are limited to 60 seconds.
    - Standard Mac text fields (Notes, TextEdit, most apps) are edited through accessibility text replacement. Where that isn't supported, such as terminals, the app sends key events to that app only. This works with a Korean input method active.
-   - If you switch to another field or app mid-way, live typing stops and the result is kept in the overlay. Cancelling erases only the text typed in this session. The app never sends newlines or Return.
-
-Partial, still-changing transcripts are shown only in the overlay. The field receives the settled result, and the app never presses the Return key that would run a command in a terminal.
+   - If you switch to another field or app mid-way, live typing stops and the result is kept in the overlay. Cancelling erases only the text typed in this session. The app never sends newlines or Return, so it can't run a command in a terminal.
 
 ## Changing shortcuts
 
@@ -98,7 +91,7 @@ Permission status refreshes when you come back from System Settings. You enter p
 
 Depending on your macOS version, the relevant Privacy & Security item may be labelled **Device Control and Data Management**. That's different from the **Accessibility** screen in the sidebar that configures Zoom, VoiceOver, and so on.
 
-Development builds with ad-hoc signing change their signature hash on every rebuild. If the list shows Speech2Text as enabled but the app still reports no permission, remove the old Speech2Text entry, add the **current `build/Speech2Text.app`** again, and allow it. Keep using that same build after approving.
+If the list shows Speech2Text as enabled but the app still reports no permission, remove the Speech2Text entry with **−**, add `/Applications/Speech2Text.app` again with **+**, and allow it.
 
 ## Data
 
@@ -122,5 +115,3 @@ open build/Speech2Text.app --args --audio-file /absolute/path/sample.aiff --no-a
 ```
 
 This run also uses Soniox and the key in the app's own Keychain. Without `--no-auto-insert`, the result is typed automatically if the field that was focused at launch is still focused.
-
-The built app is signed locally. Notarization, installing into Applications, launch at login, and GitHub Actions aren't set up.
