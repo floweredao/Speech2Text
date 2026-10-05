@@ -2,6 +2,10 @@ import AppKit
 import ApplicationServices
 
 struct InsertionPolicy {
+    static func allowsAccessibilityWrite(inWebContent: Bool, textSettable: Bool) -> Bool {
+        textSettable && !inWebContent
+    }
+
     static func allows(text: String, trusted: Bool, sameTarget: Bool, editable: Bool) -> Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && trusted && sameTarget && editable
@@ -54,6 +58,20 @@ final class TextInsertion {
         return role == kAXTextAreaRole || role == kAXTextFieldRole || role == kAXComboBoxRole
     }
 
+    func isWebContent(_ element: AXUIElement) -> Bool {
+        var current: AXUIElement? = element
+        while let element = current {
+            var role: CFTypeRef?
+            AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
+            if role as? String == "AXWebArea" { return true }
+            var parent: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, kAXParentAttribute as CFString, &parent) == .success,
+                  let parent, CFGetTypeID(parent) == AXUIElementGetTypeID() else { return false }
+            current = unsafeDowncast(parent, to: AXUIElement.self)
+        }
+        return false
+    }
+
     func copy(_ text: String) -> Bool {
         guard !text.isEmpty else { return false }
         NSPasteboard.general.clearContents()
@@ -69,7 +87,8 @@ final class TextInsertion {
         }
         var settable: DarwinBoolean = false
         if AXUIElementIsAttributeSettable(current.element, kAXSelectedTextAttribute as CFString, &settable) == .success,
-           settable.boolValue,
+           InsertionPolicy.allowsAccessibilityWrite(inWebContent: isWebContent(current.element),
+                                                   textSettable: settable.boolValue),
            AXUIElementSetAttributeValue(current.element, kAXSelectedTextAttribute as CFString, text as CFString) == .success {
             return String(localized: "선택한 입력 칸에 입력했어요.")
         }

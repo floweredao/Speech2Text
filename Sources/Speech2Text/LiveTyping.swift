@@ -126,9 +126,12 @@ final class LiveTyper {
     }
 
     private func supportsAccessibilityEditing(_ element: AXUIElement) -> Bool {
+        // Chromium advertises these setters and returns success without changing the editor.
+        // Native key events also deliver the input events that web editors require.
         var textSettable: DarwinBoolean = false, rangeSettable: DarwinBoolean = false
         return AXUIElementIsAttributeSettable(element, kAXSelectedTextAttribute as CFString, &textSettable) == .success
-            && textSettable.boolValue
+            && InsertionPolicy.allowsAccessibilityWrite(inWebContent: insertion.isWebContent(element),
+                                                       textSettable: textSettable.boolValue)
             && AXUIElementIsAttributeSettable(element, kAXSelectedTextRangeAttribute as CFString, &rangeSettable) == .success
             && rangeSettable.boolValue
     }
