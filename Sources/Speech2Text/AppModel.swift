@@ -8,6 +8,9 @@ final class AppModel {
     private let insertion = TextInsertion()
     @ObservationIgnored private var live: LiveTyper?
     @ObservationIgnored private var awaitingTarget = false
+    /// Recognized text at the moment live typing stopped because the user moved on. Only text after it is typed
+    /// into the field the user settles in next; nil while the first field is still in use.
+    @ObservationIgnored private var resumeBase: String?
     var feedback = ""
     var autoInsert = true
     private var overlayRequested = true
@@ -76,28 +79,37 @@ final class AppModel {
             feedback = String(localized: "선택한 칸에 실시간으로 입력해요.")
         }
         guard let live else { return }
-        switch live.sync(text) {
+        let outcome = live.sync(pending(text))
+        switch outcome {
         case .applied: break
-        case .targetChanged:
-            self.live = nil
-            feedback = String(localized: "입력 위치가 바뀌어 실시간 입력을 멈췄어요. 결과는 여기에 보관해요.")
         case .failed:
             self.live = nil
             feedback = String(localized: "이 칸에는 실시간 입력을 할 수 없어요. 결과는 여기에 보관해요.")
-        case .userEdited:
+        case .targetChanged, .userEdited:
+            // Never retype into the old spot; speech after this point goes to the field the user settles in.
             self.live = nil
-            feedback = String(localized: "입력 칸에서 키를 누르거나 클릭해서 실시간 입력을 멈췄어요. 결과는 여기에 보관해요.")
+            resumeBase = text
+            awaitingTarget = true
+            feedback = String(localized: "입력 위치가 바뀌었어요. 입력 칸에 커서를 두고 말하면 그 칸에 이어서 써요.")
         }
+    }
+
+    private func pending(_ text: String) -> String {
+        resumeBase.map { LiveTextEdit.continuation(of: text, after: $0) } ?? text
     }
 
     private func complete(_ text: String) {
         overlayVisible = true
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if live == nil, awaitingTarget, !empty { _ = acquireLiveTarget() }
+        let rest = pending(text)
+        if live == nil, awaitingTarget, !rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            _ = acquireLiveTarget()
+        }
         awaitingTarget = false
+        resumeBase = nil
         if let live {
             self.live = nil
-            switch live.sync(text) {
+            switch live.sync(rest) {
             case .applied: feedback = empty ? String(localized: "인식된 음성이 없어 입력하지 않았어요.") : String(localized: "입력 칸에 받아쓰기를 입력했어요.")
             case .targetChanged: feedback = String(localized: "입력 위치가 바뀌어 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
             case .failed: feedback = String(localized: "마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
@@ -125,6 +137,7 @@ final class AppModel {
         accessibilityGranted = insertion.isTrusted
         live = nil
         awaitingTarget = false
+        resumeBase = nil
         feedback = ""
         guard autoInsert else { return }
         guard accessibilityGranted else {
@@ -164,6 +177,7 @@ final class AppModel {
         let removed = hadTyped && live?.sync("") == .applied
         live = nil
         awaitingTarget = false
+        resumeBase = nil
         speech.cancel()
         feedback = removed ? String(localized: "취소해서 입력하던 내용을 지웠어요.")
             : hadTyped ? String(localized: "취소했어요. 이미 입력한 글자는 지우지 못했어요.")

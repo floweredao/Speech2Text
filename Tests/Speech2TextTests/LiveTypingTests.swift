@@ -36,6 +36,24 @@ import Testing
         #expect(!LiveTyper.isUserEdit(type: .flagsChanged, sourceUserData: 0, isShortcut: false))
     }
 
+    /// Regression: after the user switched apps mid-dictation, nothing more was typed anywhere.
+    @Test func focusChangesAndUserEditsWaitForTheNextFieldButFailuresDoNot() {
+        #expect(LiveTyper.Outcome.targetChanged.resumesInNextField)
+        #expect(LiveTyper.Outcome.userEdited.resumesInNextField)
+        #expect(!LiveTyper.Outcome.failed.resumesInNextField)
+        #expect(!LiveTyper.Outcome.applied.resumesInNextField)
+    }
+
+    /// Speech heard while typing was stopped never lands in the field the user comes back to.
+    @Test func resumedTypingSkipsTextHeardWhileStopped() {
+        #expect(LiveTextEdit.continuation(of: "첫 문장 둘째 문장", after: "첫 문장") == "둘째 문장")
+        #expect(LiveTextEdit.continuation(of: "첫 문", after: "첫 문장") == "")
+        #expect(LiveTextEdit.continuation(of: "같은 말", after: "같은 말") == "")
+        #expect(LiveTextEdit.continuation(of: "hello world", after: "") == "hello world")
+        // Regression: the cut fell inside "바다쓰기", so the next field began with the fragment "다쓰기".
+        #expect(LiveTextEdit.continuation(of: "격리된 바다쓰기 입력 시험", after: "격리된 바") == "입력 시험")
+    }
+
     @Test func lineBreaksNeverReachTheTarget() {
         #expect(LiveTextEdit.sanitize("첫 줄\n둘째 줄\r\n끝") == "첫 줄 둘째 줄  끝")
     }

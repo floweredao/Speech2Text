@@ -31,7 +31,7 @@
 "마지막 받아쓰기 붙여넣기" = "Paste Last Dictation";
 "%@ 단축키를 등록하지 못했어요. 다른 앱이 쓰고 있을 수 있어요. 다른 키를 골라 주세요." = "Couldn't register the %@ shortcut. Another app may be using it. Choose a different key.";
 "선택한 칸에 실시간으로 입력해요." = "Typing live into the selected field.";
-"입력 위치가 바뀌어 실시간 입력을 멈췄어요. 결과는 여기에 보관해요." = "The input field changed, so live typing stopped. The result is kept here.";
+"입력 위치가 바뀌었어요. 입력 칸에 커서를 두고 말하면 그 칸에 이어서 써요." = "The input field changed. Put the cursor in a field and keep talking to continue there.";
 "이 칸에는 실시간 입력을 할 수 없어요. 결과는 여기에 보관해요." = "This field doesn't accept live typing. The result is kept here.";
 "인식된 음성이 없어 입력하지 않았어요." = "No speech was recognized, so nothing was typed.";
 "입력 칸에 받아쓰기를 입력했어요." = "Typed the dictation into the field.";
@@ -123,7 +123,6 @@
 "Keychain 작업에 실패했습니다 (OSStatus %lld)." = "Keychain operation failed (OSStatus %lld).";
 "Keychain 접근을 허용하지 않아 키를 처리하지 못했습니다." = "Keychain access wasn't allowed, so the key couldn't be handled.";
 "저장된 API 키를 지웠습니다." = "Saved API key removed.";
-"입력 칸에서 키를 누르거나 클릭해서 실시간 입력을 멈췄어요. 결과는 여기에 보관해요." = "You typed or clicked in the field, so live typing stopped. The result is kept here.";
 "입력 칸을 직접 건드려서 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요." = "You edited the field, so the last correction wasn't typed. Copy or paste it.";
 "취소했어요. 이미 입력한 글자는 지우지 못했어요." = "Cancelled. Text already typed couldn't be erased.";
 "저장된 키 삭제" = "Remove Saved Key";
