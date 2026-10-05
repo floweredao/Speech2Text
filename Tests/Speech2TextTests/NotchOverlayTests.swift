@@ -71,21 +71,24 @@ private let notchVisible = CGRect(x: 0, y: 0, width: 1512, height: 950)
         #expect(NotchOverlayGeometry.transcriptViewportHeight(textHeight: -5) == 0)
     }
 
-    @Test func draggedPanelKeepsItsTopCenterWhileHeightChanges() {
+    /// Regression: reopening a moved result panel as a narrower recording capsule re-centered it, so the
+    /// panel the user placed came back 90 pt to the side.
+    @Test func draggedPanelKeepsItsTopLeftCornerWhenWidthOrHeightChanges() {
         let anchor = CGPoint(x: 400, y: 600)
         let compact = NotchOverlayGeometry.frame(anchor: anchor, screen: notchScreen, expanded: false,
                                                  contentHeight: 0)
         let expanded = NotchOverlayGeometry.frame(anchor: anchor, screen: notchScreen, expanded: true,
                                                   contentHeight: 180)
+        #expect(compact.width != expanded.width)
         for frame in [compact, expanded] {
-            #expect(frame.midX == anchor.x)
+            #expect(frame.minX == anchor.x)
             #expect(frame.maxY == anchor.y)
         }
         #expect(expanded.height == 180)
     }
 
     @Test func draggedPanelStaysOnScreenNearEdges() {
-        let corner = NotchOverlayGeometry.frame(anchor: CGPoint(x: 10, y: 20), screen: notchScreen,
+        let corner = NotchOverlayGeometry.frame(anchor: CGPoint(x: -10, y: 20), screen: notchScreen,
                                                 expanded: true, contentHeight: 180)
         #expect(corner.minX == notchScreen.minX)
         #expect(corner.minY == notchScreen.minY)

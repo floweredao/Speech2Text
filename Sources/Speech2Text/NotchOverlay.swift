@@ -155,13 +155,13 @@ enum NotchOverlayGeometry {
                       width: width, height: height)
     }
 
-    /// Where the user dragged the panel: `anchor` is its top-center point. The top edge stays at the
-    /// anchor while the height changes, and the frame is kept inside `screen`.
+    /// Where the user dragged the panel: `anchor` is its top-left corner, so the panel comes back where the
+    /// user left it even when it reopens narrower or wider. It grows right and down; the frame stays in `screen`.
     static func frame(anchor: CGPoint, screen: CGRect, expanded: Bool, contentHeight: CGFloat) -> CGRect {
         let width = width(screenWidth: screen.width, expanded: expanded)
         let wanted = expanded ? max(contentHeight, compactHeight) : compactHeight
         let height = min(wanted, screen.height)
-        let x = min(max(anchor.x - width / 2, screen.minX), screen.maxX - width)
+        let x = min(max(anchor.x, screen.minX), screen.maxX - width)
         let top = min(max(anchor.y, screen.minY + height), screen.maxY)
         return CGRect(x: x, y: top - height, width: width, height: height)
     }
@@ -188,7 +188,7 @@ final class NotchOverlayController: NSObject {
     private var expanded = false
     private var contentHeight = NotchOverlayGeometry.compactHeight
     private var announcedPhase: DictationDisplayState.Phase?
-    /// Top-center point the user dragged the panel to. Kept in memory only, so a relaunch starts
+    /// Top-left corner the user dragged the panel to. Kept in memory only, so a relaunch starts
     /// at the default position below the notch.
     private var userAnchor: CGPoint?
     /// Pointer and anchor, in screen coordinates, where the current drag began.
@@ -330,14 +330,14 @@ final class NotchOverlayController: NSObject {
         guard let panel else { return }
         let mouse = NSEvent.mouseLocation
         let start = dragStart ?? (mouse: CGPoint(x: mouse.x - translation.width, y: mouse.y + translation.height),
-                                  anchor: CGPoint(x: panel.frame.midX, y: panel.frame.maxY))
+                                  anchor: CGPoint(x: panel.frame.minX, y: panel.frame.maxY))
         dragStart = start
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? selectedScreen
         else { return }
         let wanted = CGPoint(x: start.anchor.x + mouse.x - start.mouse.x, y: start.anchor.y + mouse.y - start.mouse.y)
         let frame = NotchOverlayGeometry.frame(anchor: wanted, screen: screen.frame, expanded: expanded,
                                                contentHeight: contentHeight)
-        userAnchor = CGPoint(x: frame.midX, y: frame.maxY)
+        userAnchor = CGPoint(x: frame.minX, y: frame.maxY)
         place(panel, animated: false)
     }
 
