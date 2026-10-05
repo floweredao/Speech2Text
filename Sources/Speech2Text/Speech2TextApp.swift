@@ -8,7 +8,7 @@ struct Speech2TextApp: App {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let model = AppModel()
     private var overlay: NotchOverlayController?
     private var settings: NSWindow?
@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        model.settingsAction = { [weak self] in self?.showSettings() }
+        model.settingsAction = { [weak self] in self?.presentSettings() }
         let overlay = NotchOverlayController(model: model)
         self.overlay = overlay
         overlay.start()
@@ -77,7 +77,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggle() { model.toggleRecording(); overlay?.present() }
     @objc private func paste() { model.pasteTranscript(); overlay?.present() }
     @objc private func showOverlay() { model.overlayVisible = true; overlay?.present() }
-    @objc private func showSettings() {
+    @objc private func showSettings() { model.openSettings() }
+    private func presentSettings() {
         if settings == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 540),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -86,12 +87,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.contentView = NSHostingView(rootView: SettingsView(model: model))
             window.minSize = NSSize(width: 440, height: 420)
             window.isReleasedWhenClosed = false
+            window.delegate = self
             window.center()
             settings = window
         }
         model.accessibilityGranted = AXIsProcessTrusted()
         NSApp.activate()
         settings?.makeKeyAndOrderFront(nil)
+    }
+    func windowDidBecomeKey(_ notification: Notification) {
+        model.settingsFocused = true
+    }
+    func windowDidResignKey(_ notification: Notification) {
+        model.settingsFocused = false
+    }
+    func windowWillClose(_ notification: Notification) {
+        model.settingsFocused = false
     }
     @objc private func quit() { NSApp.terminate(nil) }
     func applicationWillTerminate(_ notification: Notification) {

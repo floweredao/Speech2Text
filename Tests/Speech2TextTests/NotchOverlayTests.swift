@@ -206,6 +206,33 @@ private func display(_ phase: SpeechPhase, error: Bool = false, transcript: Stri
 // MARK: Settings
 
 @Suite struct SettingsModelTests {
+    @MainActor @Test func openingSettingsSuppressesOverlayBeforePresentingWindow() {
+        let model = AppModel()
+        var visibleWhenPresented: Bool?
+        model.settingsAction = { visibleWhenPresented = model.overlayVisible }
+        model.openSettings()
+        #expect(visibleWhenPresented == false)
+        #expect(!model.overlayVisible)
+        model.settingsAction = nil
+    }
+
+    @MainActor @Test func explicitShowCannotCoverFocusedSettingsAndResumesAfterLeaving() {
+        let model = AppModel()
+        model.openSettings()
+        model.overlayVisible = true
+        #expect(!model.overlayVisible)
+        model.settingsFocused = false
+        #expect(model.overlayVisible)
+    }
+
+    @MainActor @Test func settingsRoundTripDoesNotReopenADismissedOverlay() {
+        let model = AppModel()
+        model.dismissOverlay()
+        model.openSettings()
+        model.settingsFocused = false
+        #expect(!model.overlayVisible)
+    }
+
     @Test(arguments: [(26, ControlPermissionPane.accessibility), (27, .deviceControl), (28, .deviceControl)])
     func controlPaneFollowsOSVersion(version: Int, expected: ControlPermissionPane) {
         #expect(ControlPermissionPane(osMajorVersion: version) == expected)

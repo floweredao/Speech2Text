@@ -10,7 +10,12 @@ final class AppModel {
     @ObservationIgnored private var awaitingTarget = false
     var feedback = ""
     var autoInsert = true
-    var overlayVisible = true
+    private var overlayRequested = true
+    var settingsFocused = false
+    var overlayVisible: Bool {
+        get { overlayRequested && !settingsFocused }
+        set { overlayRequested = newValue }
+    }
     var accessibilityGranted = AXIsProcessTrusted() {
         didSet { if accessibilityGranted, !oldValue { shortcutsChanged?() } }
     }
@@ -189,5 +194,8 @@ final class AppModel {
     func saveKey() { Task { await speech.saveKey() } }
     func loadKey() { Task { await speech.loadKey() } }
     func deleteKey() { Task { await speech.deleteKey() } }
-    func openSettings() { settingsAction?() }
+    func openSettings() {
+        settingsFocused = true
+        settingsAction?()
+    }
 }

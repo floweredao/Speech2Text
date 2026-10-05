@@ -216,7 +216,7 @@ final class NotchOverlayController: NSObject {
         selectedScreen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
             ?? NSScreen.main ?? NSScreen.screens.first
         model.overlayVisible = true
-        show()
+        synchronize()
     }
 
     func stop() {
