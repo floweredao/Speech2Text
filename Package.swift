@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "Speech2Text",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v15)],
     products: [.executable(name: "Speech2Text", targets: ["Speech2Text"])],
     targets: [
         .target(name: "DictationSpeech"),
