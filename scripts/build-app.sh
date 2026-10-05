@@ -10,7 +10,9 @@ ensure_stopped() {
   fi
 }
 ensure_stopped
-swift build -c release
+# SwiftPM records the deployment target as the linked SDK version. Record 26.0
+# so macOS 26 and later keep the same runtime behavior as the 26-only releases.
+swift build -c release -Xlinker -platform_version -Xlinker macos -Xlinker 15.0 -Xlinker 26.0
 BIN_DIR="$(swift build -c release --show-bin-path)"
 mkdir -p build
 STAGING="$(mktemp -d "$PWD/build/.app-stage.XXXXXX")"
