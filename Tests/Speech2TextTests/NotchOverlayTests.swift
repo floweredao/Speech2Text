@@ -228,6 +228,20 @@ private func display(_ phase: SpeechPhase, error: Bool = false, transcript: Stri
         #expect(model.overlayVisible)
     }
 
+    /// Regression: closing a dragged overlay with its X and showing it again brought it back at the dragged spot.
+    @MainActor @Test func closingTheOverlayForgetsTheDraggedPositionButSettingsFocusKeepsIt() {
+        let model = AppModel()
+        let overlay = NotchOverlayController(model: model)
+        overlay.userAnchor = CGPoint(x: 400, y: 600)
+        model.openSettings()
+        overlay.forgetPlacementIfClosed()
+        #expect(overlay.userAnchor == CGPoint(x: 400, y: 600))
+        model.settingsFocused = false
+        model.dismissOverlay()
+        overlay.forgetPlacementIfClosed()
+        #expect(overlay.userAnchor == nil)
+    }
+
     @MainActor @Test func settingsRoundTripDoesNotReopenADismissedOverlay() {
         let model = AppModel()
         model.dismissOverlay()

@@ -188,9 +188,9 @@ final class NotchOverlayController: NSObject {
     private var expanded = false
     private var contentHeight = NotchOverlayGeometry.compactHeight
     private var announcedPhase: DictationDisplayState.Phase?
-    /// Top-left corner the user dragged the panel to. Kept in memory only, so a relaunch starts
-    /// at the default position below the notch.
-    private var userAnchor: CGPoint?
+    /// Top-left corner the user dragged the panel to. Kept in memory only and forgotten when the user
+    /// closes the overlay, so reopening or relaunching starts at the default position below the notch.
+    var userAnchor: CGPoint?
     /// Pointer and anchor, in screen coordinates, where the current drag began.
     private var dragStart: (mouse: CGPoint, anchor: CGPoint)?
 
@@ -248,12 +248,18 @@ final class NotchOverlayController: NSObject {
             panel?.orderOut(nil)
             announcedPhase = nil
             dragStart = nil
+            forgetPlacementIfClosed()
             return
         }
         let resized = expanded != state.isExpanded
         expanded = state.isExpanded
         show(animateResize: resized)
         announce(state)
+    }
+
+    /// The user's close button drops the dragged position; hiding for focused Settings keeps it.
+    func forgetPlacementIfClosed() {
+        if !model.overlayRequested { userAnchor = nil }
     }
 
     private func cancelDictation() {

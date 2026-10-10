@@ -13,7 +13,7 @@ final class AppModel {
     @ObservationIgnored private var resumeBase: String?
     var feedback = ""
     var autoInsert = true
-    private var overlayRequested = true
+    private(set) var overlayRequested = true
     var settingsFocused = false
     var overlayVisible: Bool {
         get { overlayRequested && !settingsFocused }
