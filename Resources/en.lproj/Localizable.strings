@@ -27,6 +27,7 @@
 "%@은 이미 '%@'에 쓰고 있어요." = "%1$@ is already used for '%2$@'.";
 "받아쓰기 표시" = "Show Dictation";
 "설정…" = "Settings…";
+"업데이트 확인…" = "Check for Updates…";
 "Speech2Text 종료" = "Quit Speech2Text";
 "마지막 받아쓰기 붙여넣기" = "Paste Last Dictation";
 "%@ 단축키를 등록하지 못했어요. 다른 앱이 쓰고 있을 수 있어요. 다른 키를 골라 주세요." = "Couldn't register the %@ shortcut. Another app may be using it. Choose a different key.";

@@ -14,11 +14,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settings: NSWindow?
     private var statusItem: NSStatusItem?
     private let shortcuts = GlobalShortcutMonitor()
+    private var updater: AppUpdater?
     private var toggleItem: NSMenuItem?
     private var pasteItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        let updater = AppUpdater()
+        self.updater = updater
         model.settingsAction = { [weak self] in self?.presentSettings() }
         let overlay = NotchOverlayController(model: model)
         self.overlay = overlay
@@ -32,6 +35,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         menu.addItem(withTitle: String(localized: "받아쓰기 표시"), action: #selector(showOverlay), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: String(localized: "설정…"), action: #selector(showSettings), keyEquivalent: ",")
+        if updater.isAvailable {
+            menu.addItem(withTitle: String(localized: "업데이트 확인…"), action: #selector(checkForUpdates), keyEquivalent: "")
+        }
         menu.addItem(withTitle: String(localized: "Speech2Text 종료"), action: #selector(quit), keyEquivalent: "q")
         for item in menu.items { item.target = self }
         item.menu = menu
@@ -78,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func paste() { model.pasteTranscript(); overlay?.present() }
     @objc private func showOverlay() { model.overlayVisible = true; overlay?.present() }
     @objc private func showSettings() { model.openSettings() }
+    @objc private func checkForUpdates() { updater?.checkForUpdates() }
     private func presentSettings() {
         if settings == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 540),

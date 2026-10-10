@@ -35,6 +35,18 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$STAGING/Speech2Text.app/Contents/Resources/AppIcon.icns"
 cp -R Resources/en.lproj Resources/ko.lproj "$STAGING/Speech2Text.app/Contents/Resources/"
+# Embed the SwiftPM-resolved Sparkle (pinned in Package.swift); ditto keeps its symlinks and helpers.
+SPARKLE="$(find .build/artifacts -maxdepth 6 -path '*macos-arm64_x86_64/Sparkle.framework' | head -1)"
+[[ -n "$SPARKLE" ]] || { printf '%s\n' 'Sparkle.framework not found under .build/artifacts.' >&2; exit 1; }
+FRAMEWORK="$STAGING/Speech2Text.app/Contents/Frameworks/Sparkle.framework"
+mkdir -p "$(dirname "$FRAMEWORK")"
+ditto "$SPARKLE" "$FRAMEWORK"
+# Sign nested Sparkle code inside-out with the same certificate, keeping each helper's entitlements.
+for component in Versions/B/XPCServices/Installer.xpc Versions/B/XPCServices/Downloader.xpc \
+  Versions/B/Autoupdate Versions/B/Updater.app; do
+  codesign --force --sign "$SIGNING_IDENTITY" --options runtime --preserve-metadata=entitlements "$FRAMEWORK/$component"
+done
+codesign --force --sign "$SIGNING_IDENTITY" --options runtime --preserve-metadata=entitlements "$FRAMEWORK"
 codesign --force --sign "$SIGNING_IDENTITY" --options runtime --entitlements Resources/Entitlements.plist "$STAGING/Speech2Text.app"
 codesign --verify --deep --strict "$STAGING/Speech2Text.app"
 ensure_stopped

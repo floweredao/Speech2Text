@@ -48,6 +48,7 @@ Requires macOS 15 or later on Apple Silicon.
 
 1. Download the `.zip` from the [latest release](https://github.com/floweredao/Speech2Text/releases/latest), unzip it, and move `Speech2Text.app` to Applications.
 2. Open it. If macOS says it can't open the app, go to System Settings › Privacy & Security, scroll to Security, and click **Open Anyway** next to Speech2Text. You only need to do this once per version.
+3. Later versions install from inside the app: it checks GitHub Releases once a day, or choose **Check for Updates…** from the menu bar icon.
 
 ## Dictating
 
