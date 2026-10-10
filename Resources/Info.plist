@@ -9,8 +9,8 @@
 <key>CFBundleDisplayName</key><string>Speech2Text</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
-<key>CFBundleVersion</key><string>4</string>
-<key>CFBundleShortVersionString</key><string>1.1.2</string>
+<key>CFBundleVersion</key><string>5</string>
+<key>CFBundleShortVersionString</key><string>1.2.0</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 <key>LSUIElement</key><true/>
 <key>SUFeedURL</key><string>https://github.com/floweredao/Speech2Text/releases/latest/download/appcast.xml</string>
