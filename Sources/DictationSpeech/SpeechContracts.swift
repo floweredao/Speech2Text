@@ -38,6 +38,7 @@ enum AppError: Error, Sendable, Equatable, LocalizedError {
     case provider(code: Int?, message: String)
     case permissionDenied(String), audioOverflow, timeout(String), cancelled, inputDeviceUnavailable
     case microphoneSilent, microphoneInterrupted, offline, connectionFailed
+    case microphoneStartFailed(device: String, status: Int32)
     case keychain(Int32), keychainDenied
 
     var errorDescription: String? {
@@ -52,6 +53,8 @@ enum AppError: Error, Sendable, Equatable, LocalizedError {
         case .inputDeviceUnavailable: String(localized: "선택한 마이크를 찾을 수 없습니다. 설정에서 다른 마이크를 고르세요.")
         case .microphoneSilent: String(localized: "마이크에서 소리가 들어오지 않습니다. 다른 기기가 쓰고 있거나 macOS가 연결을 거부했을 수 있어요. 설정에서 다른 마이크를 고르세요.")
         case .microphoneInterrupted: String(localized: "녹음 중 마이크 연결이 바뀌어 받아쓰기를 멈췄습니다. 다시 시작해 주세요.")
+        case .microphoneStartFailed(let device, let status):
+            String(localized: "'\(device)' 마이크를 열지 못했습니다 (오디오 형식 또는 장치 오류 \(Int(status))). 장치 연결을 확인하거나 설정에서 다른 마이크를 고르세요.")
         case .offline: String(localized: "인터넷에 연결되어 있지 않습니다. 연결을 확인한 뒤 다시 시작해 주세요.")
         case .connectionFailed: String(localized: "Soniox에 연결하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.")
         case .keychain(let status): String(localized: "Keychain 작업에 실패했습니다 (OSStatus \(Int(status))).")

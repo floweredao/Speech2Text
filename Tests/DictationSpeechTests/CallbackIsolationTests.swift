@@ -7,7 +7,7 @@ struct CallbackIsolationTests {
     @Test @MainActor func captureTapRunsOffMainAndRejectsLateBuffers() async throws {
         let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1))
         let pipeline = try AudioPipeline(format: .pcm16Mono16k, input: format)
-        let callback = AVAudioCapture.makeTap(pipeline)
+        let callback = HALAudioCapture.makeTap(pipeline)
         await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
                 #expect(!Thread.isMainThread)

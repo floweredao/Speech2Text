@@ -34,6 +34,19 @@ public enum AudioInputDevices {
         AudioInputDevicesObservation(onChange)
     }
 
+    static func defaultDeviceID() -> AudioDeviceID? {
+        var id = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultInputDevice,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &id) == noErr,
+              id != kAudioObjectUnknown else { return nil }
+        return id
+    }
+
+    static func name(of id: AudioDeviceID) -> String? { string(id, kAudioObjectPropertyName) }
+
     static func deviceID(forUID uid: String) -> AudioDeviceID? {
         deviceIDs().first { hasInput($0) && string($0, kAudioDevicePropertyDeviceUID) == uid }
     }
@@ -67,6 +80,31 @@ public enum AudioInputDevices {
               let value else { return nil }
         return value.takeRetainedValue() as String
     }
+}
+
+/// Calls `onGone` on the main thread when the device stops being alive (unplugged or disconnected).
+final class AudioDeviceAliveObservation: @unchecked Sendable {
+    private let device: AudioDeviceID
+    private let block: AudioObjectPropertyListenerBlock
+    private var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsAlive,
+                                                     mScope: kAudioObjectPropertyScopeGlobal,
+                                                     mElement: kAudioObjectPropertyElementMain)
+
+    init(_ device: AudioDeviceID, _ onGone: @escaping @MainActor () -> Void) {
+        self.device = device
+        block = { _, _ in
+            var alive: UInt32 = 1
+            var size = UInt32(MemoryLayout<UInt32>.size)
+            var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsAlive,
+                                                     mScope: kAudioObjectPropertyScopeGlobal,
+                                                     mElement: kAudioObjectPropertyElementMain)
+            let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &alive)
+            if status != noErr || alive == 0 { MainActor.assumeIsolated { onGone() } }
+        }
+        AudioObjectAddPropertyListenerBlock(device, &address, .main, block)
+    }
+
+    deinit { AudioObjectRemovePropertyListenerBlock(device, &address, .main, block) }
 }
 
 public final class AudioInputDevicesObservation: @unchecked Sendable {

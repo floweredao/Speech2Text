@@ -119,6 +119,7 @@
 "선택한 마이크를 찾을 수 없습니다. 설정에서 다른 마이크를 고르세요." = "Can't find the selected microphone. Choose another one in Settings.";
 "마이크에서 소리가 들어오지 않습니다. 다른 기기가 쓰고 있거나 macOS가 연결을 거부했을 수 있어요. 설정에서 다른 마이크를 고르세요." = "No sound is coming from the microphone. Another device may be using it, or macOS may have refused the connection. Choose another microphone in Settings.";
 "녹음 중 마이크 연결이 바뀌어 받아쓰기를 멈췄습니다. 다시 시작해 주세요." = "The microphone changed during recording, so dictation stopped. Start again.";
+"'%@' 마이크를 열지 못했습니다 (오디오 형식 또는 장치 오류 %lld). 장치 연결을 확인하거나 설정에서 다른 마이크를 고르세요." = "Couldn't open the microphone '%1$@' (audio format or device error %2$lld). Check its connection or choose another microphone in Settings.";
 "인터넷에 연결되어 있지 않습니다. 연결을 확인한 뒤 다시 시작해 주세요." = "You're not connected to the internet. Check your connection and start again.";
 "Soniox에 연결하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요." = "Couldn't connect to Soniox. Check your internet connection and try again.";
 "Keychain 작업에 실패했습니다 (OSStatus %lld)." = "Keychain operation failed (OSStatus %lld).";
