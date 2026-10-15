@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.overlay = overlay
         overlay.start()
         overlay.present()
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = MenuBarIcon.image
         let menu = NSMenu()
         toggleItem = menu.addItem(withTitle: "", action: #selector(toggle), keyEquivalent: "")
