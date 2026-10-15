@@ -54,6 +54,16 @@ import Testing
         #expect(LiveTextEdit.continuation(of: "격리된 바다쓰기 입력 시험", after: "격리된 바") == "입력 시험")
     }
 
+    /// Regression: with the Korean input method in a web field, bare backspace keys mangled the revised start
+    /// ("어 오오늘은가 …" instead of "오늘은 회의가 …"). Each backspace must carry the backspace character.
+    @Test func revisionsSendBackspaceCharactersThenTheNewText() {
+        let strokes = LiveTyper.keystrokes(for: LiveTextEdit.between("어 오늘", "오늘은 회의"))
+        #expect(strokes == Array(repeating: LiveTyper.Keystroke(key: 51, text: "\u{8}"), count: 4)
+            + [LiveTyper.Keystroke(key: 0, text: "오늘은 회의")])
+        #expect(LiveTyper.keystrokes(for: LiveTextEdit(removed: "", insert: String(repeating: "가", count: 20)))
+            .map(\.text) == [String(repeating: "가", count: 16), String(repeating: "가", count: 4)])
+    }
+
     @Test func lineBreaksNeverReachTheTarget() {
         #expect(LiveTextEdit.sanitize("첫 줄\n둘째 줄\r\n끝") == "첫 줄 둘째 줄  끝")
     }

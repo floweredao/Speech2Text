@@ -197,33 +197,41 @@ final class LiveTyper {
         return result as? String
     }
 
-    private func typeWithKeyboard(_ edit: LiveTextEdit, pid: pid_t) -> Bool {
-        guard let source = CGEventSource(stateID: .privateState) else { return false }
-        // Events go to the target process only, so a focus change can never redirect them.
-        for _ in 0..<edit.removed.count {
-            guard post(source, key: 51, text: nil, pid: pid) else { return false }
-        }
+    struct Keystroke: Equatable, Sendable {
+        let key: CGKeyCode
+        let text: String
+    }
+
+    /// Backspaces carry the backspace character: without it, web fields with the Korean input method active
+    /// dropped or misplaced them, which mangled the start of the text when recognition revised it.
+    nonisolated static func keystrokes(for edit: LiveTextEdit) -> [Keystroke] {
+        var strokes = Array(repeating: Keystroke(key: 51, text: "\u{8}"), count: edit.removed.count)
         var chunk = ""
         for character in edit.insert {
             if chunk.utf16.count + character.utf16.count > 16 {
-                guard post(source, key: 0, text: chunk, pid: pid) else { return false }
+                strokes.append(Keystroke(key: 0, text: chunk))
                 chunk = ""
             }
             chunk.append(character)
         }
-        return chunk.isEmpty || post(source, key: 0, text: chunk, pid: pid)
+        if !chunk.isEmpty { strokes.append(Keystroke(key: 0, text: chunk)) }
+        return strokes
     }
 
-    private func post(_ source: CGEventSource, key: CGKeyCode, text: String?, pid: pid_t) -> Bool {
+    private func typeWithKeyboard(_ edit: LiveTextEdit, pid: pid_t) -> Bool {
+        guard let source = CGEventSource(stateID: .privateState) else { return false }
+        // Events go to the target process only, so a focus change can never redirect them.
+        return Self.keystrokes(for: edit).allSatisfy { post(source, key: $0.key, text: $0.text, pid: pid) }
+    }
+
+    private func post(_ source: CGEventSource, key: CGKeyCode, text: String, pid: pid_t) -> Bool {
         guard let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true),
               let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) else { return false }
         for event in [down, up] {
             event.flags = []
             event.setIntegerValueField(.eventSourceUserData, value: Self.eventMarker)
-            if let text {
-                let units = Array(text.utf16)
-                event.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
-            }
+            let units = Array(text.utf16)
+            event.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
             event.postToPid(pid)
         }
         return true
