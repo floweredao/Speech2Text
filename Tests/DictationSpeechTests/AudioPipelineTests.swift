@@ -93,6 +93,21 @@ extension AudioPipelineTests {
         } catch { #expect(error as? AppError == .audioOverflow) }
         #expect(count == 100)
     }
+    /// Regression: a Bluetooth microphone dropped from 44.1 kHz to 16 kHz after opening and recording failed.
+    @Test func hardwareRateChangeMidStreamKeepsConverting() async throws {
+        let opened = try #require(AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1))
+        let callProfile = try #require(AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1))
+        let pipeline = try AudioPipeline(format: .pcm16Mono16k, input: opened)
+        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: callProfile, frameCapacity: 3_200))
+        buffer.frameLength = 3_200
+        for index in 0..<3_200 { try #require(buffer.floatChannelData)[0][index] = 0.5 }
+        pipeline.receive(buffer)
+        pipeline.finish()
+        var data = Data()
+        for try await chunk in pipeline.stream { data.append(chunk) }
+        #expect(data.count == 6_400)
+        #expect(data.suffix(2) == Data([0, 64]))
+    }
     @Test func chunkedResamplingKeepsFrameTotals() throws {
         let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 1))
         let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 960))

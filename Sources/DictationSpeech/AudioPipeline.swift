@@ -5,7 +5,9 @@ import Foundation
 final class PCMConverter {
     private let converter: AVAudioConverter
     private let output: AVAudioFormat
+    let input: AVAudioFormat
     init(input: AVAudioFormat, format: CaptureFormat) throws {
+        self.input = input
         let rate: Double = 16_000
         guard let output = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: rate, channels: 1, interleaved: true),
               let converter = AVAudioConverter(from: input, to: output) else {
@@ -66,8 +68,15 @@ final class AudioPipeline: @unchecked Sendable {
     }
     func receive(_ buffer: AVAudioPCMBuffer) {
         lock.lock(); defer { lock.unlock() }
-        guard !finished, let converter else { return }
-        do { try enqueue(converter.convert(buffer)) }
+        guard !finished, var converter else { return }
+        do {
+            // Bluetooth microphones drop to a lower rate once their input opens; follow the hardware.
+            if converter.input != buffer.format {
+                converter = try PCMConverter(input: buffer.format, format: .pcm16Mono16k)
+                self.converter = converter
+            }
+            try enqueue(converter.convert(buffer))
+        }
         catch { end(throwing: error) }
     }
     func receivePCM(_ data: Data) {
@@ -142,12 +151,16 @@ final class AudioPipeline: @unchecked Sendable {
     }
 }
 
-@MainActor final class AVAudioCapture: AudioCapturing {
+/// Records from one device through its own HAL unit. AVAudioEngine's input node follows the system default
+/// input and moved back to it when a Bluetooth headset reconfigured, so a chosen microphone did not stay chosen.
+@MainActor final class HALAudioCapture: AudioCapturing {
     private static let log = Logger(subsystem: "local.speech2text.app", category: "audio")
-    private var engine: AVAudioEngine?
+    private var unit: AudioUnit?
+    private var renderer: HALInputRenderer?
     private var pipeline: AudioPipeline?
     private var generation = UUID()
-    private var configurationObserver: NSObjectProtocol?
+    private var deviceObservation: AudioDeviceAliveObservation?
+    private var formatObservation: HALFormatObservation?
     private let deviceUID: String?
     init(deviceUID: String? = nil) { self.deviceUID = deviceUID }
     var promptsForPermission: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined }
@@ -158,34 +171,44 @@ final class AudioPipeline: @unchecked Sendable {
         try Task.checkCancellation()
         guard generation == id else { throw AppError.cancelled }
         guard permitted else { throw AppError.permissionDenied("Microphone") }
-        let engine = AVAudioEngine()
-        let node = engine.inputNode
-        if let deviceUID {
-            guard var device = AudioInputDevices.deviceID(forUID: deviceUID), let unit = node.audioUnit,
-                  AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
-                                       &device, UInt32(MemoryLayout<AudioDeviceID>.size)) == noErr
-            else { throw AppError.inputDeviceUnavailable }
-        }
-        // After switching devices the output side still reports the previous device's format; a tap in that
-        // format never fires when the sample rates differ. The input side reflects the selected hardware.
-        let input = node.inputFormat(forBus: 0)
-        guard input.sampleRate > 0, input.channelCount > 0 else { throw AppError.permissionDenied("Microphone input device") }
-        // Recording starts before the provider connects: hold the full 12 s start window (20 ms chunks).
+        // The device is fixed for the whole recording; a later change of the system default does not move it.
+        guard let device = deviceUID.map(AudioInputDevices.deviceID(forUID:)) ?? AudioInputDevices.defaultDeviceID()
+        else { throw AppError.inputDeviceUnavailable }
+        let name = AudioInputDevices.name(of: device) ?? deviceUID ?? "?"
+        let unit: AudioUnit
+        let input: AVAudioFormat
+        do { (unit, input) = try Self.makeUnit(device: device) }
+        catch let status as HALStatus { throw AppError.microphoneStartFailed(device: name, status: status.code) }
         let pipeline = try AudioPipeline(format: format, input: input, capacity: 600)
-        self.engine = engine; self.pipeline = pipeline
+        let renderer = HALInputRenderer(unit: unit, deliver: Self.makeTap(pipeline))
+        self.unit = unit; self.renderer = renderer; self.pipeline = pipeline
         pipeline.onTermination { [weak self] in
             Task { @MainActor in
                 guard self?.generation == id else { return }
                 await self?.stop()
             }
         }
-        node.installTap(onBus: 0, bufferSize: 960, format: input, block: Self.makeTap(pipeline))
-        do { engine.prepare(); try engine.start() }
-        catch { await stop(); throw AppError.permissionDenied("Microphone could not start") }
-        // The engine stops itself when the hardware changes; end the recording instead of hanging silent.
-        configurationObserver = NotificationCenter.default.addObserver(
-            forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil,
-            using: Self.makeConfigurationHandler(self, id))
+        var callback = AURenderCallbackStruct(inputProc: HALInputRenderer.inputProc,
+                                              inputProcRefCon: Unmanaged.passUnretained(renderer).toOpaque())
+        var status = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0,
+                                          &callback, UInt32(MemoryLayout<AURenderCallbackStruct>.size))
+        if status == noErr { status = AudioUnitInitialize(unit) }
+        if status == noErr { status = AudioOutputUnitStart(unit) }
+        guard status == noErr else {
+            Self.log.error("start failed on \(name, privacy: .public): \(status, privacy: .public)")
+            await stop()
+            throw AppError.microphoneStartFailed(device: name, status: status)
+        }
+        formatObservation = HALFormatObservation(unit) { [weak self] in
+            guard self?.generation == id else { return }
+            self?.followHardwareFormat(name: name)
+        }
+        // Unplugging the device ends the recording instead of leaving it silent.
+        deviceObservation = AudioDeviceAliveObservation(device) { [weak self] in
+            guard self?.generation == id else { return }
+            Self.log.notice("input device disappeared")
+            self?.pipeline?.fail(AppError.microphoneInterrupted)
+        }
         let heard = await pipeline.waitForSignal(timeout: .seconds(3))
         guard generation == id else { throw AppError.cancelled }
         guard heard else {
@@ -195,29 +218,127 @@ final class AudioPipeline: @unchecked Sendable {
         }
         return pipeline.stream
     }
-    nonisolated static func makeConfigurationHandler(_ capture: AVAudioCapture, _ id: UUID) -> @Sendable (Notification) -> Void {
-        { [weak capture] _ in Task { @MainActor in capture?.configurationChanged(id) } }
+    /// A Bluetooth headset switches to its call profile once its microphone opens, changing the rate after start.
+    /// The unit cannot resample input, so the client side is set to the new rate and the unit restarted.
+    private func followHardwareFormat(name: String) {
+        guard let unit else { return }
+        var hardware = AudioStreamBasicDescription(), client = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        guard AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1, &hardware, &size) == noErr,
+              AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, &client, &size) == noErr,
+              hardware.mSampleRate > 0, hardware.mSampleRate != client.mSampleRate
+                || hardware.mChannelsPerFrame != client.mChannelsPerFrame else { return }
+        Self.log.notice("input format changed to \(hardware.mSampleRate, privacy: .public) Hz")
+        AudioOutputUnitStop(unit)
+        AudioUnitUninitialize(unit)
+        var status = kAudioUnitErr_FormatNotSupported
+        if let format = AVAudioFormat(standardFormatWithSampleRate: hardware.mSampleRate, channels: hardware.mChannelsPerFrame) {
+            var description = format.streamDescription.pointee
+            status = AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, &description, size)
+        }
+        if status == noErr { status = AudioUnitInitialize(unit) }
+        if status == noErr { status = AudioOutputUnitStart(unit) }
+        if status != noErr { pipeline?.fail(AppError.microphoneStartFailed(device: name, status: status)) }
     }
-    private func configurationChanged(_ id: UUID) {
-        guard generation == id, let engine, let pipeline else { return }
-        Self.log.notice("audio configuration changed, running=\(engine.isRunning, privacy: .public)")
-        // Changes also fire at startup and for output devices; only a stopped engine means the input is gone.
-        if !engine.isRunning { pipeline.fail(AppError.microphoneInterrupted) }
+    private struct HALStatus: Error { let code: OSStatus }
+    private static func makeUnit(device: AudioDeviceID) throws -> (AudioUnit, AVAudioFormat) {
+        var description = AudioComponentDescription(componentType: kAudioUnitType_Output,
+                                                    componentSubType: kAudioUnitSubType_HALOutput,
+                                                    componentManufacturer: kAudioUnitManufacturer_Apple,
+                                                    componentFlags: 0, componentFlagsMask: 0)
+        guard let component = AudioComponentFindNext(nil, &description) else { throw HALStatus(code: kAudioUnitErr_NoConnection) }
+        var created: AudioUnit?
+        try check(AudioComponentInstanceNew(component, &created))
+        guard let unit = created else { throw HALStatus(code: kAudioUnitErr_NoConnection) }
+        do {
+            var on: UInt32 = 1, off: UInt32 = 0, device = device
+            let flag = UInt32(MemoryLayout<UInt32>.size)
+            try check(AudioUnitSetProperty(unit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, &on, flag))
+            try check(AudioUnitSetProperty(unit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0, &off, flag))
+            try check(AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                                           &device, UInt32(MemoryLayout<AudioDeviceID>.size)))
+            var hardware = AudioStreamBasicDescription()
+            var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+            try check(AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1, &hardware, &size))
+            guard hardware.mSampleRate > 0, hardware.mChannelsPerFrame > 0,
+                  let client = AVAudioFormat(standardFormatWithSampleRate: hardware.mSampleRate,
+                                             channels: hardware.mChannelsPerFrame)
+            else { throw HALStatus(code: kAudioUnitErr_FormatNotSupported) }
+            // The HAL unit converts the device's samples to float at the device rate; it never resamples input.
+            var clientDescription = client.streamDescription.pointee
+            try check(AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1,
+                                           &clientDescription, size))
+            return (unit, client)
+        } catch {
+            AudioComponentInstanceDispose(unit)
+            throw error
+        }
     }
+    private static func check(_ status: OSStatus) throws { if status != noErr { throw HALStatus(code: status) } }
     nonisolated static func makeTap(_ pipeline: AudioPipeline) -> @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void {
         { buffer, _ in pipeline.receive(buffer) }
     }
     isolated deinit {
-        if let engine { engine.stop(); engine.inputNode.removeTap(onBus: 0) }
+        if let unit { AudioOutputUnitStop(unit); AudioUnitUninitialize(unit); AudioComponentInstanceDispose(unit) }
         pipeline?.finish()
     }
     func stop() async {
         generation = UUID()
-        if let configurationObserver { NotificationCenter.default.removeObserver(configurationObserver) }
-        configurationObserver = nil
-        if let engine { engine.stop(); engine.inputNode.removeTap(onBus: 0); engine.reset() }
-        engine = nil
+        deviceObservation = nil
+        formatObservation = nil
+        if let unit { AudioOutputUnitStop(unit); AudioUnitUninitialize(unit); AudioComponentInstanceDispose(unit) }
+        unit = nil
+        renderer = nil
         pipeline?.finish(); pipeline = nil
+    }
+}
+
+/// Reports stream format changes of a HAL unit's input on the main thread.
+final class HALFormatObservation: @unchecked Sendable {
+    private let unit: AudioUnit
+    private let onChange: @MainActor () -> Void
+    init(_ unit: AudioUnit, _ onChange: @escaping @MainActor () -> Void) {
+        self.unit = unit; self.onChange = onChange
+        AudioUnitAddPropertyListener(unit, kAudioUnitProperty_StreamFormat, Self.listener,
+                                     Unmanaged.passUnretained(self).toOpaque())
+    }
+    deinit {
+        AudioUnitRemovePropertyListenerWithUserData(unit, kAudioUnitProperty_StreamFormat, Self.listener,
+                                                    Unmanaged.passUnretained(self).toOpaque())
+    }
+    private static let listener: AudioUnitPropertyListenerProc = { refCon, _, _, scope, element in
+        guard scope == kAudioUnitScope_Input, element == 1 else { return }
+        let observation = Unmanaged<HALFormatObservation>.fromOpaque(refCon).takeUnretainedValue()
+        let onChange = observation.onChange
+        DispatchQueue.main.async { MainActor.assumeIsolated { onChange() } }
+    }
+}
+
+/// Pulls each input slice on the audio I/O thread and hands a copy to the pipeline on a serial queue.
+/// The stream format is read per slice, so a Bluetooth rate change after start reaches the converter.
+final class HALInputRenderer: @unchecked Sendable {
+    private let unit: AudioUnit
+    private let deliver: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void
+    private let queue = DispatchQueue(label: "local.speech2text.audio-input")
+    init(unit: AudioUnit, deliver: @escaping @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void) {
+        self.unit = unit; self.deliver = deliver
+    }
+    static let inputProc: AURenderCallback = { refCon, flags, timestamp, bus, frames, _ in
+        Unmanaged<HALInputRenderer>.fromOpaque(refCon).takeUnretainedValue().render(flags, timestamp, bus, frames)
+    }
+    private func render(_ flags: UnsafeMutablePointer<AudioUnitRenderActionFlags>, _ timestamp: UnsafePointer<AudioTimeStamp>,
+                        _ bus: UInt32, _ frames: UInt32) -> OSStatus {
+        var description = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        var status = AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, &description, &size)
+        guard status == noErr, let format = AVAudioFormat(streamDescription: &description),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return status }
+        buffer.frameLength = frames
+        status = AudioUnitRender(unit, flags, timestamp, bus, frames, buffer.mutableAudioBufferList)
+        guard status == noErr else { return status }
+        let time = AVAudioTime(audioTimeStamp: timestamp, sampleRate: format.sampleRate)
+        queue.async { [deliver] in deliver(buffer, time) }
+        return noErr
     }
 }
 

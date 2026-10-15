@@ -59,7 +59,7 @@ public enum KeyActivity: Sendable {
         let network = NetworkPath()
         self.init(
             sessionFactory: { SonioxSession() },
-            audioFactory: { AVAudioCapture(deviceUID: $0) },
+            audioFactory: { HALAudioCapture(deviceUID: $0) },
             credentials: KeychainCredentialStore(),
             isOffline: { network.isOffline }
         )
@@ -260,7 +260,7 @@ public enum KeyActivity: Sendable {
 
     static func needsSettings(_ error: Error) -> Bool {
         switch error as? AppError {
-        case .missingCredential, .inputDeviceUnavailable, .microphoneSilent, .permissionDenied: true
+        case .missingCredential, .inputDeviceUnavailable, .microphoneSilent, .microphoneStartFailed, .permissionDenied: true
         case .provider(let code, _): code == 401 || code == 403
         default: false
         }
