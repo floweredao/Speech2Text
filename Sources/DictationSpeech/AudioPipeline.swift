@@ -320,6 +320,8 @@ final class HALInputRenderer: @unchecked Sendable {
     private let unit: AudioUnit
     private let deliver: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void
     private let queue = DispatchQueue(label: "local.speech2text.audio-input")
+    /// Ownership passes to the queue: the I/O thread never touches a slice after handing it over.
+    private struct Slice: @unchecked Sendable { let buffer: AVAudioPCMBuffer; let time: AVAudioTime }
     init(unit: AudioUnit, deliver: @escaping @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void) {
         self.unit = unit; self.deliver = deliver
     }
@@ -336,8 +338,8 @@ final class HALInputRenderer: @unchecked Sendable {
         buffer.frameLength = frames
         status = AudioUnitRender(unit, flags, timestamp, bus, frames, buffer.mutableAudioBufferList)
         guard status == noErr else { return status }
-        let time = AVAudioTime(audioTimeStamp: timestamp, sampleRate: format.sampleRate)
-        queue.async { [deliver] in deliver(buffer, time) }
+        let slice = Slice(buffer: buffer, time: AVAudioTime(audioTimeStamp: timestamp, sampleRate: format.sampleRate))
+        queue.async { [deliver] in deliver(slice.buffer, slice.time) }
         return noErr
     }
 }
