@@ -11,6 +11,9 @@ final class AppModel {
     /// Recognized text at the moment live typing stopped because the user moved on. Only text after it is typed
     /// into the field the user settles in next; nil while the first field is still in use.
     @ObservationIgnored private var resumeBase: String?
+    /// Recognized text as of the previous live update. A click or focus change is only noticed on the next update,
+    /// whose new words were spoken in the new field, so the resume point is the text heard before it.
+    @ObservationIgnored private var heard = ""
     var feedback = ""
     var autoInsert = true
     private(set) var overlayRequested = true
@@ -74,6 +77,8 @@ final class AppModel {
     }
 
     private func mirror(_ text: String) {
+        let heardBefore = heard
+        heard = text
         if live == nil, awaitingTarget {
             guard acquireLiveTarget() else { return }
             feedback = String(localized: "선택한 칸에 실시간으로 입력해요.")
@@ -88,7 +93,7 @@ final class AppModel {
         case .targetChanged, .userEdited:
             // Never retype into the old spot; speech after this point goes to the field the user settles in.
             self.live = nil
-            resumeBase = text
+            resumeBase = heardBefore
             awaitingTarget = true
             feedback = String(localized: "입력 위치가 바뀌었어요. 입력 칸에 커서를 두고 말하면 그 칸에 이어서 써요.")
         }
@@ -107,6 +112,7 @@ final class AppModel {
         }
         awaitingTarget = false
         resumeBase = nil
+        heard = ""
         if let live {
             self.live = nil
             switch live.sync(rest) {
@@ -138,6 +144,7 @@ final class AppModel {
         live = nil
         awaitingTarget = false
         resumeBase = nil
+        heard = ""
         feedback = ""
         guard autoInsert else { return }
         guard accessibilityGranted else {
@@ -178,6 +185,7 @@ final class AppModel {
         live = nil
         awaitingTarget = false
         resumeBase = nil
+        heard = ""
         speech.cancel()
         feedback = removed ? String(localized: "취소해서 입력하던 내용을 지웠어요.")
             : hadTyped ? String(localized: "취소했어요. 이미 입력한 글자는 지우지 못했어요.")
