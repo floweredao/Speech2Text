@@ -71,7 +71,7 @@ public enum KeyActivity: Sendable {
         credentials: any CredentialStoring = KeychainCredentialStore(),
         isOffline: @escaping @MainActor () -> Bool = { false },
         startTimeout: Duration = .seconds(12),
-        recordingLimit: Duration = .seconds(60),
+        recordingLimit: Duration = .seconds(30 * 60),
         finishTimeout: Duration = .seconds(12)
     ) {
         self.sessionFactory = sessionFactory
