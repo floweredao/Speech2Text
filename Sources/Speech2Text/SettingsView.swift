@@ -85,6 +85,7 @@ struct SettingsView: View {
             statusSection
             setupSection
             inputSection
+            vocabularySection
             shortcutSection
         }
         .formStyle(.grouped)
@@ -272,10 +273,33 @@ struct SettingsView: View {
                 Text("시작할 때 선택한 입력 칸에 실시간으로 쓰고, 인식이 고쳐지면 그 부분도 바로 고쳐요. 칸이 바뀌면 멈추고 결과를 보관해요.")
             }
             .accessibilityIdentifier("settings-auto-insert")
+            Toggle(isOn: $model.spokenEnterEnabled) {
+                Text("말로 엔터 누르기")
+                Text("말 끝에 '\(model.spokenEnterPhrase)'라고 말하고 잠깐 멈추면, 받아쓰기를 마치고 같은 칸에서 엔터를 눌러요. 그 말은 입력하지 않아요.")
+            }
+            .accessibilityIdentifier("settings-spoken-enter")
+            if model.spokenEnterEnabled {
+                TextField("엔터 명령어", text: $model.spokenEnterPhrase)
+                    .accessibilityIdentifier("settings-spoken-enter-phrase")
+            }
             LabeledContent("화면 위쪽 표시") {
                 Button("열기") { model.overlayVisible = true }
                     .accessibilityIdentifier("settings-show-overlay")
             }
+        }
+    }
+
+    private var vocabularySection: some View {
+        Section("사전") {
+            TextEditor(text: $model.vocabularyText)
+                .font(.body)
+                .frame(minHeight: 72)
+                .accessibilityLabel("사전")
+                .accessibilityIdentifier("settings-vocabulary")
+            Text("한 줄에 하나씩 적어요. 자주 쓰는 말(OMO)은 그대로 적으면 더 잘 알아듣고, 자꾸 틀리게 받아쓰는 말은 '쏀빠이 → 센파이'처럼 적으면 고쳤서 입력해요. 다음 받아쓰기부터 적용돼요.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

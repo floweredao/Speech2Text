@@ -58,7 +58,7 @@ Requires macOS 15 or later on Apple Silicon.
 4. Press **Control+Option+D** (the default; see "Changing shortcuts" below) and speak. The overlay under the notch shows what's being recognized.
    - Recording starts as soon as the microphone is on, so you can talk right away. The Soniox connection finishes in the background, and the overlay shows "connecting" meanwhile. If the connection fails once, the app retries once automatically.
    - With no internet connection, the app refuses to start and tells you so immediately.
-5. Text is typed into the field you picked as you speak. When recognition revises earlier words, only the changed tail is erased and retyped. Press the same shortcut or the finish button to settle on the final text. Recordings are limited to 60 seconds.
+5. Text is typed into the field you picked as you speak. When recognition revises earlier words, only the changed tail is erased and retyped. Press the same shortcut or the finish button to settle on the final text. Recordings are limited to 30 minutes.
    - Standard Mac text fields (Notes, TextEdit, most apps) are edited through accessibility text replacement. Where that isn't supported, such as terminals, the app sends key events to that app only. This works with a Korean input method active.
    - If you switch to another field or app mid-way, live typing stops and the result is kept in the overlay. In terminals, typing or clicking in the field while dictating also stops it, because terminals don't report where the cursor is. Cancelling erases only the text typed in this session. The app never sends newlines or Return, so it can't run a command in a terminal.
 

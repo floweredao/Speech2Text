@@ -46,11 +46,24 @@ final class AppModel {
             speech.inputDeviceUID = inputDeviceUID
         }
     }
+    var spokenEnterEnabled = UserDefaults.standard.object(forKey: "spokenEnterEnabled") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(spokenEnterEnabled, forKey: "spokenEnterEnabled") }
+    }
+    var spokenEnterPhrase = UserDefaults.standard.string(forKey: "spokenEnterPhrase") ?? String(localized: "엔터 보내기") {
+        didSet { UserDefaults.standard.set(spokenEnterPhrase, forKey: "spokenEnterPhrase") }
+    }
+    var vocabularyText = UserDefaults.standard.string(forKey: "vocabulary") ?? "OMO\nULW\n쏀빠이 → 센파이" {
+        didSet {
+            UserDefaults.standard.set(vocabularyText, forKey: "vocabulary")
+            speech.vocabulary = Vocabulary(vocabularyText)
+        }
+    }
+    private var spokenEnter: SpokenEnter? { spokenEnterEnabled ? SpokenEnter(phrase: spokenEnterPhrase) : nil }
     /// Kept current by a CoreAudio listener, so Settings reflects plugged-in or removed microphones at once.
     private(set) var inputDevices = AudioInputDevices.all()
     private(set) var defaultInputDevice = AudioInputDevices.defaultDevice()
     @ObservationIgnored private var deviceObservation: AudioInputDevicesObservation?
-    var transcript: String { speech.transcript }
+    var transcript: String { withoutEnterCommand(speech.transcript) }
     var status: String { speech.status }
     var isRecording: Bool { speech.isRecording }
     var isBusy: Bool { speech.isBusy }
@@ -68,6 +81,8 @@ final class AppModel {
         speech.inputDeviceUID = inputDeviceUID
         speech.onLiveText = { [weak self] text in self?.mirror(text) }
         speech.onFinal = { [weak self] text in self?.complete(text) }
+        speech.onTurnFinal = { [weak self] text in self?.turnFinalized(text) }
+        speech.vocabulary = Vocabulary(vocabularyText)
         deviceObservation = AudioInputDevices.observe { [weak self] in self?.refreshInputDevices() }
     }
 
@@ -84,7 +99,7 @@ final class AppModel {
             feedback = String(localized: "선택한 칸에 실시간으로 입력해요.")
         }
         guard let live else { return }
-        let outcome = live.sync(pending(text))
+        let outcome = live.sync(pending(withoutEnterCommand(text)))
         switch outcome {
         case .applied: break
         case .failed:
@@ -103,8 +118,19 @@ final class AppModel {
         resumeBase.map { LiveTextEdit.continuation(of: text, after: $0) } ?? text
     }
 
-    private func complete(_ text: String) {
+    private func withoutEnterCommand(_ text: String) -> String {
+        spokenEnter?.strip(text) ?? text
+    }
+
+    /// The command only counts once Soniox has finalized it after a pause, so a phrase mid-sentence never stops dictation.
+    private func turnFinalized(_ text: String) {
+        if spokenEnter?.strip(text) != nil { speech.finish() }
+    }
+
+    private func complete(_ spoken: String) {
         overlayVisible = true
+        let command = spokenEnter?.strip(spoken)
+        let text = command ?? spoken
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let rest = pending(text)
         if live == nil, awaitingTarget, !rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -116,11 +142,16 @@ final class AppModel {
         if let live {
             self.live = nil
             switch live.sync(rest) {
+            case .applied where command != nil:
+                feedback = live.pressReturn() ? String(localized: "입력하고 엔터를 눌렀어요.")
+                    : String(localized: "입력 칸이 바뀌어 엔터는 누르지 않았어요.")
             case .applied: feedback = empty ? String(localized: "인식된 음성이 없어 입력하지 않았어요.") : String(localized: "입력 칸에 받아쓰기를 입력했어요.")
             case .targetChanged: feedback = String(localized: "입력 위치가 바뀌어 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
             case .failed: feedback = String(localized: "마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
             case .userEdited: feedback = String(localized: "입력 칸을 직접 건드려서 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
             }
+        } else if command != nil {
+            feedback = String(localized: "입력 중인 칸이 없어 엔터는 누르지 않았어요.")
         } else if empty {
             feedback = String(localized: "인식된 음성이 없어 입력하지 않았어요.")
         } else if feedback.isEmpty {

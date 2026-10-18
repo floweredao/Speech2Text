@@ -64,7 +64,7 @@ actor SonioxSession: STTSession {
         self.connectTimeout = connectTimeout
     }
 
-    func open(apiKey: String) async throws -> AsyncThrowingStream<TranscriptEvent, Error> {
+    func open(apiKey: String, terms: [String]) async throws -> AsyncThrowingStream<TranscriptEvent, Error> {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw AppError.missingCredential(.soniox) }
         guard !used else { throw failure ?? AppError.invalidResponse("Session already used") }
@@ -76,12 +76,13 @@ actor SonioxSession: STTSession {
         do {
             try await socket.connect(url: URL(string: "wss://stt-rt.soniox.com/transcribe-websocket")!)
             guard active else { throw failure ?? .cancelled }
-            let config: [String: Any] = [
+            var config: [String: Any] = [
                 "api_key": key, "model": "stt-rt-v5", "audio_format": "pcm_s16le",
                 "sample_rate": 16000, "num_channels": 1, "language_hints": ["ko", "en"],
                 "enable_endpoint_detection": true, "endpoint_latency_adjustment_level": 2,
                 "endpoint_sensitivity": 0.3, "max_endpoint_delay_ms": 1500
             ]
+            if !terms.isEmpty { config["context"] = ["terms": terms] }
             let text = String(decoding: try JSONSerialization.data(withJSONObject: config), as: UTF8.self)
             try await sendWithTimeout(.text(text), limit: connectTimeout)
             continuation?.yield(.status(.configSent))
