@@ -224,12 +224,11 @@ actor TestCredentials: CredentialStoring {
         #expect(!engine.hasError)
     }
 
-    @Test func vocabularyTermsReachTheProviderAndCorrectionsRewriteEveryTurn() async throws {
+    @Test func dictionaryTermsReachTheProviderAndAPauseReportsTheTranscript() async throws {
         let socket = TestSocket(), audio = TestAudio()
         let engine = engine(socket, audio)
-        engine.vocabulary = Vocabulary("OMO\n쏀빠이 → 센파이")
-        var finals: [String] = [], turnFinals: [String] = []
-        engine.onFinal = { finals.append($0) }
+        engine.vocabulary = ["OMO", "센파이"]
+        var turnFinals: [String] = []
         engine.onTurnFinal = { turnFinals.append($0) }
         audio.pair.continuation.yield(pcm)
         engine.start()
@@ -237,15 +236,15 @@ actor TestCredentials: CredentialStoring {
         guard case .text(let text) = await socket.sent.first else { Issue.record("Missing configuration"); return }
         let config = try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
         #expect((config["context"] as? [String: Any])?["terms"] as? [String] == ["OMO", "센파이"])
-        await socket.push(.text(#"{"tokens":[{"text":"쏀빠이 호출","is_final":true},{"text":"<end>","is_final":true}]}"#))
+        await socket.push(.text(#"{"tokens":[{"text":"센파이 호출","is_final":false}]}"#))
         try await waitUntil { engine.transcript == "센파이 호출" }
+        #expect(turnFinals.isEmpty)
+        await socket.push(.text(#"{"tokens":[{"text":"센파이 호출","is_final":true},{"text":"<end>","is_final":true}]}"#))
+        await socket.push(.text(#"{"tokens":[{"text":" 다음","is_final":false}]}"#))
+        try await waitUntil { engine.transcript == "센파이 호출 다음" }
         #expect(turnFinals == ["센파이 호출"])
-        engine.finish()
-        await socket.waitUntilSent(.text(""))
-        await socket.push(.text(#"{"tokens":[{"text":"끝","is_final":true}],"finished":true}"#))
+        engine.cancel()
         await engine.runTask?.value
-        #expect(finals == ["센파이 호출 끝"])
-        #expect(turnFinals.count == 1)
     }
 
     @Test func cancelDiscardsUnconfirmedTextFromPasteSurface() async throws {

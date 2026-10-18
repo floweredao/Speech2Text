@@ -19,8 +19,8 @@ public enum KeyActivity: Sendable {
 @MainActor @Observable public final class SpeechEngine {
     public var apiKey = ""
     public var inputDeviceUID: String?
-    /// Read when a dictation starts; changes apply to the next one.
-    public var vocabulary = Vocabulary()
+    /// Words sent to Soniox as context when a dictation starts; changes apply to the next one.
+    public var vocabulary: [String] = []
     public private(set) var transcript = ""
     public private(set) var status = String(localized: "받아쓰기 준비가 됐습니다.")
     public private(set) var phase = SpeechPhase.idle
@@ -119,7 +119,7 @@ public enum KeyActivity: Sendable {
         outcome = .none
         hasCurrentTranscript = false
         turns = []
-        let terms = vocabulary.terms
+        let terms = vocabulary
         let previousTranscript = lastFinalTranscript
         // Keep the previous transcript until new speech arrives, even if startup fails.
         let client = sessionFactory()
@@ -228,9 +228,9 @@ public enum KeyActivity: Sendable {
     }
 
     private func joined(_ turns: [TranscriptUpdate]) -> String {
-        vocabulary.apply(turns.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+        turns.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-            .joined(separator: " "))
+            .joined(separator: " ")
     }
 
     public func finish() {

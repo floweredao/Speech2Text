@@ -52,10 +52,10 @@ final class AppModel {
     var spokenEnterPhrase = UserDefaults.standard.string(forKey: "spokenEnterPhrase") ?? String(localized: "엔터 보내기") {
         didSet { UserDefaults.standard.set(spokenEnterPhrase, forKey: "spokenEnterPhrase") }
     }
-    var vocabularyText = UserDefaults.standard.string(forKey: "vocabulary") ?? "OMO\nULW\n쏀빠이 → 센파이" {
+    private(set) var dictionary = AppModel.storedDictionary() {
         didSet {
-            UserDefaults.standard.set(vocabularyText, forKey: "vocabulary")
-            speech.vocabulary = Vocabulary(vocabularyText)
+            UserDefaults.standard.set(dictionary, forKey: "dictionaryTerms")
+            speech.vocabulary = dictionary
         }
     }
     private var spokenEnter: SpokenEnter? { spokenEnterEnabled ? SpokenEnter(phrase: spokenEnterPhrase) : nil }
@@ -82,9 +82,19 @@ final class AppModel {
         speech.onLiveText = { [weak self] text in self?.mirror(text) }
         speech.onFinal = { [weak self] text in self?.complete(text) }
         speech.onTurnFinal = { [weak self] text in self?.turnFinalized(text) }
-        speech.vocabulary = Vocabulary(vocabularyText)
+        speech.vocabulary = dictionary
         deviceObservation = AudioInputDevices.observe { [weak self] in self?.refreshInputDevices() }
     }
+
+    private static func storedDictionary() -> [String] {
+        let defaults = UserDefaults.standard
+        if let terms = defaults.stringArray(forKey: "dictionaryTerms") { return terms }
+        if let lines = defaults.string(forKey: "vocabulary") { return DictionaryTerms.migrating(lines: lines) }
+        return DictionaryTerms.standard
+    }
+
+    func addDictionaryTerms(_ input: String) { dictionary = DictionaryTerms.adding(input, to: dictionary) }
+    func removeDictionaryTerm(_ term: String) { dictionary.removeAll { $0 == term } }
 
     func refreshInputDevices() {
         inputDevices = AudioInputDevices.all()

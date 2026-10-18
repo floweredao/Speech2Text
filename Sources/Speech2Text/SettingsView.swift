@@ -63,6 +63,7 @@ struct SettingsView: View {
     private let confirmDeleteState = State(initialValue: false)
     private let recorderState = State(initialValue: ShortcutRecorder())
     private var recorder: ShortcutRecorder { recorderState.wrappedValue }
+    private let newTermState = State(initialValue: "")
 
     private let pane = ControlPermissionPane.current
     private var state: DictationDisplayState { DictationDisplayState(model: model) }
@@ -200,7 +201,7 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings-key-message")
             }
             if !hasKey {
-                Text("키가 없으면 받아쓰기를 시작할 수 없어요. 저장하면 이 앱의 Keychain에 보관돼 다음 실행에도 남아요.")
+                Text("키를 저장해야 받아쓰기를 시작할 수 있어요.")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -229,7 +230,7 @@ struct SettingsView: View {
                 }
             } label: {
                 Text("마이크")
-                Text("받아쓰는 동안에만 Soniox로 음성을 보내요.")
+                Text("녹음하는 동안에만 Soniox로 보내요.")
             }
 
             Picker(selection: $model.inputDeviceUID) {
@@ -242,7 +243,6 @@ struct SettingsView: View {
                 }
             } label: {
                 Text("사용할 마이크")
-                Text("선택한 마이크가 없으면 받아쓰기를 시작하지 않고 알려 드려요.")
             }
             .accessibilityIdentifier("settings-input-device")
 
@@ -270,16 +270,17 @@ struct SettingsView: View {
         Section("입력") {
             Toggle(isOn: $model.autoInsert) {
                 Text("말하는 동안 바로 입력")
-                Text("시작할 때 선택한 입력 칸에 실시간으로 쓰고, 인식이 고쳐지면 그 부분도 바로 고쳐요. 칸이 바뀌면 멈추고 결과를 보관해요.")
+                Text("선택한 칸에 실시간으로 쓰고, 인식이 고쳐지면 바로 고쳐요.")
             }
             .accessibilityIdentifier("settings-auto-insert")
             Toggle(isOn: $model.spokenEnterEnabled) {
                 Text("말로 엔터 누르기")
-                Text("말 끝에 '\(model.spokenEnterPhrase)'라고 말하고 잠깐 멈추면, 받아쓰기를 마치고 같은 칸에서 엔터를 눌러요. 그 말은 입력하지 않아요.")
+                Text("끝에 명령어를 말하고 잠깐 멈추면 엔터를 눌러요.")
             }
             .accessibilityIdentifier("settings-spoken-enter")
             if model.spokenEnterEnabled {
-                TextField("엔터 명령어", text: $model.spokenEnterPhrase)
+                TextField("명령어", text: $model.spokenEnterPhrase, prompt: Text("엔터 보내기"))
+                    .multilineTextAlignment(.trailing)
                     .accessibilityIdentifier("settings-spoken-enter-phrase")
             }
             LabeledContent("화면 위쪽 표시") {
@@ -290,17 +291,45 @@ struct SettingsView: View {
     }
 
     private var vocabularySection: some View {
-        Section("사전") {
-            TextEditor(text: $model.vocabularyText)
-                .font(.body)
-                .frame(minHeight: 72)
-                .accessibilityLabel("사전")
-                .accessibilityIdentifier("settings-vocabulary")
-            Text("한 줄에 하나씩 적어요. 자주 쓰는 말(OMO)은 그대로 적으면 더 잘 알아듣고, 자꾸 틀리게 받아쓰는 말은 '쏀빠이 → 센파이'처럼 적으면 고쳤서 입력해요. 다음 받아쓰기부터 적용돼요.")
+        Section {
+            if !model.dictionary.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(model.dictionary, id: \.self) { termChip($0) }
+                }
+                .padding(.vertical, 2)
+                .accessibilityIdentifier("settings-dictionary")
+            }
+            TextField("단어 추가", text: newTermState.projectedValue, prompt: Text("입력 후 Return"))
+                .multilineTextAlignment(.trailing)
+                .onSubmit {
+                    model.addDictionaryTerms(newTermState.wrappedValue)
+                    newTermState.wrappedValue = ""
+                }
+                .accessibilityIdentifier("settings-dictionary-add")
+        } header: {
+            Text("사전")
+        } footer: {
+            Text("자주 쓰는 단어를 적어 두면 더 정확히 받아써요.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func termChip(_ term: String) -> some View {
+        HStack(spacing: 4) {
+            Text(term)
+                .lineLimit(1)
+            Button("'\(term)' 지우기", systemImage: "xmark") { model.removeDictionaryTerm(term) }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .font(.callout)
+        .padding(.leading, 10)
+        .padding(.trailing, 7)
+        .padding(.vertical, 4)
+        .background(.quaternary, in: Capsule())
     }
 
     private var shortcutSection: some View {
@@ -376,6 +405,39 @@ struct SettingsView: View {
     }
 
     // MARK: Helpers
+
+    private struct FlowLayout: Layout {
+        var spacing: CGFloat
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            arrange(subviews, width: proposal.width ?? .infinity).size
+        }
+
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            let frames = arrange(subviews, width: bounds.width).frames
+            for (subview, frame) in zip(subviews, frames) {
+                subview.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+                              proposal: ProposedViewSize(frame.size))
+            }
+        }
+
+        private func arrange(_ subviews: Subviews, width: CGFloat) -> (frames: [CGRect], size: CGSize) {
+            var frames: [CGRect] = [], x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, widest: CGFloat = 0
+            for subview in subviews {
+                let size = subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+                if x > 0, x + size.width > width {
+                    x = 0
+                    y += rowHeight + spacing
+                    rowHeight = 0
+                }
+                frames.append(CGRect(origin: CGPoint(x: x, y: y), size: size))
+                x += size.width + spacing
+                widest = max(widest, x - spacing)
+                rowHeight = max(rowHeight, size.height)
+            }
+            return (frames, CGSize(width: widest, height: y + rowHeight))
+        }
+    }
 
     private func statusBadge(_ text: String, granted: Bool) -> some View {
         Label(text, systemImage: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")

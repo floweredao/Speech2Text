@@ -1,4 +1,3 @@
-import DictationSpeech
 import Testing
 @testable import Speech2Text
 
@@ -26,15 +25,13 @@ import Testing
     }
 }
 
-@Suite struct VocabularyTests {
-    @Test func linesBecomeTermsAndCorrections() {
-        let vocabulary = Vocabulary("OMO\n\n 쏀빠이 → 센파이 \nulw -> ULW\n센파이")
-        #expect(vocabulary.terms == ["OMO", "센파이", "ULW"])
-        #expect(vocabulary.apply("쏀빠이에서 Ulw 실행") == "센파이에서 ULW 실행")
+@Suite struct DictionaryTermsTests {
+    @Test func commasAndLinesAddSeveralWordsAndDuplicatesAreSkippedInAnyCase() {
+        #expect(DictionaryTerms.adding(" 센파이, omo\nULW ,,", to: ["OMO"]) == ["OMO", "센파이", "ULW"])
+        #expect(DictionaryTerms.adding("  ", to: ["OMO"]) == ["OMO"])
     }
 
-    @Test func longerCorrectionsWinOverTheirOwnWords() {
-        let vocabulary = Vocabulary("오 엠 오 → OMO\n오 → 5")
-        #expect(vocabulary.apply("오 엠 오 열어") == "OMO 열어")
+    @Test func linesFromVersion130KeepOnlyTheWrittenWord() {
+        #expect(DictionaryTerms.migrating(lines: "OMO\n쏀빠이 → 센파이\nulw -> ULW\n\n센파이") == ["OMO", "센파이", "ULW"])
     }
 }
