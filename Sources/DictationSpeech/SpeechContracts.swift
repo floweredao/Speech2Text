@@ -12,11 +12,16 @@ enum TranscriptEvent: Sendable, Equatable {
     case status(SessionStatus), update(TranscriptUpdate), finished
 }
 protocol STTSession: Sendable {
-    func open(apiKey: String) async throws -> AsyncThrowingStream<TranscriptEvent, Error>
+    func open(apiKey: String, terms: [String]) async throws -> AsyncThrowingStream<TranscriptEvent, Error>
     func sendAudio(_ pcm: Data) async throws
     /// Sends EOF after the caller has drained audio. Completion arrives on the event stream.
     func finish() async throws
     func cancel() async
+}
+extension STTSession {
+    func open(apiKey: String) async throws -> AsyncThrowingStream<TranscriptEvent, Error> {
+        try await open(apiKey: apiKey, terms: [])
+    }
 }
 @MainActor protocol AudioCapturing: AnyObject {
     /// True when starting will show the system permission prompt, so the provider must not wait on it.

@@ -141,6 +141,14 @@ final class LiveTyper {
         return .applied
     }
 
+    /// Only for the spoken Enter command, after the final text is in place and only into the same field.
+    func pressReturn() -> Bool {
+        guard !stopped, let current = insertion.currentTarget(), current.pid == target.pid,
+              CFEqual(current.element, target.element),
+              let source = CGEventSource(stateID: .privateState) else { return false }
+        return post(source, key: 36, text: "\r", pid: current.pid)
+    }
+
     private func supportsAccessibilityEditing(_ element: AXUIElement) -> Bool {
         // Chromium advertises these setters and returns success without changing the editor.
         // Native key events also deliver the input events that web editors require.
