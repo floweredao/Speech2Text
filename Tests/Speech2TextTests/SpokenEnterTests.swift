@@ -9,6 +9,8 @@ import Testing
         ("이거 고쳐 줘. 엔터보내기.", "이거 고쳐 줘."),
         ("고쳐 줘 엔터 보내기!", "고쳐 줘"),
         ("엔터 보내기", ""),
+        ("그런 것 좀 알려줘. 엔터 보내기. 보내기, 엔터.", "그런 것 좀 알려줘."),
+        ("이거 고쳐 줘. 보내기, 엔터.", "이거 고쳐 줘."),
     ])
     func trailingPhraseIsRemovedWhateverTheSpacingOrPunctuation(text: String, rest: String) {
         #expect(command.strip(text) == rest)
@@ -22,6 +24,7 @@ import Testing
     @Test func blankPhraseNeverMatchesAndLatinIgnoresCase() {
         #expect(SpokenEnter(phrase: " ").strip("아무 말") == nil)
         #expect(SpokenEnter(phrase: "send it").strip("fix this. Send It.") == "fix this.")
+        #expect(SpokenEnter(phrase: "send it").strip("fix it send it") == "fix it")
     }
 }
 
