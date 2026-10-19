@@ -47,16 +47,26 @@ final class AppModel {
         }
     }
     var spokenEnterEnabled = UserDefaults.standard.object(forKey: "spokenEnterEnabled") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(spokenEnterEnabled, forKey: "spokenEnterEnabled") }
+        didSet {
+            UserDefaults.standard.set(spokenEnterEnabled, forKey: "spokenEnterEnabled")
+            speech.vocabulary = recognitionTerms
+        }
     }
     var spokenEnterPhrase = UserDefaults.standard.string(forKey: "spokenEnterPhrase") ?? String(localized: "엔터 보내기") {
-        didSet { UserDefaults.standard.set(spokenEnterPhrase, forKey: "spokenEnterPhrase") }
+        didSet {
+            UserDefaults.standard.set(spokenEnterPhrase, forKey: "spokenEnterPhrase")
+            speech.vocabulary = recognitionTerms
+        }
     }
     private(set) var dictionary = AppModel.storedDictionary() {
         didSet {
             UserDefaults.standard.set(dictionary, forKey: "dictionaryTerms")
-            speech.vocabulary = dictionary
+            speech.vocabulary = recognitionTerms
         }
+    }
+    /// The command phrase goes to Soniox as context too; without it "엔터" after a pause is often heard as "센터".
+    private var recognitionTerms: [String] {
+        spokenEnterEnabled ? DictionaryTerms.adding(spokenEnterPhrase, to: dictionary) : dictionary
     }
     private var spokenEnter: SpokenEnter? { spokenEnterEnabled ? SpokenEnter(phrase: spokenEnterPhrase) : nil }
     /// Kept current by a CoreAudio listener, so Settings reflects plugged-in or removed microphones at once.
@@ -82,7 +92,7 @@ final class AppModel {
         speech.onLiveText = { [weak self] text in self?.mirror(text) }
         speech.onFinal = { [weak self] text in self?.complete(text) }
         speech.onTurnFinal = { [weak self] text in self?.turnFinalized(text) }
-        speech.vocabulary = dictionary
+        speech.vocabulary = recognitionTerms
         deviceObservation = AudioInputDevices.observe { [weak self] in self?.refreshInputDevices() }
     }
 
