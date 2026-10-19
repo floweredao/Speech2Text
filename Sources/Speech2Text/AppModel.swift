@@ -66,9 +66,11 @@ final class AppModel {
     }
     /// The command phrase goes to Soniox as context too; without it "엔터" after a pause is often heard as "센터".
     private var recognitionTerms: [String] {
-        spokenEnterEnabled ? DictionaryTerms.adding(spokenEnterPhrase, to: dictionary) : dictionary
+        spokenEnter.map { $0.terms.reduce(dictionary) { DictionaryTerms.adding($1, to: $0) } } ?? dictionary
     }
-    private var spokenEnter: SpokenEnter? { spokenEnterEnabled ? SpokenEnter(phrase: spokenEnterPhrase) : nil }
+    private var spokenEnter: SpokenEnter? {
+        spokenEnterEnabled ? SpokenEnter(setting: spokenEnterPhrase, shownDefault: String(localized: "엔터 보내기")) : nil
+    }
     /// Kept current by a CoreAudio listener, so Settings reflects plugged-in or removed microphones at once.
     private(set) var inputDevices = AudioInputDevices.all()
     private(set) var defaultInputDevice = AudioInputDevices.defaultDevice()

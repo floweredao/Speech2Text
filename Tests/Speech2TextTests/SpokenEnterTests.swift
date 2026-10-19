@@ -21,6 +21,18 @@ import Testing
         #expect(command.strip(text) == nil)
     }
 
+    /// An English UI shows "send enter" as the default, but the speaker may say the Korean command (owner's 2026-10-19 note).
+    @Test func defaultCommandAcceptsEveryLanguagesDefaultPhrase() {
+        let english = SpokenEnter(setting: "send enter", shownDefault: "send enter")
+        #expect(english.strip("이제 잘 되나 보내기 엔터.") == "이제 잘 되나")
+        #expect(english.strip("fix this, send enter") == "fix this,")
+        #expect(english.terms == ["send enter", "엔터 보내기"])
+        let custom = SpokenEnter(setting: "전송", shownDefault: "send enter")
+        #expect(custom.strip("이제 잘 되나 보내기 엔터.") == nil)
+        #expect(custom.strip("이거 고쳐 줘 전송") == "이거 고쳐 줘")
+        #expect(custom.terms == ["전송"])
+    }
+
     @Test func blankPhraseNeverMatchesAndLatinIgnoresCase() {
         #expect(SpokenEnter(phrase: " ").strip("아무 말") == nil)
         #expect(SpokenEnter(phrase: "send it").strip("fix this. Send It.") == "fix this.")

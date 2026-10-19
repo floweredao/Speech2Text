@@ -5,9 +5,28 @@ import Foundation
 /// The words may also come in another order or be said again ("엔터 보내기. 보내기, 엔터."),
 /// because a speaker repeats the command when nothing seems to happen.
 struct SpokenEnter: Equatable {
-    let phrase: String
+    /// The default phrase of every UI language. The UI language does not tell which language the speaker uses
+    /// (an English macOS shows "send enter" to someone who says "엔터 보내기"), so the default accepts them all.
+    static let defaultPhrases = ["엔터 보내기", "send enter"]
+
+    let phrases: [String]
+
+    init(phrase: String) { phrases = [phrase] }
+
+    /// A phrase left at the default shown in Settings counts in every language; a phrase the user typed counts alone.
+    init(setting phrase: String, shownDefault: String) {
+        let isDefault = phrase.trimmingCharacters(in: .whitespacesAndNewlines) == shownDefault
+        phrases = isDefault ? [phrase] + Self.defaultPhrases.filter { $0 != phrase } : [phrase]
+    }
+
+    /// Phrases to send to recognition as context, so they are written the way they are matched.
+    var terms: [String] { phrases }
 
     func strip(_ text: String) -> String? {
+        phrases.compactMap { Self.strip(text, phrase: $0) }.min { $0.count < $1.count }
+    }
+
+    private static func strip(_ text: String, phrase: String) -> String? {
         let words = Self.words(in: phrase.precomposedStringWithCanonicalMapping.lowercased())
         guard !words.isEmpty else { return nil }
         let text = text.precomposedStringWithCanonicalMapping
