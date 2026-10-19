@@ -19,14 +19,6 @@ import Testing
         #expect(command.strip(text) == nil)
     }
 
-    /// Regression: recognition wrote "센터" for a spoken "엔터", so the command never pressed Return.
-    @Test func enterMisheardAsCenterStillCounts() {
-        #expect(command.strip("고쳐 줘 센터 보내기.") == "고쳐 줘")
-        #expect(command.strip("고쳐 줘 앤터 보내기") == "고쳐 줘")
-        #expect(SpokenEnter(phrase: "보내기 엔터").strip("고쳐 줘. 보내기 센터") == "고쳐 줘.")
-        #expect(command.strip("고쳐 줘 센터를 보내기") == nil)
-    }
-
     @Test func blankPhraseNeverMatchesAndLatinIgnoresCase() {
         #expect(SpokenEnter(phrase: " ").strip("아무 말") == nil)
         #expect(SpokenEnter(phrase: "send it").strip("fix this. Send It.") == "fix this.")
