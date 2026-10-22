@@ -1,5 +1,7 @@
+import AppKit
 import CoreGraphics
 import DictationSpeech
+import SwiftUI
 import Testing
 @testable import Speech2Text
 
@@ -65,10 +67,9 @@ private let notchVisible = CGRect(x: 0, y: 0, width: 1512, height: 950)
     }
 
     @Test func transcriptViewportFitsShortTextAndCapsLongText() {
-        #expect(NotchOverlayGeometry.transcriptViewportHeight(textHeight: 19) == 19)
-        #expect(NotchOverlayGeometry.transcriptViewportHeight(textHeight: 400)
-                == NotchOverlayGeometry.maxTranscriptHeight)
-        #expect(NotchOverlayGeometry.transcriptViewportHeight(textHeight: -5) == 0)
+        #expect(NotchOverlayGeometry.transcriptViewportHeight(textHeight: 19, maxHeight: 110) == 19)
+        #expect(NotchOverlayGeometry.transcriptViewportHeight(textHeight: 400, maxHeight: 110) == 110)
+        #expect(NotchOverlayGeometry.transcriptViewportHeight(textHeight: -5, maxHeight: 110) == 0)
     }
 
     /// Regression: reopening a moved result panel as a narrower recording capsule re-centered it, so the
@@ -259,5 +260,29 @@ private func display(_ phase: SpeechPhase, error: Bool = false, transcript: Stri
         #expect(SetupReadiness(hasKey: true, microphone: .granted, controlGranted: true).missingCount == 0)
         #expect(SetupReadiness(hasKey: true, microphone: .notDetermined, controlGranted: true).missingCount == 0)
         #expect(SetupReadiness(hasKey: false, microphone: .denied, controlGranted: false).missingCount == 3)
+    }
+}
+
+// MARK: Hit areas
+
+/// Overlay buttons are drawn small to fit the notch row, but each must still offer a 28 pt target.
+@MainActor @Suite struct OverlayHitAreaTests {
+    private func measuredSize(_ shape: OverlayControlStyle.Shape, _ label: some View) -> CGSize {
+        let view = NSHostingView(rootView: Button {} label: { label }
+            .buttonStyle(OverlayControlStyle(shape: shape, prominent: false)))
+        view.layoutSubtreeIfNeeded()
+        return view.fittingSize
+    }
+
+    @Test func iconButtonIsAtLeast28PointsSquare() {
+        let size = measuredSize(.circle, Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)))
+        #expect(size.width >= NotchOverlayGeometry.minimumHitSize)
+        #expect(size.height >= NotchOverlayGeometry.minimumHitSize)
+    }
+
+    @Test func textButtonIsAtLeast28PointsTall() {
+        let size = measuredSize(.capsule, Label("Copy", systemImage: "doc.on.doc").font(.callout.weight(.medium)))
+        #expect(size.height >= NotchOverlayGeometry.minimumHitSize)
+        #expect(size.width >= NotchOverlayGeometry.minimumHitSize)
     }
 }

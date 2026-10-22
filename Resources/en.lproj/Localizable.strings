@@ -147,3 +147,4 @@
 "키를 저장해야 받아쓰기를 시작할 수 있어요." = "Save a key to start dictating.";
 "녹음하는 동안에만 Soniox로 보내요." = "Sent to Soniox only while recording.";
 "마지막 받아쓰기 복사" = "Copy Last Dictation";
+"오류 복사" = "Copy Error";

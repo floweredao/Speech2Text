@@ -253,6 +253,9 @@ final class AppModel {
     func copyTranscript() {
         feedback = insertion.copy(transcript) ? String(localized: "복사했어요. 원하는 곳에서 ⌘V를 누르세요.") : String(localized: "복사할 텍스트가 없어요.")
     }
+    func copyError() {
+        feedback = insertion.copy(status) ? String(localized: "복사했어요. 원하는 곳에서 ⌘V를 누르세요.") : String(localized: "복사할 텍스트가 없어요.")
+    }
     func pasteTranscript() {
         guard !isBusy else {
             feedback = String(localized: "받아쓰기를 마무리한 다음 붙여넣어 주세요.")

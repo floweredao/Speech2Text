@@ -128,8 +128,13 @@ struct DictationDisplayState: Equatable {
 enum NotchOverlayGeometry {
     static let compactHeight: CGFloat = 44
     static let compactWidth: CGFloat = 340
-    /// About five lines of 14 pt transcript text; longer text scrolls.
-    static let maxTranscriptHeight: CGFloat = 96
+    /// The transcript grows to this many lines of its text style, then scrolls. The view measures the lines,
+    /// so the cap follows the system text size.
+    static let maxTranscriptLines = 5
+    /// Used only until the five-line sample has been measured.
+    static let fallbackMaxTranscriptHeight: CGFloat = 96
+    /// Smallest hit area of an overlay button, whatever its visible size.
+    static let minimumHitSize: CGFloat = 28
     static let topGap: CGFloat = 8
     static let margin: CGFloat = 12
 
@@ -138,8 +143,8 @@ enum NotchOverlayGeometry {
         return min(preferred, max(0, screenWidth - margin * 2))
     }
 
-    static func transcriptViewportHeight(textHeight: CGFloat) -> CGFloat {
-        min(max(textHeight, 0), maxTranscriptHeight)
+    static func transcriptViewportHeight(textHeight: CGFloat, maxHeight: CGFloat) -> CGFloat {
+        min(max(textHeight, 0), maxHeight)
     }
 
     /// Horizontally centered below the notch, auxiliary top areas, or menu bar of `screen`.
@@ -425,14 +430,15 @@ private struct NotchOverlayView: View {
             indicator(state)
                 .frame(width: 20, height: 20)
             Text(state.title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.body.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.92))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .help(state.title)
                 .accessibilityIdentifier("notch-status")
-            HStack(spacing: 6) {
+            // Buttons carry a transparent margin around their visible circle, so the gap looks like 6 pt.
+            HStack(spacing: 2) {
                 ForEach(state.headerActions, id: \.self) { action in
                     OverlayIconButton(symbol: symbol(for: action), label: label(for: action, state),
                                       id: identifier(for: action), prominent: action == .start) {
@@ -441,7 +447,7 @@ private struct NotchOverlayView: View {
                 }
             }
         }
-        .frame(height: 28)
+        .frame(minHeight: 28)
     }
 
     @ViewBuilder
@@ -467,7 +473,7 @@ private struct NotchOverlayView: View {
     private func details(_ state: DictationDisplayState) -> some View {
         if !state.message.isEmpty {
             Text(state.message)
-                .font(.system(size: 13, weight: .medium))
+                .font(.body.weight(.medium))
                 .foregroundStyle(Color.orange)
                 .lineLimit(4)
                 .truncationMode(.tail)
@@ -484,6 +490,10 @@ private struct NotchOverlayView: View {
                         perform(action)
                     }
                 }
+                // The overlay never becomes key, so its text can't be selected; copying is the way to keep the error.
+                OverlayTextButton(title: String(localized: "오류 복사"), symbol: "doc.on.doc", id: "notch-copy-error") {
+                    model.copyError()
+                }
                 Spacer(minLength: 0)
             }
         }
@@ -492,7 +502,7 @@ private struct NotchOverlayView: View {
         }
         if !state.noteText.isEmpty {
             Text(state.noteText)
-                .font(.system(size: 11))
+                .font(.subheadline)
                 .foregroundStyle(Color.white.opacity(0.68))
                 .lineLimit(2)
                 .truncationMode(.tail)
@@ -519,10 +529,10 @@ private struct NotchOverlayView: View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(kind == .previous ? String(localized: "이전 받아쓰기") : String(localized: "중단 전 받은 텍스트 · 확정 아님"))
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.5))
                 Text(text)
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundStyle(.white.opacity(0.7))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -555,7 +565,9 @@ private struct NotchOverlayView: View {
         switch action {
         case .start: "mic.fill"
         case .finish: "stop.fill"
-        case .cancel, .dismiss: "xmark"
+        // Cancelling discards the dictation; closing only hides the overlay. They must not look the same.
+        case .cancel: "xmark.circle"
+        case .dismiss: "xmark"
         case .settings: "gearshape"
         }
     }
@@ -595,13 +607,18 @@ private struct TranscriptViewport: View {
     let followsTail: Bool
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
     private let textHeight = State(initialValue: CGFloat(19))
+    private let maxHeight = State(initialValue: NotchOverlayGeometry.fallbackMaxTranscriptHeight)
+    private static let lineSample = Array(repeating: "Ag", count: NotchOverlayGeometry.maxTranscriptLines)
+        .joined(separator: "\n")
+
+    private func styled(_ text: Text) -> some View {
+        text.font(.title3.weight(.medium)).lineSpacing(2)
+    }
 
     var body: some View {
         ScrollView(.vertical) {
-            Text(text)
-                .font(.system(size: 14, weight: .medium))
+            styled(Text(text))
                 .foregroundStyle(.white)
-                .lineSpacing(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { textHeight.wrappedValue = $0 }
@@ -611,7 +628,16 @@ private struct TranscriptViewport: View {
         .scrollIndicators(.automatic)
         .defaultScrollAnchor(followsTail ? .bottom : .top)
         .defaultScrollAnchor(followsTail ? .bottom : .top, for: .sizeChanges)
-        .frame(height: NotchOverlayGeometry.transcriptViewportHeight(textHeight: textHeight.wrappedValue))
+        .frame(height: NotchOverlayGeometry.transcriptViewportHeight(textHeight: textHeight.wrappedValue,
+                                                                     maxHeight: maxHeight.wrappedValue))
+        // Five invisible lines in the same style measure the scroll cap at the current text size.
+        .background(alignment: .top) {
+            styled(Text(Self.lineSample))
+                .fixedSize(horizontal: false, vertical: true)
+                .hidden()
+                .accessibilityHidden(true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { maxHeight.wrappedValue = $0 }
+        }
     }
 }
 
@@ -642,7 +668,7 @@ private struct OverlayTextButton: View {
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: symbol)
-                .font(.system(size: 12, weight: .medium))
+                .font(.callout.weight(.medium))
                 .labelStyle(.titleAndIcon)
         }
         .buttonStyle(OverlayControlStyle(shape: .capsule, prominent: false))
@@ -651,7 +677,7 @@ private struct OverlayTextButton: View {
     }
 }
 
-private struct OverlayControlStyle: ButtonStyle {
+struct OverlayControlStyle: ButtonStyle {
     enum Shape { case circle, capsule }
     let shape: Shape
     let prominent: Bool
@@ -664,13 +690,16 @@ private struct OverlayControlStyle: ButtonStyle {
         return Group {
             switch shape {
             case .circle:
+                // A 24 pt circle inside a transparent 28 pt hit area.
                 label.frame(width: 24, height: 24)
                     .background(fill, in: Circle())
-                    .contentShape(Circle())
+                    .frame(width: NotchOverlayGeometry.minimumHitSize, height: NotchOverlayGeometry.minimumHitSize)
+                    .contentShape(Rectangle())
             case .capsule:
-                label.padding(.horizontal, 10).frame(height: 26)
+                label.padding(.horizontal, 10).frame(minHeight: 26)
                     .background(fill, in: Capsule())
-                    .contentShape(Capsule())
+                    .frame(minHeight: NotchOverlayGeometry.minimumHitSize)
+                    .contentShape(Rectangle())
             }
         }
     }
