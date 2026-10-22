@@ -182,16 +182,16 @@ struct SettingsView: View {
             HStack {
                 Button("저장") { model.saveKey() }
                     .disabled(!hasKey || keyBusy)
-                    .help("이 앱 전용 Keychain 항목에 저장합니다.")
+                    .help("이 앱 전용 Keychain 항목에 저장해요.")
                     .accessibilityIdentifier("settings-save-key")
                 Button("불러오기") { model.loadKey() }
                     .disabled(keyBusy)
-                    .help("이 앱의 Keychain 항목에서 불러옵니다.")
+                    .help("이 앱의 Keychain 항목에서 불러와요.")
                     .accessibilityIdentifier("settings-load-key")
                 Spacer()
                 Button("저장된 키 삭제", role: .destructive) { confirmDeleteState.wrappedValue = true }
                     .disabled(keyBusy)
-                    .help("이 Mac의 Keychain에서 Soniox API 키를 지웁니다.")
+                    .help("이 Mac의 Keychain에서 Soniox API 키를 지워요.")
                     .accessibilityIdentifier("settings-delete-key")
             }
             .confirmationDialog("저장된 API 키를 지울까요?", isPresented: confirmDeleteState.projectedValue) {

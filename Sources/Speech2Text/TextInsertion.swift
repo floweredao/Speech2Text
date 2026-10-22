@@ -79,7 +79,7 @@ final class TextInsertion {
     }
 
     func insert(_ text: String, expected: Target?) -> String {
-        guard isTrusted else { return String(localized: "접근성 권한이 필요해요. 복사해서 직접 붙여넣을 수 있어요.") }
+        guard isTrusted else { return String(localized: "'\(ControlPermissionPane.current.title)' 권한이 필요해요. 복사해서 직접 붙여넣을 수 있어요.") }
         guard let current = currentTarget() else { return String(localized: "입력 칸을 선택한 다음 붙여넣기를 눌러 주세요.") }
         let same = expected.map { $0.pid == current.pid && CFEqual($0.element, current.element) } ?? true
         guard InsertionPolicy.allows(text: text, trusted: isTrusted, sameTarget: same, editable: isEditable(current)) else {

@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Security
 
 actor KeychainCredentialStore: CredentialStoring {
@@ -40,8 +41,13 @@ actor KeychainCredentialStore: CredentialStoring {
         let status = SecItemDelete(query(kind) as CFDictionary)
         if status != errSecItemNotFound { try check(status) }
     }
+    private static let log = Logger(subsystem: "local.speech2text.app", category: "keychain")
     private func check(_ status: OSStatus) throws {
-        guard status == errSecSuccess else { throw Self.error(for: status) }
+        guard status == errSecSuccess else {
+            // The status code is for diagnosis only; the user sees a plain sentence.
+            Self.log.error("Keychain operation failed: OSStatus \(status, privacy: .public)")
+            throw Self.error(for: status)
+        }
     }
     /// Only a refused access prompt is a denial; locked keychains and storage failures are not permissions.
     static func error(for status: OSStatus) -> AppError {

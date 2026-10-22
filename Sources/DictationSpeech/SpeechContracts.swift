@@ -49,21 +49,21 @@ enum AppError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingCredential: String(localized: "Soniox API 키를 입력해 주세요.")
-        case .invalidResponse(let context): String(localized: "음성 인식 응답을 처리할 수 없습니다: \(context)")
+        case .invalidResponse(let context): String(localized: "음성 인식 응답을 처리하지 못했어요: \(context)")
         case .provider(let code, let message): "Soniox\(code.map { " (\($0))" } ?? ""): \(message)"
-        case .permissionDenied(let context): String(localized: "접근 권한이 필요합니다: \(context)")
-        case .audioOverflow: String(localized: "오디오 전송이 지연되어 녹음을 중단했습니다. 다시 시작해 주세요.")
-        case .timeout(let context): String(localized: "응답 대기 시간이 초과됐습니다: \(context)")
-        case .cancelled: String(localized: "받아쓰기를 취소했습니다.")
-        case .inputDeviceUnavailable: String(localized: "선택한 마이크를 찾을 수 없습니다. 설정에서 다른 마이크를 고르세요.")
-        case .microphoneSilent: String(localized: "마이크에서 소리가 들어오지 않습니다. 다른 기기가 쓰고 있거나 macOS가 연결을 거부했을 수 있어요. 설정에서 다른 마이크를 고르세요.")
-        case .microphoneInterrupted: String(localized: "녹음 중 마이크 연결이 바뀌어 받아쓰기를 멈췄습니다. 다시 시작해 주세요.")
+        case .permissionDenied(let context): String(localized: "접근 권한이 필요해요: \(context)")
+        case .audioOverflow: String(localized: "오디오 전송이 늦어져 녹음을 멈췄어요. 다시 시작해 주세요.")
+        case .timeout(let context): String(localized: "응답을 기다리는 시간이 지났어요: \(context)")
+        case .cancelled: String(localized: "받아쓰기를 취소했어요.")
+        case .inputDeviceUnavailable: String(localized: "선택한 마이크를 찾을 수 없어요. 설정에서 다른 마이크를 골라 주세요.")
+        case .microphoneSilent: String(localized: "마이크에서 소리가 들어오지 않아요. 다른 기기가 쓰고 있거나 macOS가 연결을 거부했을 수 있어요. 설정에서 다른 마이크를 골라 주세요.")
+        case .microphoneInterrupted: String(localized: "녹음 중 마이크 연결이 바뀌어 받아쓰기를 멈췄어요. 다시 시작해 주세요.")
         case .microphoneStartFailed(let device, let status):
-            String(localized: "'\(device)' 마이크를 열지 못했습니다 (오디오 형식 또는 장치 오류 \(Int(status))). 장치 연결을 확인하거나 설정에서 다른 마이크를 고르세요.")
-        case .offline: String(localized: "인터넷에 연결되어 있지 않습니다. 연결을 확인한 뒤 다시 시작해 주세요.")
-        case .connectionFailed: String(localized: "Soniox에 연결하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.")
-        case .keychain(let status): String(localized: "Keychain 작업에 실패했습니다 (OSStatus \(Int(status))).")
-        case .keychainDenied: String(localized: "Keychain 접근을 허용하지 않아 키를 처리하지 못했습니다.")
+            String(localized: "'\(device)' 마이크를 열지 못했어요 (오디오 형식 또는 장치 오류 \(Int(status))). 장치 연결을 확인하거나 설정에서 다른 마이크를 골라 주세요.")
+        case .offline: String(localized: "인터넷에 연결되어 있지 않아요. 연결을 확인한 뒤 다시 시작해 주세요.")
+        case .connectionFailed: String(localized: "Soniox에 연결하지 못했어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.")
+        case .keychain: String(localized: "Keychain에 접근하지 못했어요. 잠시 뒤 다시 시도해 주세요.")
+        case .keychainDenied: String(localized: "Keychain 접근을 허용하지 않아 키를 처리하지 못했어요.")
         }
     }
 }

@@ -22,7 +22,7 @@ public enum KeyActivity: Sendable {
     /// Words sent to Soniox as context when a dictation starts; changes apply to the next one.
     public var vocabulary: [String] = []
     public private(set) var transcript = ""
-    public private(set) var status = String(localized: "받아쓰기 준비가 됐습니다.")
+    public private(set) var status = String(localized: "받아쓰기 준비가 됐어요.")
     public private(set) var phase = SpeechPhase.idle
     public private(set) var hasError = false {
         didSet { if !hasError { needsSettings = false } }
@@ -126,7 +126,7 @@ public enum KeyActivity: Sendable {
         session = client
         audio = capture
         phase = .preparing
-        status = String(localized: "마이크를 준비하고 있습니다.")
+        status = String(localized: "마이크를 준비하고 있어요.")
         armTimeout(startTimeout, context: String(localized: "음성 인식 시작"), epoch: epoch)
         runTask = Task { [weak self] in
             guard let self else { return }
@@ -138,12 +138,12 @@ public enum KeyActivity: Sendable {
                 let chunks = try await capture.start(format: .pcm16Mono16k)
                 guard generation == epoch, !Task.isCancelled else { return }
                 phase = .recording
-                status = String(localized: "듣고 있습니다 · 연결 중…")
+                status = String(localized: "듣고 있어요 · 연결 중…")
                 let (provider, events) = try await (early ?? connect(client, apiKey: key, terms: terms, epoch: epoch)).value
                 guard generation == epoch, !Task.isCancelled else { return }
                 // Finishing while connecting already armed its own timeout; keep it.
                 if phase == .recording {
-                    status = String(localized: "듣고 있습니다.")
+                    status = String(localized: "듣고 있어요.")
                     timerTask?.cancel()
                     timerTask = Task { [weak self, recordingLimit] in
                         do { try await Task.sleep(for: recordingLimit) } catch { return }
@@ -190,7 +190,7 @@ public enum KeyActivity: Sendable {
                 audio = nil
                 phase = .idle
                 hasError = false
-                status = result.isEmpty ? String(localized: "인식된 음성이 없습니다.") : String(localized: "받아쓰기를 마쳤습니다.")
+                status = result.isEmpty ? String(localized: "인식된 음성이 없어요.") : String(localized: "받아쓰기를 마쳤어요.")
                 onFinal?(result)
             } catch { fail(error, epoch: epoch) }
         }
@@ -208,7 +208,7 @@ public enum KeyActivity: Sendable {
                 guard generation == epoch else { throw AppError.cancelled }
                 let retry = sessionFactory()
                 session = retry
-                if phase == .recording { status = String(localized: "듣고 있습니다 · 다시 연결 중…") }
+                if phase == .recording { status = String(localized: "듣고 있어요 · 다시 연결 중…") }
                 return (retry, try await retry.open(apiKey: key, terms: terms))
             }
         }
@@ -243,7 +243,7 @@ public enum KeyActivity: Sendable {
     private func beginFinishing(epoch: UUID) {
         guard phase != .finishing else { return }
         phase = .finishing
-        status = String(localized: "남은 음성을 마무리하고 있습니다.")
+        status = String(localized: "남은 음성을 마무리하고 있어요.")
         armTimeout(finishTimeout, context: String(localized: "음성 인식 마무리"), epoch: epoch)
     }
 
@@ -303,7 +303,7 @@ public enum KeyActivity: Sendable {
         defer { keyActivity = .idle }
         do {
             try await credentials.save(apiKey.trimmingCharacters(in: .whitespacesAndNewlines), for: .soniox)
-            reportKey(String(localized: "API 키를 저장했습니다."))
+            reportKey(String(localized: "API 키를 저장했어요."))
         } catch { reportKey(error.localizedDescription, failed: true) }
     }
 
@@ -316,7 +316,7 @@ public enum KeyActivity: Sendable {
             let value = try await credentials.load(.soniox)
             guard apiKey == previous, !Task.isCancelled else { return }
             if let value { apiKey = value }
-            reportKey(value == nil ? String(localized: "저장된 API 키가 없습니다.") : String(localized: "API 키를 불러왔습니다."))
+            reportKey(value == nil ? String(localized: "저장된 API 키가 없어요.") : String(localized: "API 키를 불러왔어요."))
         } catch { reportKey(error.localizedDescription, failed: true) }
     }
 
@@ -327,7 +327,7 @@ public enum KeyActivity: Sendable {
         do {
             try await credentials.delete(.soniox)
             apiKey = ""
-            reportKey(String(localized: "저장된 API 키를 지웠습니다."))
+            reportKey(String(localized: "저장된 API 키를 지웠어요."))
         } catch { reportKey(error.localizedDescription, failed: true) }
     }
 

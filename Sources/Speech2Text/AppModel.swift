@@ -201,7 +201,7 @@ final class AppModel {
         feedback = ""
         guard autoInsert else { return }
         guard accessibilityGranted else {
-            feedback = String(localized: "기기 제어 권한이 없어 결과를 보관해요.")
+            feedback = String(localized: "'\(ControlPermissionPane.current.title)' 권한이 없어 결과를 보관해요.")
             return
         }
         // Started from our own settings window: give focus back to the app the user was typing in.

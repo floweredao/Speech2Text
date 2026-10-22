@@ -34,7 +34,7 @@ extension SonioxReducerTests {
  }
  @Test func malformedAndErrorFirst() throws {
   var r = SonioxTranscriptReducer()
-  #expect(throws: AppError.provider(code: 401, message: "음성 인식 요청이 거절됐습니다.")) { try r.reduce(Data(#"{"error_code":401,"tokens":[{"text":"bad","is_final":true}],"finished":true}"#.utf8)) }
+  #expect(throws: AppError.provider(code: 401, message: "음성 인식 요청이 거절됐어요.")) { try r.reduce(Data(#"{"error_code":401,"tokens":[{"text":"bad","is_final":true}],"finished":true}"#.utf8)) }
   #expect(throws: AppError.invalidResponse("Soniox schema")) { try r.reduce(Data(#"{"tokens":[{"text":42}]}"#.utf8)) }
   #expect(try r.reduce(Data(#"{"tokens":[{"text":"good","is_final":false}]}"#.utf8)) == [.update(.init(turnID: "soniox-0", revision: 1, text: "good", isFinal: false))])
  }
