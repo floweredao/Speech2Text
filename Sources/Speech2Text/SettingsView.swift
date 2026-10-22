@@ -30,6 +30,19 @@ enum ControlPermissionPane: Equatable {
     }
 }
 
+extension NSColor {
+    /// Warning text: system orange is too light for small text on the light grouped background, so light
+    /// appearances use a darker orange (at least 4.5:1). Icons keep `Color.orange`.
+    static let warningText = NSColor(name: "warningText") { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? .systemOrange : NSColor(srgbRed: 0.64, green: 0.28, blue: 0, alpha: 1)
+    }
+}
+
+extension Color {
+    static let warningText = Color(nsColor: .warningText)
+}
+
 enum MicrophoneAccess: Equatable {
     case granted, notDetermined, denied
 
@@ -118,7 +131,7 @@ struct SettingsView: View {
                     if state.phase == .error {
                         Text(model.status)
                             .font(.callout)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.warningText)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("settings-error")
@@ -147,10 +160,14 @@ struct SettingsView: View {
                 .fixedSize()
             }
             if readiness.missingCount > 0 {
-                Label("아래 준비 항목 \(readiness.missingCount)개를 확인해 주세요.",
-                      systemImage: "exclamationmark.triangle.fill")
+                Label {
+                    Text("아래 준비 항목 \(readiness.missingCount)개를 확인해 주세요.")
+                        .foregroundStyle(Color.warningText)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
                     .font(.callout)
-                    .foregroundStyle(.orange)
                     .accessibilityIdentifier("settings-readiness")
             }
         }
@@ -195,7 +212,7 @@ struct SettingsView: View {
             } else if !model.speech.keyMessage.isEmpty {
                 Text(model.speech.keyMessage)
                     .font(.caption)
-                    .foregroundStyle(model.speech.keyFailed ? Color.orange : Color.secondary)
+                    .foregroundStyle(model.speech.keyFailed ? Color.warningText : Color.secondary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("settings-key-message")
@@ -203,13 +220,14 @@ struct SettingsView: View {
             if !hasKey {
                 Text("키를 저장해야 받아쓰기를 시작할 수 있어요.")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.warningText)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("settings-key-status")
             }
 
             LabeledContent {
-                HStack {
+                // Longer English labels move the buttons under the badge instead of clipping at 440 pt.
+                fitting {
                     statusBadge(microphoneBadge, granted: microphone == .granted)
                         .accessibilityIdentifier("settings-microphone-status")
                     switch microphone {
@@ -247,7 +265,7 @@ struct SettingsView: View {
             .accessibilityIdentifier("settings-input-device")
 
             LabeledContent {
-                HStack {
+                fitting {
                     statusBadge(model.accessibilityGranted ? String(localized: "허용됨") : String(localized: "필요함"), granted: model.accessibilityGranted)
                         .accessibilityIdentifier("settings-accessibility-status")
                     if !model.accessibilityGranted {
@@ -340,21 +358,21 @@ struct SettingsView: View {
             if !model.shortcutNote.isEmpty {
                 Text(model.shortcutNote)
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.warningText)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("settings-shortcut-note")
             }
             if !model.shortcutProblem.isEmpty {
                 Text(model.shortcutProblem)
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.warningText)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("settings-shortcut-problem")
             }
             if model.shortcuts.usesModifierOnlyTrigger && !model.accessibilityGranted {
                 Text("수정 키만 누르는 단축키는 '\(pane.title)' 권한이 있어야 동작해요.")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.warningText)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("settings-shortcut-permission")
             }
@@ -439,10 +457,24 @@ struct SettingsView: View {
         }
     }
 
+    /// One row when it fits, otherwise the badge above its buttons.
+    private func fitting(@ViewBuilder _ content: () -> some View) -> some View {
+        let content = content()
+        return ViewThatFits(in: .horizontal) {
+            HStack { content }
+            VStack(alignment: .trailing, spacing: 6) { content }
+        }
+    }
+
+    /// The icon carries the color; the words stay readable text (green and orange are too light for text).
     private func statusBadge(_ text: String, granted: Bool) -> some View {
-        Label(text, systemImage: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-            .foregroundStyle(granted ? Color.green : Color.orange)
-            .fixedSize()
+        Label {
+            Text(text).foregroundStyle(granted ? Color.primary : Color.warningText)
+        } icon: {
+            Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(granted ? Color.green : Color.orange)
+        }
+        .fixedSize()
     }
 
     private var defaultDeviceLabel: String {
