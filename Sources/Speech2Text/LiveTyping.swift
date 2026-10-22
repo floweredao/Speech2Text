@@ -42,8 +42,14 @@ final class LiveTyper {
         /// The user moved on (another field, app, click or key); later speech may go to the field they settle in.
         var resumesInNextField: Bool { self == .targetChanged || self == .userEdited }
     }
-    private enum Mode { case accessibility, keyboard }
+    enum Mode { case accessibility, keyboard }
     private enum Step { case applied, unsafe(String), unsupported(String) }
+
+    /// Accessibility edits start at an empty caret. A selection where dictation starts is replaced the way typing
+    /// replaces it, so key events take over (Chromium address bars select their URL on focus).
+    nonisolated static func startMode(selectionLength: Int) -> Mode {
+        selectionLength == 0 ? .accessibility : .keyboard
+    }
 
     private static let log = Logger(subsystem: "local.speech2text.app", category: "live-typing")
     private let target: TextInsertion.Target
@@ -163,7 +169,9 @@ final class LiveTyper {
     private func replaceWithAccessibility(_ element: AXUIElement, _ edit: LiveTextEdit) -> Step {
         if anchor == nil {
             guard let caret = selectedRange(element) else { return .unsupported("read caret") }
-            guard caret.length == 0 else { return .unsafe("user selection at start") }
+            guard Self.startMode(selectionLength: caret.length) == .accessibility else {
+                return .unsupported("selection at start")
+            }
             anchor = caret.location
         }
         guard let anchor else { return .unsupported("no anchor") }

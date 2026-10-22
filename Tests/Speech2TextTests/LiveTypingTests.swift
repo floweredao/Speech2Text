@@ -64,6 +64,12 @@ import Testing
             .map(\.text) == [String(repeating: "가", count: 16), String(repeating: "가", count: 4)])
     }
 
+    /// Regression: in a browser address bar, which selects its URL on focus, dictation stopped before typing anything.
+    @Test func aSelectionWhereDictationStartsIsTypedOverWithKeys() {
+        #expect(LiveTyper.startMode(selectionLength: 43) == .keyboard)
+        #expect(LiveTyper.startMode(selectionLength: 0) == .accessibility)
+    }
+
     @Test func lineBreaksNeverReachTheTarget() {
         #expect(LiveTextEdit.sanitize("첫 줄\n둘째 줄\r\n끝") == "첫 줄 둘째 줄  끝")
     }
