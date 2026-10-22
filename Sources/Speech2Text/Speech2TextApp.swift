@@ -8,7 +8,7 @@ struct Speech2TextApp: App {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     private let model = AppModel()
     private var overlay: NotchOverlayController?
     private var settings: NSWindow?
@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var updater: AppUpdater?
     private var toggleItem: NSMenuItem?
     private var pasteItem: NSMenuItem?
+    private var cancelItem: NSMenuItem?
+    private var copyItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -31,6 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         item.button?.image = MenuBarIcon.image
         let menu = NSMenu()
         toggleItem = menu.addItem(withTitle: "", action: #selector(toggle), keyEquivalent: "")
+        // Cancel and copy are here too so the overlay, which never takes keyboard focus, is not the only way.
+        cancelItem = menu.addItem(withTitle: "", action: #selector(cancelDictation), keyEquivalent: "")
+        copyItem = menu.addItem(withTitle: String(localized: "마지막 받아쓰기 복사"), action: #selector(copyTranscript), keyEquivalent: "")
         pasteItem = menu.addItem(withTitle: "", action: #selector(paste), keyEquivalent: "")
         menu.addItem(withTitle: String(localized: "받아쓰기 표시"), action: #selector(showOverlay), keyEquivalent: "")
         menu.addItem(.separator())
@@ -64,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func applyShortcuts() {
         toggleItem?.title = menuTitle(String(localized: "받아쓰기 시작 / 마무리"), .toggleDictation)
         pasteItem?.title = menuTitle(String(localized: "마지막 받아쓰기 붙여넣기"), .pasteTranscript)
+        cancelItem?.title = menuTitle(String(localized: "받아쓰기 취소"), .cancelDictation)
         guard model.capturingShortcut == nil else {
             shortcuts.stop()
             return
@@ -72,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             switch action {
             case .toggleDictation: self?.toggle()
             case .pasteTranscript: self?.paste()
+            case .cancelDictation: self?.cancelDictation()
             }
         }
         model.shortcutProblem = refused.isEmpty ? ""
@@ -82,6 +89,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     @objc private func toggle() { model.toggleRecording(); overlay?.present() }
     @objc private func paste() { model.pasteTranscript(); overlay?.present() }
+    @objc private func cancelDictation() { model.cancel(); overlay?.present() }
+    @objc private func copyTranscript() { model.copyTranscript(); overlay?.present() }
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(cancelDictation): model.isBusy
+        // Same rule as the overlay: unconfirmed text heard before a cancel is never offered for copy.
+        case #selector(copyTranscript): DictationDisplayState(model: model).offersTranscriptActions
+        default: true
+        }
+    }
     @objc private func showOverlay() { model.overlayVisible = true; overlay?.present() }
     @objc private func showSettings() { model.openSettings() }
     @objc private func checkForUpdates() { updater?.checkForUpdates() }

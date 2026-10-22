@@ -102,6 +102,19 @@ import Testing
         #expect(ShortcutSettings.load(from: defaults) == settings)
     }
 
+    /// Settings saved before the cancel action existed keep the user's keys instead of falling back to defaults.
+    @Test func settingsSavedWithoutCancelActionKeepTheirShortcuts() throws {
+        let defaults = try #require(UserDefaults(suiteName: "ShortcutTests-\(UUID().uuidString)"))
+        var old = ShortcutSettings.standard
+        old[.toggleDictation] = Shortcut(trigger: bothShifts, taps: 2)
+        let json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(old)) as? [String: Any])
+        let legacy = json.filter { $0.key != "cancelDictation" }
+        defaults.set(try JSONSerialization.data(withJSONObject: legacy), forKey: ShortcutSettings.defaultsKey)
+        let loaded = ShortcutSettings.load(from: defaults)
+        #expect(loaded[.toggleDictation] == Shortcut(trigger: bothShifts, taps: 2))
+        #expect(loaded[.cancelDictation] == nil)
+    }
+
     @Test func sameShortcutOnAnotherActionIsReported() {
         let settings = ShortcutSettings.standard
         let toggle = settings[.toggleDictation]!

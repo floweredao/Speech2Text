@@ -2,12 +2,13 @@ import Carbon.HIToolbox
 import Foundation
 
 enum ShortcutAction: String, CaseIterable, Codable, Sendable {
-    case toggleDictation, pasteTranscript
+    case toggleDictation, pasteTranscript, cancelDictation
 
     var title: String {
         switch self {
         case .toggleDictation: String(localized: "받아쓰기 시작 / 마무리")
         case .pasteTranscript: String(localized: "마지막 결과 붙여넣기")
+        case .cancelDictation: String(localized: "받아쓰기 취소")
         }
     }
 }
@@ -173,6 +174,8 @@ struct Shortcut: Codable, Hashable, Sendable {
 struct ShortcutSettings: Codable, Equatable, Sendable {
     var toggleDictation: Shortcut?
     var pasteTranscript: Shortcut?
+    /// No default key: settings saved before this action existed decode it as unset.
+    var cancelDictation: Shortcut? = nil
 
     static let standard = ShortcutSettings(
         toggleDictation: Shortcut(trigger: .key(KeyChord(keyCode: UInt16(kVK_ANSI_D), modifiers: [.control, .option])), taps: 1),
@@ -184,12 +187,14 @@ struct ShortcutSettings: Codable, Equatable, Sendable {
             switch action {
             case .toggleDictation: toggleDictation
             case .pasteTranscript: pasteTranscript
+            case .cancelDictation: cancelDictation
             }
         }
         set {
             switch action {
             case .toggleDictation: toggleDictation = newValue
             case .pasteTranscript: pasteTranscript = newValue
+            case .cancelDictation: cancelDictation = newValue
             }
         }
     }
