@@ -18,6 +18,8 @@ actor TestSocket: SocketTransport {
     private var refusing = false
     private var connectWaiters: [CheckedContinuation<Void, Never>] = []
     private var closeWaiters: [CheckedContinuation<Void, Never>] = []
+    /// Signalled for every audio frame, so a test can wait for audio while it holds the main actor.
+    nonisolated let audioSent = DispatchSemaphore(value: 0)
 
     func connect(url: URL) {
         connections += 1
@@ -38,6 +40,7 @@ actor TestSocket: SocketTransport {
         if refusing { throw URLError(.notConnectedToInternet) }
         let isConfig = sent.isEmpty
         sent.append(frame)
+        if case .binary = frame { audioSent.signal() }
         let ready = sentWaiters.filter { $0.0 == frame }
         sentWaiters.removeAll { $0.0 == frame }
         for (_, waiter) in ready { waiter.resume() }
@@ -279,6 +282,58 @@ actor TestCredentials: CredentialStoring {
         await socket.push(.text(#"{"tokens":[{"text":"late","is_final":false}]}"#))
         await engine.runTask?.value
         #expect(live.count == 2)
+    }
+
+    /// Live typing makes accessibility calls into the target app on the main actor, and a busy app answers slowly.
+    /// Audio waiting for the main actor reached Soniox late, so text stalled until the user stopped.
+    @Test func audioKeepsReachingTheProviderWhileTheMainActorIsBusy() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        let later = Data(repeating: 8, count: 640)
+        var deliveredWhileBusy: Bool?
+        engine.onLiveText = { _ in
+            guard deliveredWhileBusy == nil else { return }
+            while socket.audioSent.wait(timeout: .now()) == .success {}
+            audio.pair.continuation.yield(later)
+            deliveredWhileBusy = socket.audioSent.wait(timeout: .now() + 3) == .success
+        }
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        await socket.waitUntilSent(.binary(pcm))
+        await socket.push(.text(#"{"tokens":[{"text":"말하는 중","is_final":false}]}"#))
+        try await waitUntil { engine.transcript == "말하는 중" }
+        #expect(deliveredWhileBusy == true)
+        engine.cancel()
+        await engine.runTask?.value
+    }
+
+    /// Revisions that arrive while live typing is still busy are not replayed one by one, which would leave typing
+    /// further behind with every revision; the next delivery is the newest text.
+    @Test func revisionsArrivingWhileLiveTextIsBusyAreDeliveredOnceAsTheNewest() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        var live: [String] = []
+        let caughtUp = DispatchSemaphore(value: 0)
+        engine.onLiveText = { text in
+            live.append(text)
+            guard live.count == 1, let inbox = engine.inbox else { return }
+            Task.detached {
+                await socket.push(.text(#"{"tokens":[{"text":"하나 둘","is_final":false}]}"#))
+                await socket.push(.text(#"{"tokens":[{"text":"하나 둘 셋","is_final":false}]}"#))
+                await inbox.waitUntilHolding(2)
+                caughtUp.signal()
+            }
+            #expect(caughtUp.wait(timeout: .now() + 3) == .success)
+        }
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        await socket.waitUntilSent(.binary(pcm))
+        await socket.push(.text(#"{"tokens":[{"text":"하나","is_final":false}]}"#))
+        try await waitUntil { engine.transcript == "하나 둘 셋" }
+        #expect(live == ["하나", "하나 둘 셋"])
+        #expect(engine.transcript == "하나 둘 셋")
+        engine.cancel()
+        await engine.runTask?.value
     }
 
     @Test func turnsAreJoinedWithASingleSpace() async throws {

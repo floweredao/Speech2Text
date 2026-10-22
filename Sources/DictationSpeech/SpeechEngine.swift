@@ -45,6 +45,7 @@ public enum KeyActivity: Sendable {
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var turns: [TranscriptUpdate] = []
     @ObservationIgnored private var lastFinalTranscript = ""
+    @ObservationIgnored private(set) var inbox: TranscriptInbox?
     @ObservationIgnored private var session: (any STTSession)?
     @ObservationIgnored private var audio: (any AudioCapturing)?
     @ObservationIgnored private(set) var runTask: Task<Void, Never>?
@@ -151,25 +152,36 @@ public enum KeyActivity: Sendable {
                         self.finish()
                     }
                 }
-                senderTask = Task { [weak self] in
+                // Audio never waits for the main actor: live typing's accessibility calls into a busy app hold it,
+                // and audio queued behind them reached Soniox late, so text stalled until the user stopped.
+                // stop() cancels this task whenever the generation changes.
+                senderTask = Task.detached(priority: .userInitiated) { [weak self] in
                     do {
                         for try await chunk in chunks {
-                            guard let self, self.generation == epoch, !Task.isCancelled else { return }
+                            try Task.checkCancellation()
                             if !chunk.isEmpty { try await provider.sendAudio(chunk) }
                         }
-                        guard let self, self.generation == epoch, !Task.isCancelled else { return }
-                        self.beginFinishing(epoch: epoch)
+                        try Task.checkCancellation()
+                        guard await self?.audioEnded(epoch: epoch) == true else { return }
                         try await provider.finish()
-                    } catch { self?.fail(error, epoch: epoch) }
+                    } catch { await self?.fail(error, epoch: epoch) }
                 }
+                let inbox = TranscriptInbox()
+                self.inbox = inbox
+                Task.detached { await inbox.collect(events) }
                 var completed = false
-                for try await event in events {
+                while let batch = try await inbox.next() {
                     guard generation == epoch, !Task.isCancelled else { return }
-                    switch event {
-                    case .status: break
-                    case .update(let update): receive(update)
-                    case .finished: completed = true
+                    var changed = false
+                    for event in batch {
+                        switch event {
+                        case .status: break
+                        case .update(let update): changed = receive(update) || changed
+                        case .finished: completed = true
+                        }
                     }
+                    // Once per batch: revisions that arrived while live typing was busy are typed as one edit.
+                    if changed { onLiveText?(transcript) }
                 }
                 guard generation == epoch, !Task.isCancelled else { return }
                 guard completed, phase == .finishing else {
@@ -214,17 +226,17 @@ public enum KeyActivity: Sendable {
         }
     }
 
-    private func receive(_ update: TranscriptUpdate) {
+    private func receive(_ update: TranscriptUpdate) -> Bool {
         if let index = turns.firstIndex(where: { $0.turnID == update.turnID }) {
-            guard !turns[index].isFinal, update.revision > turns[index].revision else { return }
+            guard !turns[index].isFinal, update.revision > turns[index].revision else { return false }
             turns[index] = update
         } else {
             turns.append(update)
         }
         transcript = joined(turns)
         hasCurrentTranscript = !transcript.isEmpty
-        onLiveText?(transcript)
         if update.isFinal, phase == .recording { onTurnFinal?(transcript) }
+        return true
     }
 
     private func joined(_ turns: [TranscriptUpdate]) -> String {
@@ -238,6 +250,12 @@ public enum KeyActivity: Sendable {
         guard phase == .recording, let audio else { return }
         beginFinishing(epoch: generation)
         stopTask = Task { await audio.stop() }
+    }
+
+    private func audioEnded(epoch: UUID) -> Bool {
+        guard generation == epoch else { return false }
+        beginFinishing(epoch: epoch)
+        return true
     }
 
     private func beginFinishing(epoch: UUID) {
@@ -334,5 +352,61 @@ public enum KeyActivity: Sendable {
     private func reportKey(_ message: String, failed: Bool = false) {
         keyMessage = message
         keyFailed = failed
+    }
+}
+
+/// Provider events gathered off the main actor. The main actor takes everything that arrived while it was busy in
+/// one batch, so live typing that is slower than the revisions gets the newest text instead of working off a backlog.
+actor TranscriptInbox {
+    private var events: [TranscriptEvent] = []
+    private var end: Result<Void, Error>?
+    private var reader: CheckedContinuation<[TranscriptEvent]?, Error>?
+    private var holdWaiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
+
+    func collect(_ stream: AsyncThrowingStream<TranscriptEvent, Error>) async {
+        do {
+            for try await event in stream { add(event) }
+            close(.success(()))
+        } catch { close(.failure(error)) }
+    }
+
+    /// Every event that arrived since the last call, waiting for one if none has; nil once the stream ended.
+    func next() async throws -> [TranscriptEvent]? {
+        if !events.isEmpty {
+            defer { events = [] }
+            return events
+        }
+        switch end {
+        case .success: return nil
+        case .failure(let error): throw error
+        case nil: return try await withCheckedThrowingContinuation { reader = $0 }
+        }
+    }
+
+    func waitUntilHolding(_ count: Int) async {
+        if events.count >= count { return }
+        await withCheckedContinuation { holdWaiters.append((count, $0)) }
+    }
+
+    private func add(_ event: TranscriptEvent) {
+        events.append(event)
+        if let reader {
+            self.reader = nil
+            reader.resume(returning: events)
+            events = []
+        }
+        let ready = holdWaiters.filter { $0.count <= events.count }
+        holdWaiters.removeAll { $0.count <= events.count }
+        ready.forEach { $0.continuation.resume() }
+    }
+
+    private func close(_ result: Result<Void, Error>) {
+        end = result
+        guard let reader else { return }
+        self.reader = nil
+        switch result {
+        case .success: reader.resume(returning: nil)
+        case .failure(let error): reader.resume(throwing: error)
+        }
     }
 }
