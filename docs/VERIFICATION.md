@@ -59,3 +59,21 @@ Screenshots and generated audio remain local under the git-ignored `.omo/evidenc
 - Physical microphone accuracy (speaker/mic distance prevented acoustic playback tests; the microphone capture path was exercised only up to "listening").
 - An end-to-end app run into a terminal: the attempt was pre-empted by focus moving to the user's full-screen terminal, which exercised the guard instead.
 - The QA sample produced no mid-sentence recognition revisions; correction logic is covered by unit tests and by the real-surface cancel deletion, which uses the same replacement path.
+
+
+# Verification — 2026-10-22 HIG fix round
+
+## Passed
+
+- `bash scripts/test.sh`: 115 tests, 17 suites, zero skips, exit 0.
+- Menu bar menu: "받아쓰기 취소" (enabled only while busy) and "마지막 받아쓰기 복사" (enabled only when the overlay offers copy) were added, plus an optional cancel shortcut. Settings saved before the cancel action existed still load (`ShortcutTests.settingsSavedWithoutCancelActionKeepTheirShortcuts`).
+- Overlay text uses system text styles; only the two icons keep a fixed point size. The transcript scroll cap is measured as five lines of its own style (99 pt for title3 in an offscreen render).
+- Overlay button hit areas: offscreen `NSHostingView` layout of `OverlayControlStyle` measures ≥ 28 × 28 pt for icon and text buttons (`OverlayHitAreaTests`).
+- Settings warning text: WCAG contrast of `NSColor.warningText` ≥ 4.5:1 against window and control backgrounds in light and dark appearances (`SettingsColorTests`).
+- Settings at 440 pt: offscreen renders of the Korean settings window and of the permission rows with English labels showed no clipping or overlap.
+
+## Not claimed
+
+- VoiceOver walk-through (start → record → finish → copy): needs the owner's Mac or a remote VM; the remote VM was out of quota. The DESIGN.md checkbox stays open.
+- Keyboard-only run of the new menu items with Control+F8 and arrow keys on the real menu bar.
+- Overlay text growing with a larger system text size: SwiftUI text styles on macOS did not change with `dynamicTypeSize` in an offscreen check, so whether the macOS text size setting reaches this app is unverified.

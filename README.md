@@ -76,6 +76,7 @@ If you move to another app or field while speaking, automatic typing stops. The 
 
 - **Copy**: copies the current dictation to the clipboard. Paste it with ⌘V wherever you like.
 - **Paste** or **Control+Option+V**: sends it to the currently selected field. The overlay's buttons never take keyboard focus.
+- Without a mouse: the menu bar icon's menu has **Cancel Dictation** and **Copy Last Dictation** too (reach it with Control+F8 and the arrow keys). Cancel Dictation has no default shortcut; you can set one in Settings › Shortcuts.
 - For fields that don't support accessibility, copy and paste by hand.
 
 Some apps don't report whether input succeeded. In that case the app shows **Paste requested** instead of claiming success. The default paste path replaces the clipboard contents with the dictation. Automatic typing isn't guaranteed to work in every third-party app.
