@@ -276,4 +276,9 @@ final class AppModel {
         settingsFocused = true
         settingsAction?()
     }
+    /// Settings only hides the overlay while the user is in it. Its window stays key when the user switches to
+    /// another app, and no resign-key notice arrives, so app activation decides.
+    func appActivationChanged(isActive: Bool, settingsIsKey: Bool) {
+        settingsFocused = isActive && settingsIsKey
+    }
 }

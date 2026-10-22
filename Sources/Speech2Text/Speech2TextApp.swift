@@ -119,6 +119,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate()
         settings?.makeKeyAndOrderFront(nil)
     }
+    func applicationDidBecomeActive(_ notification: Notification) {
+        model.appActivationChanged(isActive: true, settingsIsKey: settings?.isKeyWindow == true)
+    }
+    func applicationDidResignActive(_ notification: Notification) {
+        model.appActivationChanged(isActive: false, settingsIsKey: settings?.isKeyWindow == true)
+    }
     func windowDidBecomeKey(_ notification: Notification) {
         model.settingsFocused = true
     }

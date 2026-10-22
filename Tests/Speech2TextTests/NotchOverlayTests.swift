@@ -229,6 +229,17 @@ private func display(_ phase: SpeechPhase, error: Bool = false, transcript: Stri
         #expect(model.overlayVisible)
     }
 
+    /// Regression: Settings left open behind another app hid the overlay through whole dictations, because a window
+    /// stays key while its app is inactive and no resign-key notice arrives.
+    @MainActor @Test func settingsLeftOpenBehindAnotherAppDoesNotHideTheOverlay() {
+        let model = AppModel()
+        model.openSettings()
+        model.appActivationChanged(isActive: false, settingsIsKey: true)
+        #expect(model.overlayVisible)
+        model.appActivationChanged(isActive: true, settingsIsKey: true)
+        #expect(!model.overlayVisible)
+    }
+
     /// Regression: closing a dragged overlay with its X and showing it again brought it back at the dragged spot.
     @MainActor @Test func closingTheOverlayForgetsTheDraggedPositionButSettingsFocusKeepsIt() {
         let model = AppModel()
