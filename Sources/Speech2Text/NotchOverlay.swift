@@ -565,9 +565,7 @@ private struct NotchOverlayView: View {
         switch action {
         case .start: "mic.fill"
         case .finish: "stop.fill"
-        // Cancelling discards the dictation; closing only hides the overlay. They must not look the same.
-        case .cancel: "xmark.circle"
-        case .dismiss: "xmark"
+        case .cancel, .dismiss: "xmark"
         case .settings: "gearshape"
         }
     }
