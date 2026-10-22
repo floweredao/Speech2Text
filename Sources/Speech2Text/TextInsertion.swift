@@ -32,11 +32,25 @@ final class TextInsertion {
               let app = NSWorkspace.shared.frontmostApplication,
               app.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return nil }
         let application = AXUIElementCreateApplication(app.processIdentifier)
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(application, kAXFocusedUIElementAttribute as CFString, &value) == .success,
-              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
-        let element = unsafeDowncast(value, to: AXUIElement.self)
-        return Target(pid: app.processIdentifier, element: element)
+        let element = Self.focusedElement { () -> AXUIElement? in
+            var value: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(application, kAXFocusedUIElementAttribute as CFString, &value) == .success,
+                  let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+            return unsafeDowncast(value, to: AXUIElement.self)
+        } wake: {
+            _ = AXUIElementSetAttributeValue(application, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        }
+        return element.map { Target(pid: app.processIdentifier, element: $0) }
+    }
+
+    /// Chromium and Electron apps (Discord, browsers) switch their accessibility tree off after a few idle minutes
+    /// and then report no focused element; reading attributes does not switch it back on. A failed lookup asks the
+    /// app to turn it on again (Electron's documented switch, ignored by other apps). The tree is back within about
+    /// a second, so the next lookup, made on the next live transcript update, finds the field.
+    static func focusedElement<Element>(lookup: () -> Element?, wake: () -> Void) -> Element? {
+        if let element = lookup() { return element }
+        wake()
+        return nil
     }
 
     func isEditable(_ target: Target) -> Bool {
