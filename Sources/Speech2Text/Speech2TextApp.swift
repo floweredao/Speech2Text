@@ -118,6 +118,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.accessibilityGranted = AXIsProcessTrusted()
         NSApp.activate()
         settings?.makeKeyAndOrderFront(nil)
+        // macOS can refuse the activation (launched from Finder or a script); then no key or activation notice
+        // arrives, and Settings must not keep the overlay hidden. A granted activation hides it again.
+        model.appActivationChanged(isActive: NSApp.isActive, settingsIsKey: true)
     }
     func applicationDidBecomeActive(_ notification: Notification) {
         model.appActivationChanged(isActive: true, settingsIsKey: settings?.isKeyWindow == true)
@@ -126,7 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.appActivationChanged(isActive: false, settingsIsKey: settings?.isKeyWindow == true)
     }
     func windowDidBecomeKey(_ notification: Notification) {
-        model.settingsFocused = true
+        model.appActivationChanged(isActive: NSApp.isActive, settingsIsKey: true)
     }
     func windowDidResignKey(_ notification: Notification) {
         model.settingsFocused = false
