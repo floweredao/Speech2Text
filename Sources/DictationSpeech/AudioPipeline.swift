@@ -52,6 +52,9 @@ final class AudioPipeline: @unchecked Sendable {
     private var pending = Data()
     private var finished = false
     private var heardSignal = false
+    private var receivedBytes = 0
+    /// Seconds of 16 kHz mono 16-bit audio received so far.
+    var capturedDuration: TimeInterval { lock.lock(); defer { lock.unlock() }; return Double(receivedBytes) / 32_000 }
     private var signalWaiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
     private var terminalError: Error?
     /// The error that ended the stream early, if any.
@@ -98,6 +101,7 @@ final class AudioPipeline: @unchecked Sendable {
             heardSignal = true
             resumeWaiters()
         }
+        receivedBytes += data.count
         pending.append(data)
         while pending.count >= chunkBytes {
             let chunk = Data(pending.prefix(chunkBytes))
@@ -164,6 +168,7 @@ final class AudioPipeline: @unchecked Sendable {
     private let deviceUID: String?
     init(deviceUID: String? = nil) { self.deviceUID = deviceUID }
     var promptsForPermission: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined }
+    var capturedDuration: TimeInterval { pipeline?.capturedDuration ?? 0 }
     func start(format: CaptureFormat) async throws -> AsyncThrowingStream<Data, Error> {
         await stop()
         let id = UUID(); generation = id

@@ -45,6 +45,8 @@ public enum KeyActivity: Sendable {
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var turns: [TranscriptUpdate] = []
     @ObservationIgnored private var lastFinalTranscript = ""
+    /// System uptime of the first recorded sample, the zero of Soniox token times.
+    @ObservationIgnored private var audioOrigin: TimeInterval?
     @ObservationIgnored private(set) var inbox: TranscriptInbox?
     @ObservationIgnored private var session: (any STTSession)?
     @ObservationIgnored private var audio: (any AudioCapturing)?
@@ -120,6 +122,7 @@ public enum KeyActivity: Sendable {
         outcome = .none
         hasCurrentTranscript = false
         turns = []
+        audioOrigin = nil
         let terms = vocabulary
         let previousTranscript = lastFinalTranscript
         // Keep the previous transcript until new speech arrives, even if startup fails.
@@ -138,6 +141,7 @@ public enum KeyActivity: Sendable {
                 let early = capture.promptsForPermission ? nil : connect(client, apiKey: key, terms: terms, epoch: epoch)
                 let chunks = try await capture.start(format: .pcm16Mono16k)
                 guard generation == epoch, !Task.isCancelled else { return }
+                audioOrigin = ProcessInfo.processInfo.systemUptime - capture.capturedDuration
                 phase = .recording
                 status = String(localized: "듣고 있어요 · 연결 중…")
                 let (provider, events) = try await (early ?? connect(client, apiKey: key, terms: terms, epoch: epoch)).value
@@ -237,6 +241,22 @@ public enum KeyActivity: Sendable {
         hasCurrentTranscript = !transcript.isEmpty
         if update.isFinal, phase == .recording { onTurnFinal?(transcript) }
         return true
+    }
+
+    /// Milliseconds of recorded audio at a system uptime (an `NSEvent.timestamp`), on the scale of Soniox token
+    /// times. Nil until the microphone has started.
+    public func audioMilliseconds(atUptime uptime: TimeInterval) -> Int? {
+        audioOrigin.map { Int(((uptime - $0) * 1000).rounded()) }
+    }
+
+    /// The transcript made only of words whose sound started before `ms`. A word without a time counts as
+    /// earlier, so text of unknown timing is never moved to a later point. The result is a prefix of `transcript`.
+    public func transcript(spokenBefore ms: Int) -> String {
+        joined(turns.map { turn in
+            guard !turn.spans.isEmpty else { return turn }
+            let before = turn.spans.prefix { ($0.startMs ?? Int.min) < ms }.map(\.text).joined()
+            return TranscriptUpdate(turnID: turn.turnID, revision: turn.revision, text: before, isFinal: turn.isFinal)
+        })
     }
 
     private func joined(_ turns: [TranscriptUpdate]) -> String {

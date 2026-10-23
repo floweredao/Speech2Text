@@ -2,11 +2,18 @@ import Foundation
 
 enum CaptureFormat: Sendable { case pcm16Mono16k }
 enum SessionStatus: Sendable, Equatable { case configSent }
+/// Recognized text with the time its first sound was spoken, in milliseconds of recorded audio.
+struct TimedText: Sendable, Equatable {
+    let text: String
+    let startMs: Int?
+}
 struct TranscriptUpdate: Sendable, Equatable {
     let turnID: String
     let revision: Int
     let text: String
     let isFinal: Bool
+    /// The tokens that make up `text`, in order.
+    var spans: [TimedText] = []
 }
 enum TranscriptEvent: Sendable, Equatable {
     case status(SessionStatus), update(TranscriptUpdate), finished
@@ -26,11 +33,14 @@ extension STTSession {
 @MainActor protocol AudioCapturing: AnyObject {
     /// True when starting will show the system permission prompt, so the provider must not wait on it.
     var promptsForPermission: Bool { get }
+    /// Seconds of audio captured so far, including audio still buffered before the provider connected.
+    var capturedDuration: TimeInterval { get }
     func start(format: CaptureFormat) async throws -> AsyncThrowingStream<Data, Error>
     func stop() async
 }
 extension AudioCapturing {
     var promptsForPermission: Bool { false }
+    var capturedDuration: TimeInterval { 0 }
 }
 enum CredentialKind: String, Sendable { case soniox }
 protocol CredentialStoring: Sendable {

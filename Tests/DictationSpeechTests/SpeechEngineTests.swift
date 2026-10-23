@@ -84,6 +84,7 @@ actor TestSocket: SocketTransport {
 
 @MainActor final class TestAudio: AudioCapturing {
     let pair = AsyncThrowingStream<Data, Error>.makeStream()
+    var capturedDuration: TimeInterval = 0
     private(set) var starts = 0
     private(set) var stops = 0
     var startError: AppError?
@@ -201,6 +202,39 @@ actor TestCredentials: CredentialStoring {
         await socket.push(.text(#"{"tokens":[{"text":"late","is_final":true}],"finished":true}"#))
         engine.finish()
         #expect(finals.count == 1)
+    }
+
+    /// Regression (late text in the next field): words spoken before the user pressed Enter or clicked another field
+    /// were recognized after it and typed there. The split follows when each word was spoken, not when it arrived.
+    @Test func textSpokenBeforeACutFollowsSpeechTimeNotArrival() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        await socket.waitUntilSent(.binary(pcm))
+        await socket.push(.text(#"{"tokens":[{"text":"첫","is_final":true,"start_ms":0},{"text":" 문장","is_final":true,"start_ms":400},{"text":"<end>","is_final":true},{"text":" 둘째","is_final":false,"start_ms":2100},{"text":" 문장","is_final":false,"start_ms":2600}]}"#))
+        try await waitUntil { engine.transcript == "첫 문장 둘째 문장" }
+        #expect(engine.transcript(spokenBefore: 2500) == "첫 문장 둘째")
+        #expect(engine.transcript(spokenBefore: 300) == "첫")
+        #expect(engine.transcript(spokenBefore: 0) == "")
+        #expect(engine.transcript(spokenBefore: 9000) == engine.transcript)
+        engine.cancel()
+    }
+
+    /// Soniox times count from the first recorded sample, which can predate the moment recording was reported.
+    @Test func audioClockStartsAtTheFirstRecordedSample() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        audio.capturedDuration = 2
+        let engine = engine(socket, audio)
+        #expect(engine.audioMilliseconds(atUptime: ProcessInfo.processInfo.systemUptime) == nil)
+        audio.pair.continuation.yield(pcm)
+        let before = ProcessInfo.processInfo.systemUptime
+        engine.start()
+        await socket.waitUntilSent(.binary(pcm))
+        let after = ProcessInfo.processInfo.systemUptime
+        let now = try #require(engine.audioMilliseconds(atUptime: after))
+        #expect(now >= 2000 && now <= 2000 + Int(((after - before) * 1000).rounded(.up)))
+        engine.cancel()
     }
 
     @Test func providerFailureRetainsVisibleTextAndNeverCallsFinal() async throws {
@@ -753,7 +787,8 @@ struct SonioxTransportTests {
         #expect(await socket.sent.suffix(2) == [.binary(Data([1, 2])), .text("")])
         await socket.push(.text(#"{"tokens":[{"text":"final","is_final":true}],"finished":true}"#))
         #expect(try await reader.value == [.status(.configSent),
-                                          .update(.init(turnID: "soniox-0", revision: 1, text: "final", isFinal: true)),
+                                          .update(.init(turnID: "soniox-0", revision: 1, text: "final", isFinal: true,
+                                                        spans: [.init(text: "final", startMs: nil)])),
                                           .finished])
         #expect(await socket.closed)
     }

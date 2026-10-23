@@ -148,3 +148,4 @@
 "녹음하는 동안에만 Soniox로 보내요." = "Sent to Soniox only while recording.";
 "마지막 받아쓰기 복사" = "Copy Last Dictation";
 "오류 복사" = "Copy Error";
+"입력 위치가 바뀔 때까지 한 말은 다른 칸에 넣지 않았어요. 복사하거나 붙여넣어 주세요." = "Words spoken before the input field changed were not typed elsewhere. Copy or paste them.";

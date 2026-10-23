@@ -8,12 +8,10 @@ final class AppModel {
     private let insertion = TextInsertion()
     @ObservationIgnored private var live: LiveTyper?
     @ObservationIgnored private var awaitingTarget = false
-    /// Recognized text at the moment live typing stopped because the user moved on. Only text after it is typed
-    /// into the field the user settles in next; nil while the first field is still in use.
-    @ObservationIgnored private var resumeBase: String?
-    /// Recognized text as of the previous live update. A click or focus change is only noticed on the next update,
-    /// whose new words were spoken in the new field, so the resume point is the text heard before it.
-    @ObservationIgnored private var heard = ""
+    /// Audio time (ms) when the user moved on: a key, click or focus change. Words whose sound started before it
+    /// are never typed into another field, however late they are recognized; only later words go to the field the
+    /// user settles in. Nil while the first field is still in use.
+    @ObservationIgnored private var cutMs: Int?
     var feedback = ""
     var autoInsert = true
     private(set) var overlayRequested = true
@@ -114,8 +112,6 @@ final class AppModel {
     }
 
     private func mirror(_ text: String) {
-        let heardBefore = heard
-        heard = text
         if live == nil, awaitingTarget {
             guard acquireLiveTarget() else { return }
             feedback = String(localized: "선택한 칸에 실시간으로 입력해요.")
@@ -127,17 +123,24 @@ final class AppModel {
         case .failed:
             self.live = nil
             feedback = String(localized: "이 칸에는 실시간 입력을 할 수 없어요. 결과는 여기에 보관해요.")
-        case .targetChanged, .userEdited:
-            // Never retype into the old spot; speech after this point goes to the field the user settles in.
-            self.live = nil
-            resumeBase = heardBefore
-            awaitingTarget = true
-            feedback = String(localized: "입력 위치가 바뀌었어요. 입력 칸에 커서를 두고 말하면 그 칸에 이어서 써요.")
+        case .userEdited:
+            moveOn(at: live.userActedAt ?? ProcessInfo.processInfo.systemUptime)
+        case .targetChanged:
+            // A focus change without a key or click (another app took focus) is only noticed now.
+            moveOn(at: ProcessInfo.processInfo.systemUptime)
         }
     }
 
+    /// Never retype into the old spot; speech after `uptime` goes to the field the user settles in.
+    private func moveOn(at uptime: TimeInterval) {
+        live = nil
+        cutMs = speech.audioMilliseconds(atUptime: uptime) ?? Int.max
+        awaitingTarget = true
+        feedback = String(localized: "입력 위치가 바뀌었어요. 입력 칸에 커서를 두고 말하면 그 칸에 이어서 써요.")
+    }
+
     private func pending(_ text: String) -> String {
-        resumeBase.map { LiveTextEdit.continuation(of: text, after: $0) } ?? text
+        cutMs.map { LiveTextEdit.continuation(of: text, after: speech.transcript(spokenBefore: $0)) } ?? text
     }
 
     private func withoutEnterCommand(_ text: String) -> String {
@@ -154,13 +157,15 @@ final class AppModel {
         let command = spokenEnter?.strip(spoken)
         let text = command ?? spoken
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        // A key or click while the last words were being finalized counts like one during recording.
+        if let live, let acted = live.userActedAt { moveOn(at: acted) }
+        let movedOn = cutMs != nil
         let rest = pending(text)
         if live == nil, awaitingTarget, !rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             _ = acquireLiveTarget()
         }
         awaitingTarget = false
-        resumeBase = nil
-        heard = ""
+        cutMs = nil
         if let live {
             self.live = nil
             switch live.sync(rest) {
@@ -172,6 +177,8 @@ final class AppModel {
             case .failed: feedback = String(localized: "마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
             case .userEdited: feedback = String(localized: "입력 칸을 직접 건드려서 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
             }
+        } else if movedOn, !empty {
+            feedback = String(localized: "입력 위치가 바뀔 때까지 한 말은 다른 칸에 넣지 않았어요. 복사하거나 붙여넣어 주세요.")
         } else if command != nil {
             feedback = String(localized: "입력 중인 칸이 없어 엔터는 누르지 않았어요.")
         } else if empty {
@@ -196,8 +203,7 @@ final class AppModel {
         accessibilityGranted = insertion.isTrusted
         live = nil
         awaitingTarget = false
-        resumeBase = nil
-        heard = ""
+        cutMs = nil
         feedback = ""
         guard autoInsert else { return }
         guard accessibilityGranted else {
@@ -237,8 +243,7 @@ final class AppModel {
         let removed = hadTyped && live?.sync("") == .applied
         live = nil
         awaitingTarget = false
-        resumeBase = nil
-        heard = ""
+        cutMs = nil
         speech.cancel()
         feedback = removed ? String(localized: "취소해서 입력하던 내용을 지웠어요.")
             : hadTyped ? String(localized: "취소했어요. 이미 입력한 글자는 지우지 못했어요.")

@@ -60,6 +60,8 @@ final class LiveTyper {
     private(set) var typed = ""
     private(set) var stopped = false
     private var userEdited = false
+    /// System uptime of the user's first key or click after this field was picked (an `NSEvent.timestamp`).
+    private(set) var userActedAt: TimeInterval?
     private let isShortcut: (KeyChord) -> Bool
     private var inputMonitor: Any?
 
@@ -70,12 +72,14 @@ final class LiveTyper {
         self.target = target
         self.insertion = insertion
         self.isShortcut = isShortcut
+        installInputGuard()
     }
 
     isolated deinit { removeInputGuard() }
 
-    /// Keyboard-mode fields (terminals) report no usable caret, so a key or click the user makes there
-    /// could move the insertion point without us knowing. Our own events and our shortcuts don't count.
+    /// Any key or click the user makes after the field was picked ends typing into it, even before our first
+    /// letter: an Enter pressed because nothing showed up yet must not be followed by text heard before it.
+    /// Keyboard-mode fields (terminals) also report no usable caret. Our own events and our shortcuts don't count.
     nonisolated static func isUserEdit(type: NSEvent.EventType, sourceUserData: Int64, isShortcut: Bool) -> Bool {
         guard sourceUserData != eventMarker, !isShortcut else { return false }
         switch type {
@@ -100,8 +104,9 @@ final class LiveTyper {
         let shortcut = event.type == .keyDown
             && isShortcut(KeyChord(keyCode: event.keyCode, modifiers: KeyModifiers(rawFlags: event.modifierFlags.rawValue)))
         let marker = event.cgEvent?.getIntegerValueField(.eventSourceUserData) ?? 0
-        guard !typed.isEmpty, Self.isUserEdit(type: event.type, sourceUserData: marker, isShortcut: shortcut) else { return }
-        Self.log.notice("stopped: user input in keyboard-mode field")
+        guard Self.isUserEdit(type: event.type, sourceUserData: marker, isShortcut: shortcut) else { return }
+        Self.log.notice("stopped: user input (\(self.typed.isEmpty ? "nothing typed yet" : "after typing", privacy: .public))")
+        userActedAt = event.timestamp
         stopped = true
         userEdited = true
         removeInputGuard()
@@ -137,7 +142,6 @@ final class LiveTyper {
                 mode = .keyboard
             }
         }
-        installInputGuard()
         guard typeWithKeyboard(edit, pid: current.pid) else {
             Self.log.error("stopped: key event creation failed")
             stopped = true
