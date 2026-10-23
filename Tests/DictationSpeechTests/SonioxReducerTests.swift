@@ -71,3 +71,13 @@ extension SonioxReducerTests {
   #expect(try r.reduce(Data(#"{"tokens":[{"text":" 말씀","is_final":false,"start_ms":900}]}"#.utf8)) == [.update(.init(turnID: "soniox-0", revision: 2, text: "첫 말씀", isFinal: false, spans: [.init(text: "첫", startMs: 100), .init(text: " 말씀", startMs: 900)]))])
  }
 }
+
+extension SonioxReducerTests {
+ /// Regression: a provisional word Soniox dropped at an endpoint, with nothing finalized, stayed on screen and typed.
+ @Test func endpointWithoutFinalTextClearsTheProvisionalText() throws {
+  var r = SonioxTranscriptReducer()
+  _ = try r.reduce(Data(#"{"tokens":[{"text":"음","is_final":false}]}"#.utf8))
+  #expect(try r.reduce(Data(#"{"tokens":[{"text":"<end>","is_final":true}]}"#.utf8)) == [.update(.init(turnID: "soniox-0", revision: 2, text: "", isFinal: false))])
+  #expect(try r.reduce(Data(#"{"tokens":[{"text":"다음","is_final":false}]}"#.utf8)) == [.update(.init(turnID: "soniox-0", revision: 3, text: "다음", isFinal: false, spans: [.init(text: "다음", startMs: nil)]))])
+ }
+}
