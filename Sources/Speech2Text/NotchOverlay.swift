@@ -33,6 +33,9 @@ struct DictationDisplayState: Equatable {
     let noteText: String
     /// The error comes from setup (key, microphone, permission), so retrying without a change repeats it.
     let needsSettings: Bool
+    /// Earlier dictations below the current one, newest first. Never includes the text shown as the body or the
+    /// labelled retained line.
+    let history: [DictationRecord]
 
     @MainActor init(model: AppModel) {
         self.init(speechPhase: model.speechPhase, hasError: model.hasError, needsSettings: model.needsSettings,
@@ -40,11 +43,12 @@ struct DictationDisplayState: Equatable {
                   transcript: model.transcript, feedback: model.feedback,
                   session: DictationSession(outcome: model.speechOutcome,
                                             hasCurrentTranscript: model.hasCurrentTranscript),
-                  toggleShortcut: model.shortcuts[.toggleDictation]?.label)
+                  toggleShortcut: model.shortcuts[.toggleDictation]?.label, history: model.history)
     }
 
     init(speechPhase: SpeechPhase, hasError: Bool, needsSettings: Bool = false, status: String, transcript: String,
-         feedback: String, session: DictationSession = DictationSession(), toggleShortcut: String? = "⌃⌥D") {
+         feedback: String, session: DictationSession = DictationSession(), toggleShortcut: String? = "⌃⌥D",
+         history: [DictationRecord] = []) {
         self.needsSettings = needsSettings
         let fresh = session.freshTranscript(transcript)
         let phase: Phase
@@ -90,11 +94,32 @@ struct DictationDisplayState: Equatable {
         self.retained = retained
         retainedKind = retained.isEmpty ? nil : kind
         noteText = phase == .idle || phase == .error ? "" : feedback
+        // The newest record is the finished result itself, or the "previous" line, until a new dictation starts.
+        let older: ArraySlice<DictationRecord>
+        switch phase {
+        case .idle: older = []
+        case .result: older = history.dropFirst()
+        default: older = retainedKind == .previous ? history.dropFirst() : history[...]
+        }
+        self.history = Array(older.prefix(NotchOverlayGeometry.historyRows))
+    }
+
+    /// What changes the overlay's layout, so motion follows these changes but not every revision of live text.
+    struct LayoutKey: Hashable {
+        let phase: Phase
+        let history: [UUID]
+        let hasTranscript: Bool
+        let hasNote: Bool
+    }
+    var layoutKey: LayoutKey {
+        LayoutKey(phase: phase, history: history.map(\.id), hasTranscript: !transcript.isEmpty, hasNote: !noteText.isEmpty)
     }
 
     var isBusy: Bool { phase == .connecting || phase == .finalizing }
     var followsTail: Bool { phase == .recording || phase == .finalizing }
-    var isExpanded: Bool { !message.isEmpty || !transcript.isEmpty || !retained.isEmpty || !noteText.isEmpty }
+    var isExpanded: Bool {
+        !message.isEmpty || !transcript.isEmpty || !retained.isEmpty || !noteText.isEmpty || !history.isEmpty
+    }
     /// Copy and paste act on `model.transcript`, which is the shown body or retained line in these states.
     var offersTranscriptActions: Bool { phase == .result || !retained.isEmpty }
 
@@ -131,6 +156,8 @@ enum NotchOverlayGeometry {
     /// The transcript grows to this many lines of its text style, then scrolls. The view measures the lines,
     /// so the cap follows the system text size.
     static let maxTranscriptLines = 5
+    /// Earlier dictations shown under the current one; older ones stay in `AppModel.history`.
+    static let historyRows = 3
     /// Used only until the five-line sample has been measured.
     static let fallbackMaxTranscriptHeight: CGFloat = 96
     /// Smallest hit area of an overlay button, whatever its visible size.
@@ -172,6 +199,30 @@ enum NotchOverlayGeometry {
     }
 }
 
+/// Motion values for the overlay. See DESIGN.md, "모션".
+enum OverlayMotion {
+    /// Critically damped: it settles without overshoot, because nothing the user threw is moving.
+    static let appear = Animation.spring(response: 0.32, dampingFraction: 1)
+    static let disappear = Animation.easeIn(duration: 0.14)
+    static let layout = Animation.spring(response: 0.36, dampingFraction: 1)
+    /// Reduce Motion keeps only a short cross-fade.
+    static let reduced = Animation.easeOut(duration: 0.15)
+    /// The panel frame follows the content with a fast start and a soft settle, close to `layout`.
+    static let resizeDuration = 0.28
+    static var resizeCurve: CAMediaTimingFunction { CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1) }
+    /// The entrance grows out of the notch: slightly smaller and higher, anchored at the top edge.
+    static let hiddenScale: CGFloat = 0.94
+    static let hiddenOffset: CGFloat = -6
+    /// Each step down the history list is dimmer and a little smaller.
+    static func historyOpacity(depth: Int) -> Double { max(0.3, 0.62 - Double(depth) * 0.14) }
+    static func historyScale(depth: Int) -> CGFloat { 1 - CGFloat(depth) * 0.03 }
+}
+
+/// Whether the overlay is shown or on its way out; the view animates its entrance and exit from it.
+@MainActor @Observable final class OverlayPresence {
+    var shown = false
+}
+
 /// Never key or main: the dictation target keeps keyboard focus while the overlay is visible.
 private final class OverlayPanel: NSPanel {
     override var canBecomeKey: Bool { false }
@@ -187,6 +238,11 @@ private final class FirstClickHostingView<Content: View>: NSHostingView<Content>
 final class NotchOverlayController: NSObject {
     private let model: AppModel
     private var panel: OverlayPanel?
+    private var hosting: NSView?
+    private let presence = OverlayPresence()
+    /// Bumped by every show and hide, so an exit animation that finishes after a new show never orders the panel out.
+    private var visibilityGeneration = 0
+    private var hiding = false
     private var running = false
     private var observationGeneration = UUID()
     private var selectedScreen: NSScreen?
@@ -250,7 +306,7 @@ final class NotchOverlayController: NSObject {
     private func synchronize() {
         let state = DictationDisplayState(model: model)
         guard model.overlayVisible else {
-            panel?.orderOut(nil)
+            hide()
             announcedPhase = nil
             dragStart = nil
             forgetPlacementIfClosed()
@@ -289,6 +345,26 @@ final class NotchOverlayController: NSObject {
                                         .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
 
+    /// Fades out, then leaves the screen. Showing again during the fade reverses it from where it is.
+    private func hide() {
+        guard let panel, panel.isVisible, !hiding else { return }
+        visibilityGeneration += 1
+        let generation = visibilityGeneration
+        // Hidden before its entrance began: nothing to fade, and a transparent panel must not stay on screen.
+        guard presence.shown else {
+            panel.orderOut(nil)
+            return
+        }
+        hiding = true
+        withAnimation(OverlayMotion.disappear) {
+            presence.shown = false
+        } completion: { [weak self] in
+            guard let self, self.visibilityGeneration == generation else { return }
+            self.hiding = false
+            if !self.model.overlayVisible { panel.orderOut(nil) }
+        }
+    }
+
     private func show(animateResize: Bool = false) {
         if panel == nil {
             let window = OverlayPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
@@ -304,6 +380,7 @@ final class NotchOverlayController: NSObject {
             window.animationBehavior = .none
             let view = NotchOverlayView(
                 model: model,
+                presence: presence,
                 onCancel: { [weak self] in self?.cancelDictation() },
                 onContentHeight: { [weak self] height in
                     // Resize after the current SwiftUI layout pass, never inside it.
@@ -314,19 +391,30 @@ final class NotchOverlayController: NSObject {
             let hosting = FirstClickHostingView(rootView: view)
             hosting.sizingOptions = []
             window.contentView = hosting
+            self.hosting = hosting
             panel = window
         }
         guard let panel else { return }
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let appear = reduceMotion ? OverlayMotion.reduced : OverlayMotion.appear
         place(panel, animated: animateResize && panel.isVisible && !reduceMotion)
-        guard !panel.isVisible else { return }
-        panel.alphaValue = reduceMotion ? 1 : 0
+        if panel.isVisible {
+            // Shown again while fading out: turn around from the current state.
+            guard hiding else { return }
+            hiding = false
+            visibilityGeneration += 1
+            withAnimation(appear) { presence.shown = true }
+            return
+        }
+        visibilityGeneration += 1
+        let generation = visibilityGeneration
+        presence.shown = false
+        hosting?.layoutSubtreeIfNeeded()
         panel.orderFrontRegardless()
-        if !reduceMotion {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.16
-                panel.animator().alphaValue = 1
-            }
+        // The hidden state has to reach the screen once before the entrance can animate from it.
+        Task { @MainActor [weak self] in
+            guard let self, self.visibilityGeneration == generation, self.model.overlayVisible else { return }
+            withAnimation(appear) { self.presence.shown = true }
         }
     }
 
@@ -377,8 +465,8 @@ final class NotchOverlayController: NSObject {
         guard panel.frame != frame else { return }
         if animated {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.18
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                context.duration = OverlayMotion.resizeDuration
+                context.timingFunction = OverlayMotion.resizeCurve
                 panel.animator().setFrame(frame, display: true)
             }
         } else {
@@ -387,8 +475,9 @@ final class NotchOverlayController: NSObject {
     }
 }
 
-private struct NotchOverlayView: View {
+struct NotchOverlayView: View {
     let model: AppModel
+    let presence: OverlayPresence
     let onCancel: () -> Void
     let onContentHeight: (CGFloat) -> Void
     let onDragChanged: (CGSize) -> Void
@@ -404,6 +493,7 @@ private struct NotchOverlayView: View {
             header(state)
             if state.isExpanded { details(state) }
         }
+        .animation(reduceMotion ? OverlayMotion.reduced : OverlayMotion.layout, value: state.layoutKey)
         .padding(.horizontal, 14)
         .padding(.top, 8)
         .padding(.bottom, state.isExpanded ? 12 : 8)
@@ -413,6 +503,10 @@ private struct NotchOverlayView: View {
         .background(Color(white: 0.11), in: shape)
         .overlay(shape.strokeBorder(.white.opacity(contrast == .increased ? 0.7 : 0.12), lineWidth: 1))
         .clipShape(shape)
+        // Entrance and exit: out of the notch, anchored at the top edge. Reduce Motion keeps the fade only.
+        .scaleEffect(presence.shown || reduceMotion ? 1 : OverlayMotion.hiddenScale, anchor: .top)
+        .offset(y: presence.shown || reduceMotion ? 0 : OverlayMotion.hiddenOffset)
+        .opacity(presence.shown ? 1 : 0)
         // Drag anywhere outside the buttons to move the panel; buttons keep their clicks.
         .gesture(DragGesture(minimumDistance: 3)
             .onChanged { onDragChanged($0.translation) }
@@ -499,6 +593,7 @@ private struct NotchOverlayView: View {
         }
         if !state.transcript.isEmpty {
             TranscriptViewport(text: state.transcript, followsTail: state.followsTail)
+                .transition(entering)
         }
         if !state.noteText.isEmpty {
             Text(state.noteText)
@@ -513,14 +608,58 @@ private struct NotchOverlayView: View {
         if let kind = state.retainedKind {
             retainedLine(state.retained, kind: kind)
         } else if state.offersTranscriptActions {
-            HStack(spacing: 8) {
-                OverlayTextButton(title: String(localized: "복사"), symbol: "doc.on.doc", id: "notch-copy") { model.copyTranscript() }
-                OverlayTextButton(title: String(localized: "붙여넣기") + shortcutSuffix(.pasteTranscript), symbol: "arrow.down.doc",
-                                  id: "notch-paste") {
-                    model.pasteTranscript()
+            transcriptActions
+        }
+        if !state.history.isEmpty {
+            historyList(state.history)
+        }
+    }
+
+    /// New content arrives from above and pushes older content down.
+    private var entering: AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top))
+    }
+
+    /// Earlier dictations, pushed down by the new one: dimmer and a little smaller the older they are.
+    private func historyList(_ records: [DictationRecord]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(records.enumerated()), id: \.element.id) { depth, record in
+                HStack(alignment: .center, spacing: 8) {
+                    Text(record.text)
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(OverlayMotion.historyOpacity(depth: depth)))
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .scaleEffect(reduceMotion ? 1 : OverlayMotion.historyScale(depth: depth), anchor: .leading)
+                        .help(record.text)
+                        .accessibilityLabel(String(localized: "이전 받아쓰기") + ": " + record.text)
+                        .accessibilityIdentifier("notch-history-row")
+                    OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "이 받아쓰기 복사"),
+                                      id: "notch-history-copy", prominent: false) {
+                        model.copyHistory(record)
+                    }
+                    .opacity(OverlayMotion.historyOpacity(depth: depth) + 0.2)
                 }
-                Spacer(minLength: 0)
+                .transition(entering)
             }
+        }
+        .padding(.top, 8)
+        // A hairline keeps earlier dictations apart from the current one and its buttons.
+        .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.08)).frame(height: 1) }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(String(localized: "받아쓰기 기록"))
+        .accessibilityIdentifier("notch-history")
+    }
+
+    private var transcriptActions: some View {
+        HStack(spacing: 8) {
+            OverlayTextButton(title: String(localized: "복사"), symbol: "doc.on.doc", id: "notch-copy") { model.copyTranscript() }
+            OverlayTextButton(title: String(localized: "붙여넣기") + shortcutSuffix(.pasteTranscript), symbol: "arrow.down.doc",
+                              id: "notch-paste") {
+                model.pasteTranscript()
+            }
+            Spacer(minLength: 0)
         }
     }
 

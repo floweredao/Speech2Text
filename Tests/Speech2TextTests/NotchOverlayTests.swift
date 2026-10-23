@@ -111,10 +111,13 @@ private func session(_ outcome: SpeechOutcome = .none, current: Bool = false) ->
 }
 
 private func display(_ phase: SpeechPhase, error: Bool = false, transcript: String, feedback: String = "",
-                     session: DictationSession) -> DictationDisplayState {
+                     session: DictationSession, history: [DictationRecord] = []) -> DictationDisplayState {
     DictationDisplayState(speechPhase: phase, hasError: error, status: "엔진 상태", transcript: transcript,
-                          feedback: feedback, session: session)
+                          feedback: feedback, session: session, history: history)
 }
+
+/// Newest first; the newest is the dictation that just finished.
+private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map { DictationRecord(text: $0) }
 
 @Suite struct DictationDisplayStateTests {
     @Test func launchIdleIsCompactAndCanStartRecording() {
@@ -194,6 +197,31 @@ private func display(_ phase: SpeechPhase, error: Bool = false, transcript: Stri
         #expect(state.retained == live)
         #expect(state.retainedKind == .unfinished)
         #expect(state.transcript.isEmpty)
+    }
+
+    /// Owner request: a new dictation pushes the finished one down into the history list instead of replacing it.
+    @Test func startingANewDictationMovesTheResultIntoHistory() {
+        let result = display(.idle, transcript: previous, session: session(.completed, current: true), history: records)
+        #expect(result.transcript == previous)
+        #expect(result.history == Array(records[1...3]))
+        let connecting = display(.preparing, transcript: previous, session: session(), history: records)
+        #expect(connecting.transcript.isEmpty)
+        #expect(connecting.history == Array(records[0...2]))
+        #expect(connecting.isExpanded)
+        let recording = display(.recording, transcript: live, session: session(current: true), history: records)
+        #expect(recording.transcript == live)
+        #expect(recording.history == Array(records[0...2]))
+    }
+
+    @Test func historyNeverRepeatsTheLabelledPreviousLineAndHidesWhenIdle() {
+        let notice = display(.idle, transcript: previous, feedback: "인식 없음", session: session(.empty), history: records)
+        #expect(notice.retained == previous)
+        #expect(notice.history == Array(records[1...3]))
+        let unfinished = display(.idle, error: true, transcript: live, session: session(.failed, current: true), history: records)
+        #expect(unfinished.history == Array(records[0...2]))
+        let idle = display(.idle, transcript: "", session: session(), history: records)
+        #expect(idle.history.isEmpty)
+        #expect(!idle.isExpanded)
     }
 
     /// Regression: cancelling during finalization was shown as a finished result.

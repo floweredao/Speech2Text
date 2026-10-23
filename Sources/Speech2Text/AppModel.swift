@@ -2,8 +2,17 @@ import AppKit
 import DictationSpeech
 import Observation
 
+/// A finished dictation kept for the overlay's history list. Kept in memory only.
+struct DictationRecord: Identifiable, Equatable {
+    let id = UUID()
+    let text: String
+}
+
 @MainActor @Observable
 final class AppModel {
+    static let historyLimit = 20
+    /// Finished dictations, newest first. The newest is also `transcript` until a new dictation replaces it.
+    private(set) var history: [DictationRecord] = []
     let speech = SpeechEngine()
     private let insertion = TextInsertion()
     @ObservationIgnored private var live: LiveTyper?
@@ -157,6 +166,10 @@ final class AppModel {
         let command = spokenEnter?.strip(spoken)
         let text = command ?? spoken
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if !empty {
+            history.insert(DictationRecord(text: text), at: 0)
+            if history.count > Self.historyLimit { history.removeLast(history.count - Self.historyLimit) }
+        }
         // A key or click while the last words were being finalized counts like one during recording.
         if let live, let acted = live.userActedAt { moveOn(at: acted) }
         let movedOn = cutMs != nil
@@ -257,6 +270,9 @@ final class AppModel {
     }
     func copyTranscript() {
         feedback = insertion.copy(transcript) ? String(localized: "복사했어요. 원하는 곳에서 ⌘V를 누르세요.") : String(localized: "복사할 텍스트가 없어요.")
+    }
+    func copyHistory(_ record: DictationRecord) {
+        feedback = insertion.copy(record.text) ? String(localized: "복사했어요. 원하는 곳에서 ⌘V를 누르세요.") : String(localized: "복사할 텍스트가 없어요.")
     }
     func copyError() {
         feedback = insertion.copy(status) ? String(localized: "복사했어요. 원하는 곳에서 ⌘V를 누르세요.") : String(localized: "복사할 텍스트가 없어요.")
