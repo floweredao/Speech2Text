@@ -101,6 +101,7 @@ struct SettingsView: View {
             inputSection
             vocabularySection
             shortcutSection
+            experimentalSection
         }
         .formStyle(.grouped)
         .frame(minWidth: 440, idealWidth: 480, maxWidth: 640, minHeight: 420, idealHeight: 540)
@@ -301,6 +302,11 @@ struct SettingsView: View {
                     .multilineTextAlignment(.trailing)
                     .accessibilityIdentifier("settings-spoken-enter-phrase")
             }
+            Toggle(isOn: $model.voiceEditingEnabled) {
+                Text("말로 고치기")
+                Text("잠깐 멈춘 뒤 ‘지워’, ‘되돌려’, ‘A를 B로 바꿔’만 따로 말하면 고쳐요.")
+            }
+            .accessibilityIdentifier("settings-voice-editing")
             Picker(selection: $model.silenceStopSeconds) {
                 timeoutChoices
             } label: {
@@ -319,6 +325,35 @@ struct SettingsView: View {
                 Button("열기") { model.showOverlay() }
                     .accessibilityIdentifier("settings-show-overlay")
             }
+        }
+    }
+
+    private var experimentalSection: some View {
+        Section("실험적 기능") {
+            Picker(selection: $model.translationTarget) {
+                ForEach(AppModel.translationChoices, id: \.self) { code in
+                    Text(Self.translationLabel(code)).tag(code)
+                }
+            } label: {
+                Text("실시간 번역")
+                Text("말한 내용을 고른 언어로 번역해 입력해요. 말로 고치기·엔터는 번역된 글 기준이라 잘 안 될 수 있어요.")
+            }
+            .accessibilityIdentifier("settings-translation")
+            Toggle(isOn: $model.marksUncertainWords) {
+                Text("확실하지 않은 단어 표시")
+                Text("잘못 들었을 수 있는 단어에 점선 밑줄을 칠해요.")
+            }
+            .accessibilityIdentifier("settings-uncertain-words")
+        }
+    }
+
+    static func translationLabel(_ code: String?) -> String {
+        switch code {
+        case "en": String(localized: "영어로")
+        case "ko": String(localized: "한국어로")
+        case "ja": String(localized: "일본어로")
+        case "zh": String(localized: "중국어로")
+        default: String(localized: "끄기")
         }
     }
 

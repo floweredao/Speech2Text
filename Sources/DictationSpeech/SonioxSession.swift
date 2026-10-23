@@ -2,16 +2,18 @@ import Foundation
 
 enum SocketFrame: Sendable, Equatable { case text(String), binary(Data), closed(Int) }
 protocol SocketTransport: Sendable {
-    func connect(url: URL) async throws
+    /// The key travels on the upgrade request, never in the start message (Soniox refuses that from 2027-01-15).
+    func connect(url: URL, apiKey: String) async throws
     func send(_ frame: SocketFrame) async throws
     func receive() async throws -> SocketFrame
     func close() async
 }
 actor URLSocketTransport: SocketTransport {
     private var socket: URLSessionWebSocketTask?
-    func connect(url: URL) {
+    func connect(url: URL, apiKey: String) {
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         let task = URLSession.shared.webSocketTask(with: request)
         socket = task
         task.resume()
@@ -64,25 +66,28 @@ actor SonioxSession: STTSession {
         self.connectTimeout = connectTimeout
     }
 
-    func open(apiKey: String, terms: [String]) async throws -> AsyncThrowingStream<TranscriptEvent, Error> {
+    func open(apiKey: String, terms: [String], translateTo target: String?) async throws
+        -> AsyncThrowingStream<TranscriptEvent, Error> {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw AppError.missingCredential(.soniox) }
         guard !used else { throw failure ?? AppError.invalidResponse("Session already used") }
         used = true
         active = true
+        reducer = SonioxTranscriptReducer(translating: target != nil)
         let pair = AsyncThrowingStream<TranscriptEvent, Error>.makeStream()
         continuation = pair.continuation
         continuation?.onTermination = { [weak self] _ in Task { await self?.cancel() } }
         do {
-            try await socket.connect(url: URL(string: "wss://stt-rt.soniox.com/transcribe-websocket")!)
+            try await socket.connect(url: URL(string: "wss://stt-rt.soniox.com/transcribe-websocket")!, apiKey: key)
             guard active else { throw failure ?? .cancelled }
             var config: [String: Any] = [
-                "api_key": key, "model": "stt-rt-v5", "audio_format": "pcm_s16le",
+                "model": "stt-rt-v5", "audio_format": "pcm_s16le",
                 "sample_rate": 16000, "num_channels": 1, "language_hints": ["ko", "en"],
                 "enable_endpoint_detection": true, "endpoint_latency_adjustment_level": 2,
                 "endpoint_sensitivity": 0.3, "max_endpoint_delay_ms": 1500
             ]
             if !terms.isEmpty { config["context"] = ["terms": terms] }
+            if let target { config["translation"] = ["type": "one_way", "target_language": target] }
             let text = String(decoding: try JSONSerialization.data(withJSONObject: config), as: UTF8.self)
             try await sendWithTimeout(.text(text), limit: connectTimeout)
             continuation?.yield(.status(.configSent))

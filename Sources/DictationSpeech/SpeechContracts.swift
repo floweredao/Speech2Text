@@ -6,6 +6,8 @@ enum SessionStatus: Sendable, Equatable { case configSent }
 struct TimedText: Sendable, Equatable {
     let text: String
     let startMs: Int?
+    /// Soniox's 0-1 certainty for this token.
+    var confidence: Double? = nil
 }
 struct TranscriptUpdate: Sendable, Equatable {
     let turnID: String
@@ -19,15 +21,16 @@ enum TranscriptEvent: Sendable, Equatable {
     case status(SessionStatus), update(TranscriptUpdate), finished
 }
 protocol STTSession: Sendable {
-    func open(apiKey: String, terms: [String]) async throws -> AsyncThrowingStream<TranscriptEvent, Error>
+    /// `translateTo` (a language code) makes the stream carry that translation instead of the spoken language.
+    func open(apiKey: String, terms: [String], translateTo: String?) async throws -> AsyncThrowingStream<TranscriptEvent, Error>
     func sendAudio(_ pcm: Data) async throws
     /// Sends EOF after the caller has drained audio. Completion arrives on the event stream.
     func finish() async throws
     func cancel() async
 }
 extension STTSession {
-    func open(apiKey: String) async throws -> AsyncThrowingStream<TranscriptEvent, Error> {
-        try await open(apiKey: apiKey, terms: [])
+    func open(apiKey: String, terms: [String] = []) async throws -> AsyncThrowingStream<TranscriptEvent, Error> {
+        try await open(apiKey: apiKey, terms: terms, translateTo: nil)
     }
 }
 @MainActor protocol AudioCapturing: AnyObject {
@@ -35,12 +38,15 @@ extension STTSession {
     var promptsForPermission: Bool { get }
     /// Seconds of audio captured so far, including audio still buffered before the provider connected.
     var capturedDuration: TimeInterval { get }
+    /// Loudness of the latest audio, 0 (silence) to 1, for a level meter. Read by polling, never observed.
+    var inputLevel: Float { get }
     func start(format: CaptureFormat) async throws -> AsyncThrowingStream<Data, Error>
     func stop() async
 }
 extension AudioCapturing {
     var promptsForPermission: Bool { false }
     var capturedDuration: TimeInterval { 0 }
+    var inputLevel: Float { 0 }
 }
 enum CredentialKind: String, Sendable { case soniox }
 protocol CredentialStoring: Sendable {

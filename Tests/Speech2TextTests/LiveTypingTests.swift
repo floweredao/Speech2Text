@@ -44,16 +44,6 @@ import Testing
         #expect(!LiveTyper.Outcome.applied.resumesInNextField)
     }
 
-    /// Speech heard while typing was stopped never lands in the field the user comes back to.
-    @Test func resumedTypingSkipsTextHeardWhileStopped() {
-        #expect(LiveTextEdit.continuation(of: "첫 문장 둘째 문장", after: "첫 문장") == "둘째 문장")
-        #expect(LiveTextEdit.continuation(of: "첫 문", after: "첫 문장") == "")
-        #expect(LiveTextEdit.continuation(of: "같은 말", after: "같은 말") == "")
-        #expect(LiveTextEdit.continuation(of: "hello world", after: "") == "hello world")
-        // Regression: the cut fell inside "바다쓰기", so the next field began with the fragment "다쓰기".
-        #expect(LiveTextEdit.continuation(of: "격리된 바다쓰기 입력 시험", after: "격리된 바") == "입력 시험")
-    }
-
     /// Regression: with the Korean input method in a web field, bare backspace keys mangled the revised start
     /// ("어 오오늘은가 …" instead of "오늘은 회의가 …"). Each backspace must carry the backspace character.
     @Test func revisionsSendBackspaceCharactersThenTheNewText() {

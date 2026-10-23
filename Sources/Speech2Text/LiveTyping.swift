@@ -21,17 +21,6 @@ struct LiveTextEdit: Equatable {
     static func sanitize(_ text: String) -> String {
         text.components(separatedBy: .newlines).joined(separator: " ")
     }
-
-    /// What to type into a field picked up again after live typing stopped: only text recognized after `base`.
-    static func continuation(of text: String, after base: String) -> String {
-        guard text.count > base.count else { return "" }
-        var rest = text.dropFirst(base.count)
-        // A word cut in half belongs to the speech heard while stopped; start at the next whole word.
-        if let before = text.dropLast(rest.count).last, !before.isWhitespace, rest.first?.isWhitespace == false {
-            rest = rest.drop { !$0.isWhitespace }
-        }
-        return String(rest.drop { $0.isWhitespace })
-    }
 }
 
 @MainActor

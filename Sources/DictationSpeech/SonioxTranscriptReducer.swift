@@ -7,9 +7,13 @@ struct SonioxTranscriptReducer: Sendable {
     private var revision = 0
     private var ended = false
     private var lastText = ""
-    init() {}
+    /// With translation on, only translated tokens make up the text; otherwise translated tokens never do.
+    private let translating: Bool
+    init(translating: Bool = false) { self.translating = translating }
     mutating func reduce(_ data: Data) throws -> [TranscriptEvent] {
-        struct Token: Decodable { let text: String; let is_final: Bool; let start_ms: Int? }
+        struct Token: Decodable {
+            let text: String; let is_final: Bool; let start_ms: Int?; let confidence: Double?; let translation_status: String?
+        }
         struct Frame: Decodable { let tokens: [Token]?; let finished: Bool?; let error_code: Int?; let error_message: String? }
         let frame: Frame
         do { frame = try JSONDecoder().decode(Frame.self, from: data) }
@@ -32,12 +36,14 @@ struct SonioxTranscriptReducer: Sendable {
                     events.append(update(committed, final: true, spans: committedSpans)); turn += 1; revision = 0
                 }
                 committed = ""; provisional = ""; lastText = ""; committedSpans = []; provisionalSpans = []
+            } else if (token.translation_status == "translation") != translating {
+                continue
             } else if token.is_final {
                 committed += token.text
-                committedSpans.append(TimedText(text: token.text, startMs: token.start_ms))
+                committedSpans.append(TimedText(text: token.text, startMs: token.start_ms, confidence: token.confidence))
             } else {
                 provisional += token.text
-                provisionalSpans.append(TimedText(text: token.text, startMs: token.start_ms))
+                provisionalSpans.append(TimedText(text: token.text, startMs: token.start_ms, confidence: token.confidence))
             }
         }
         if frame.finished == true {

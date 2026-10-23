@@ -23,6 +23,10 @@ public enum KeyActivity: Sendable {
     public var vocabulary: [String] = []
     /// A recording finishes by itself once this long passes without newly recognized text. Nil keeps listening.
     public var silenceLimit: Duration? = .seconds(30)
+    /// A language code to type a live translation instead of the spoken words (experimental); nil for none.
+    public var translationTarget: String?
+    /// Microphone loudness now, 0-1, for the recording indicator. Poll it; it is not observable.
+    public var inputLevel: Float { audio?.inputLevel ?? 0 }
     /// The last recording was finished by `silenceLimit`, not by the user.
     public private(set) var finishedForSilence = false
     public private(set) var transcript = ""
@@ -130,6 +134,7 @@ public enum KeyActivity: Sendable {
         audioOrigin = nil
         finishedForSilence = false
         let terms = vocabulary
+        let target = translationTarget
         let previousTranscript = lastFinalTranscript
         // Keep the previous transcript until new speech arrives, even if startup fails.
         let client = sessionFactory()
@@ -144,14 +149,14 @@ public enum KeyActivity: Sendable {
                 guard generation == epoch, !Task.isCancelled else { return }
                 // The microphone starts at once and buffers while the provider connects, so the first
                 // words are kept. A pending permission prompt comes first: Soniox drops idle sockets.
-                let early = capture.promptsForPermission ? nil : connect(client, apiKey: key, terms: terms, epoch: epoch)
+                let early = capture.promptsForPermission ? nil : connect(client, apiKey: key, terms: terms, target: target, epoch: epoch)
                 let chunks = try await capture.start(format: .pcm16Mono16k)
                 guard generation == epoch, !Task.isCancelled else { return }
                 audioOrigin = ProcessInfo.processInfo.systemUptime - capture.capturedDuration
                 phase = .recording
                 armSilenceLimit(epoch: epoch)
                 status = String(localized: "듣고 있어요 · 연결 중…")
-                let (provider, events) = try await (early ?? connect(client, apiKey: key, terms: terms, epoch: epoch)).value
+                let (provider, events) = try await (early ?? connect(client, apiKey: key, terms: terms, target: target, epoch: epoch)).value
                 guard generation == epoch, !Task.isCancelled else { return }
                 // Finishing while connecting already armed its own timeout; keep it.
                 if phase == .recording {
@@ -228,18 +233,18 @@ public enum KeyActivity: Sendable {
 
     /// Opens the provider while audio buffers. A failed connection is retried once on a fresh session:
     /// no audio has been sent yet, so the retry loses nothing.
-    private func connect(_ first: any STTSession, apiKey key: String, terms: [String], epoch: UUID)
+    private func connect(_ first: any STTSession, apiKey key: String, terms: [String], target: String?, epoch: UUID)
         -> Task<(any STTSession, AsyncThrowingStream<TranscriptEvent, Error>), Error> {
         Task {
             guard generation == epoch else { throw AppError.cancelled }
             do {
-                return (first, try await first.open(apiKey: key, terms: terms))
+                return (first, try await first.open(apiKey: key, terms: terms, translateTo: target))
             } catch AppError.connectionFailed {
                 guard generation == epoch else { throw AppError.cancelled }
                 let retry = sessionFactory()
                 session = retry
                 if phase == .recording { status = String(localized: "듣고 있어요 · 다시 연결 중…") }
-                return (retry, try await retry.open(apiKey: key, terms: terms))
+                return (retry, try await retry.open(apiKey: key, terms: terms, translateTo: target))
             }
         }
     }
@@ -263,14 +268,29 @@ public enum KeyActivity: Sendable {
         audioOrigin.map { Int(((uptime - $0) * 1000).rounded()) }
     }
 
-    /// The transcript made only of words whose sound started before `ms`. A word without a time counts as
-    /// earlier, so text of unknown timing is never moved to a later point. The result is a prefix of `transcript`.
-    public func transcript(spokenBefore ms: Int) -> String {
-        joined(turns.map { turn in
-            guard !turn.spans.isEmpty else { return turn }
-            let before = turn.spans.prefix { ($0.startMs ?? Int.min) < ms }.map(\.text).joined()
-            return TranscriptUpdate(turnID: turn.turnID, revision: turn.revision, text: before, isFinal: turn.isFinal)
-        })
+    /// The turns of this recording, each holding only words whose sound started at or after `ms` (all words when
+    /// nil). A word without a time counts as earlier, so text of unknown timing never moves to a later point, and a
+    /// word already under way at `ms` belongs before it too.
+    /// Recognized tokens Soniox was less than `threshold` sure of, in order, for marking in the overlay.
+    public func uncertainTokens(below threshold: Double) -> [String] {
+        turns.flatMap(\.spans).compactMap { span in
+            guard let confidence = span.confidence, confidence < threshold else { return nil }
+            let text = span.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? nil : text
+        }
+    }
+
+    public func spokenTurns(from ms: Int?) -> [SpokenTurn] {
+        turns.compactMap { turn in
+            guard let ms else { return SpokenTurn(text: turn.text, isFinal: turn.isFinal) }
+            guard let first = turn.spans.firstIndex(where: { ($0.startMs ?? Int.min) >= ms }) else { return nil }
+            var kept = turn.spans[first...]
+            if first > turn.spans.startIndex {
+                kept = kept.drop { $0.text.first?.isWhitespace != true }
+            }
+            let text = kept.map(\.text).joined()
+            return text.isEmpty ? nil : SpokenTurn(text: text, isFinal: turn.isFinal)
+        }
     }
 
     private func joined(_ turns: [TranscriptUpdate]) -> String {
@@ -400,6 +420,16 @@ public enum KeyActivity: Sendable {
     private func reportKey(_ message: String, failed: Bool = false) {
         keyMessage = message
         keyFailed = failed
+    }
+}
+
+/// One stretch of speech Soniox finalizes on its own after a pause; provisional while still being revised.
+public struct SpokenTurn: Equatable, Sendable {
+    public let text: String
+    public let isFinal: Bool
+    public init(text: String, isFinal: Bool) {
+        self.text = text
+        self.isFinal = isFinal
     }
 }
 

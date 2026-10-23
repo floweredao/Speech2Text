@@ -21,7 +21,31 @@ final class AppModel {
     /// are never typed into another field, however late they are recognized; only later words go to the field the
     /// user settles in. Nil while the first field is still in use.
     @ObservationIgnored private var cutMs: Int?
-    var feedback = ""
+    var feedback = "" {
+        didSet { feedbackIsRoutine = false }
+    }
+    /// The feedback only confirms that things went as expected (typing live, typed in), so the overlay keeps it out
+    /// of sight; problems and voice edits stay visible.
+    private(set) var feedbackIsRoutine = false
+    /// The app live typing writes into, shown beside the title.
+    private(set) var liveTargetName: String?
+    /// Language codes offered for the experimental live translation; nil types the spoken language.
+    static let translationChoices: [String?] = [nil, "en", "ko", "ja", "zh"]
+    var translationTarget = UserDefaults.standard.string(forKey: "translationTarget") {
+        didSet {
+            UserDefaults.standard.set(translationTarget, forKey: "translationTarget")
+            speech.translationTarget = translationTarget
+        }
+    }
+    /// Marks words Soniox was unsure of in the overlay.
+    var marksUncertainWords = UserDefaults.standard.object(forKey: "marksUncertainWords") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(marksUncertainWords, forKey: "marksUncertainWords") }
+    }
+    static let uncertainBelow = 0.6
+    var uncertainWords: [String] {
+        marksUncertainWords && speech.hasCurrentTranscript ? speech.uncertainTokens(below: Self.uncertainBelow) : []
+    }
+    var inputLevel: Float { speech.inputLevel }
     var autoInsert = true
     private(set) var overlayRequested = true
     var settingsFocused = false
@@ -88,8 +112,18 @@ final class AppModel {
     }
     /// The command phrase goes to Soniox as context too; without it "엔터" after a pause is often heard as "센터".
     private var recognitionTerms: [String] {
-        spokenEnter.map { $0.terms.reduce(dictionary) { DictionaryTerms.adding($1, to: $0) } } ?? dictionary
+        let commands = (spokenEnter?.terms ?? []) + (voiceEditingEnabled ? VoiceCommand.terms : [])
+        return commands.reduce(dictionary) { DictionaryTerms.adding($1, to: $0) }
     }
+    /// Hands-free edits: a command said on its own after a pause edits the dictated text instead of being typed.
+    var voiceEditingEnabled = UserDefaults.standard.object(forKey: "voiceEditingEnabled") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(voiceEditingEnabled, forKey: "voiceEditingEnabled")
+            speech.vocabulary = recognitionTerms
+        }
+    }
+    /// Commands already reported for the current field, so each one is announced once.
+    @ObservationIgnored private var reportedEdits = 0
     private var spokenEnter: SpokenEnter? {
         spokenEnterEnabled ? SpokenEnter(setting: spokenEnterPhrase, shownDefault: String(localized: "엔터 보내기")) : nil
     }
@@ -97,7 +131,11 @@ final class AppModel {
     private(set) var inputDevices = AudioInputDevices.all()
     private(set) var defaultInputDevice = AudioInputDevices.defaultDevice()
     @ObservationIgnored private var deviceObservation: AudioInputDevicesObservation?
-    var transcript: String { withoutEnterCommand(speech.transcript) }
+    /// The dictation as it reads after voice edits; an earlier result when this run has no text of its own.
+    var transcript: String {
+        let raw = speech.transcript
+        return withoutEnterCommand(speech.hasCurrentTranscript ? edited(from: nil).text : raw)
+    }
     var status: String { speech.status }
     var isRecording: Bool { speech.isRecording }
     var isBusy: Bool { speech.isBusy }
@@ -118,6 +156,7 @@ final class AppModel {
         speech.onTurnFinal = { [weak self] text in self?.turnFinalized(text) }
         speech.vocabulary = recognitionTerms
         speech.silenceLimit = Self.limit(silenceStopSeconds)
+        speech.translationTarget = translationTarget
         deviceObservation = AudioInputDevices.observe { [weak self] in self?.refreshInputDevices() }
     }
 
@@ -136,17 +175,21 @@ final class AppModel {
         defaultInputDevice = AudioInputDevices.defaultDevice()
     }
 
-    private func mirror(_ text: String) {
+    private func mirror(_: String) {
+        let field = edited(from: cutMs)
+        if field.outcomes.count > reportedEdits, let last = field.outcomes.last { feedback = Self.describe(last) }
+        reportedEdits = field.outcomes.count
         if live == nil, awaitingTarget {
             guard acquireLiveTarget() else { return }
-            feedback = String(localized: "선택한 칸에 실시간으로 입력해요.")
+            routine(String(localized: "선택한 칸에 실시간으로 입력해요."))
         }
         guard let live else { return }
-        let outcome = live.sync(pending(withoutEnterCommand(text)))
+        let outcome = live.sync(withoutEnterCommand(field.text))
         switch outcome {
         case .applied: break
         case .failed:
             self.live = nil
+            liveTargetName = nil
             feedback = String(localized: "이 칸에는 실시간 입력을 할 수 없어요. 결과는 여기에 보관해요.")
         case .userEdited:
             moveOn(at: live.userActedAt ?? ProcessInfo.processInfo.systemUptime)
@@ -157,15 +200,36 @@ final class AppModel {
     }
 
     /// Never retype into the old spot; speech after `uptime` goes to the field the user settles in.
+    private func routine(_ text: String) {
+        feedback = text
+        feedbackIsRoutine = true
+    }
+
     private func moveOn(at uptime: TimeInterval) {
         live = nil
+        liveTargetName = nil
         cutMs = speech.audioMilliseconds(atUptime: uptime) ?? Int.max
         awaitingTarget = true
         feedback = String(localized: "입력 위치가 바뀌었어요. 입력 칸에 커서를 두고 말하면 그 칸에 이어서 써요.")
     }
 
-    private func pending(_ text: String) -> String {
-        cutMs.map { LiveTextEdit.continuation(of: text, after: speech.transcript(spokenBefore: $0)) } ?? text
+    /// The text for the field in use: words spoken after `cut` (all when nil), with voice edits applied.
+    private func edited(from cut: Int?) -> VoiceEditor.Result {
+        VoiceEditor.apply(speech.spokenTurns(from: cut), commandsEnabled: voiceEditingEnabled)
+    }
+
+    static func describe(_ outcome: VoiceEditor.Outcome) -> String {
+        switch outcome {
+        case .applied(.deleteLastSentence): String(localized: "마지막 문장을 지웠어요. '되돌려'라고 말하면 되돌려요.")
+        case .applied(.deleteLastWord): String(localized: "마지막 단어를 지웠어요. '되돌려'라고 말하면 되돌려요.")
+        case .applied(.clearAll): String(localized: "받아쓴 글을 모두 지웠어요. '되돌려'라고 말하면 되돌려요.")
+        case .applied(.undo): String(localized: "되돌렸어요.")
+        case .applied(.replace(let old, let new)):
+            String(localized: "'\(old)'을(를) '\(new)'(으)로 바꿨어요. '되돌려'라고 말하면 되돌려요.")
+        case .nothingToChange(.undo): String(localized: "되돌릴 것이 없어요.")
+        case .nothingToChange: String(localized: "고칠 글이 없어요.")
+        case .notFound(let old): String(localized: "'\(old)'을(를) 찾지 못해 바꾸지 않았어요.")
+        }
     }
 
     private func withoutEnterCommand(_ text: String) -> String {
@@ -173,12 +237,13 @@ final class AppModel {
     }
 
     /// The command only counts once Soniox has finalized it after a pause, so a phrase mid-sentence never stops dictation.
-    private func turnFinalized(_ text: String) {
-        if spokenEnter?.strip(text) != nil { speech.finish() }
+    private func turnFinalized(_: String) {
+        if spokenEnter?.strip(edited(from: nil).text) != nil { speech.finish() }
     }
 
-    private func complete(_ spoken: String) {
+    private func complete(_: String) {
         overlayVisible = true
+        let spoken = edited(from: nil).text
         let command = spokenEnter?.strip(spoken)
         let text = command ?? spoken
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -189,7 +254,8 @@ final class AppModel {
         // A key or click while the last words were being finalized counts like one during recording.
         if let live, let acted = live.userActedAt { moveOn(at: acted) }
         let movedOn = cutMs != nil
-        let rest = pending(text)
+        let field = edited(from: cutMs).text
+        let rest = spokenEnter?.strip(field) ?? field
         if live == nil, awaitingTarget, !rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             _ = acquireLiveTarget()
         }
@@ -201,7 +267,8 @@ final class AppModel {
             case .applied where command != nil:
                 feedback = live.pressReturn() ? String(localized: "입력하고 엔터를 눌렀어요.")
                     : String(localized: "입력 칸이 바뀌어 엔터는 누르지 않았어요.")
-            case .applied: feedback = empty ? String(localized: "인식된 음성이 없어 입력하지 않았어요.") : String(localized: "입력 칸에 받아쓰기를 입력했어요.")
+            case .applied where empty: feedback = String(localized: "인식된 음성이 없어 입력하지 않았어요.")
+            case .applied: routine(String(localized: "입력 칸에 받아쓰기를 입력했어요."))
             case .targetChanged: feedback = String(localized: "입력 위치가 바뀌어 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
             case .failed: feedback = String(localized: "마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
             case .userEdited: feedback = String(localized: "입력 칸을 직접 건드려서 마지막 수정을 넣지 못했어요. 복사하거나 붙여넣어 주세요.")
@@ -231,8 +298,10 @@ final class AppModel {
     private func prepareLiveTyping() {
         accessibilityGranted = insertion.isTrusted
         live = nil
+        liveTargetName = nil
         awaitingTarget = false
         cutMs = nil
+        reportedEdits = 0
         feedback = ""
         guard autoInsert else { return }
         guard accessibilityGranted else {
@@ -242,7 +311,7 @@ final class AppModel {
         // Started from our own settings window: give focus back to the app the user was typing in.
         if NSApp.isActive { NSApp.deactivate() }
         if acquireLiveTarget() {
-            feedback = String(localized: "선택한 칸에 실시간으로 입력해요.")
+            routine(String(localized: "선택한 칸에 실시간으로 입력해요."))
         } else {
             awaitingTarget = true
             feedback = String(localized: "입력할 칸을 클릭하면 그 칸에 바로 써요.")
@@ -254,6 +323,7 @@ final class AppModel {
         live = LiveTyper(target: target, insertion: insertion) { [weak self] chord in
             self?.shortcuts.bindings.keys.contains { $0.trigger == .key(chord) } ?? false
         }
+        liveTargetName = NSRunningApplication(processIdentifier: target.pid)?.localizedName
         awaitingTarget = false
         return true
     }
@@ -271,6 +341,7 @@ final class AppModel {
         let hadTyped = !(live?.typed.isEmpty ?? true)
         let removed = hadTyped && live?.sync("") == .applied
         live = nil
+        liveTargetName = nil
         awaitingTarget = false
         cutMs = nil
         speech.cancel()

@@ -17,7 +17,7 @@ struct DictationSession: Equatable {
 /// Status text is already localized by the engine and is only displayed, never parsed.
 struct DictationDisplayState: Equatable {
     enum Phase: Equatable { case idle, connecting, recording, finalizing, result, notice, cancelled, error }
-    enum Action: Hashable { case start, finish, cancel, settings, dismiss }
+    enum Action: Hashable { case start, finish, cancel, settings, dismiss, copy }
     /// Why retained text is not the current result.
     enum RetainedKind: Equatable { case previous, unfinished }
 
@@ -36,6 +36,14 @@ struct DictationDisplayState: Equatable {
     /// Earlier dictations below the current one, newest first. Never includes the text shown as the body or the
     /// labelled retained line.
     let history: [DictationRecord]
+    /// Older records behind the "more" button; offered only while no dictation runs.
+    let moreHistory: [DictationRecord]
+    /// The app live typing writes into, shown quietly beside the title while it matters.
+    let targetName: String?
+    /// The result already went into the field, so copy and paste step back to one header button.
+    let inserted: Bool
+    /// Words Soniox was unsure of, marked in the transcript when the setting is on.
+    let uncertainWords: [String]
 
     @MainActor init(model: AppModel) {
         self.init(speechPhase: model.speechPhase, hasError: model.hasError, needsSettings: model.needsSettings,
@@ -43,12 +51,15 @@ struct DictationDisplayState: Equatable {
                   transcript: model.transcript, feedback: model.feedback,
                   session: DictationSession(outcome: model.speechOutcome,
                                             hasCurrentTranscript: model.hasCurrentTranscript),
-                  toggleShortcut: model.shortcuts[.toggleDictation]?.label, history: model.history)
+                  toggleShortcut: model.shortcuts[.toggleDictation]?.label, history: model.history,
+                  feedbackIsRoutine: model.feedbackIsRoutine, targetName: model.liveTargetName,
+                  uncertainWords: model.uncertainWords)
     }
 
     init(speechPhase: SpeechPhase, hasError: Bool, needsSettings: Bool = false, status: String, transcript: String,
          feedback: String, session: DictationSession = DictationSession(), toggleShortcut: String? = "⌃⌥D",
-         history: [DictationRecord] = []) {
+         history: [DictationRecord] = [], feedbackIsRoutine: Bool = false, targetName: String? = nil,
+         uncertainWords: [String] = []) {
         self.needsSettings = needsSettings
         let fresh = session.freshTranscript(transcript)
         let phase: Phase
@@ -93,7 +104,11 @@ struct DictationDisplayState: Equatable {
         }
         self.retained = retained
         retainedKind = retained.isEmpty ? nil : kind
-        noteText = phase == .idle || phase == .error ? "" : feedback
+        // Routine confirmations (typing live, typed in) would only compete with the transcript; problems stay.
+        noteText = phase == .idle || phase == .error || feedbackIsRoutine ? "" : feedback
+        inserted = phase == .result && feedbackIsRoutine
+        self.targetName = phase == .recording || phase == .finalizing || inserted ? targetName : nil
+        self.uncertainWords = uncertainWords
         // The newest record is the finished result itself, or the "previous" line, until a new dictation starts.
         let older: ArraySlice<DictationRecord>
         switch phase {
@@ -102,6 +117,8 @@ struct DictationDisplayState: Equatable {
         default: older = retainedKind == .previous ? history.dropFirst() : history[...]
         }
         self.history = Array(older.prefix(NotchOverlayGeometry.historyRows))
+        let dictating = phase == .connecting || phase == .recording || phase == .finalizing
+        moreHistory = dictating ? [] : Array(older.dropFirst(NotchOverlayGeometry.historyRows))
     }
 
     /// What changes the overlay's layout, so motion follows these changes but not every revision of live text.
@@ -110,9 +127,11 @@ struct DictationDisplayState: Equatable {
         let history: [UUID]
         let hasTranscript: Bool
         let hasNote: Bool
+        let hasTarget: Bool
     }
     var layoutKey: LayoutKey {
-        LayoutKey(phase: phase, history: history.map(\.id), hasTranscript: !transcript.isEmpty, hasNote: !noteText.isEmpty)
+        LayoutKey(phase: phase, history: history.map(\.id), hasTranscript: !transcript.isEmpty, hasNote: !noteText.isEmpty,
+                  hasTarget: targetName != nil)
     }
 
     var isBusy: Bool { phase == .connecting || phase == .finalizing }
@@ -129,6 +148,7 @@ struct DictationDisplayState: Equatable {
         case .connecting, .finalizing: [.cancel]
         case .recording: [.finish, .cancel]
         case .error: [.dismiss]
+        case .result where inserted: [.copy, .start, .settings, .dismiss]
         case .idle, .result, .notice, .cancelled: [.start, .settings, .dismiss]
         }
     }
@@ -158,7 +178,7 @@ enum NotchOverlayGeometry {
     /// so the cap follows the system text size.
     static let maxTranscriptLines = 5
     /// Earlier dictations shown under the current one; older ones stay in `AppModel.history`.
-    static let historyRows = 3
+    static let historyRows = 1
     /// Used only until the five-line sample has been measured.
     static let fallbackMaxTranscriptHeight: CGFloat = 96
     /// Smallest hit area of an overlay button, whatever its visible size.
@@ -203,9 +223,15 @@ enum NotchOverlayGeometry {
 /// Motion values for the overlay. See DESIGN.md, "모션".
 enum OverlayMotion {
     /// Critically damped: it settles without overshoot, because nothing the user threw is moving.
-    static let appear = Animation.spring(response: 0.32, dampingFraction: 1)
+    /// The overlay sits where the Dynamic Island would: it morphs with a slightly underdamped spring, like the
+    /// island, so a change of state reads as one surface reshaping rather than content swapping.
+    static let appear = Animation.spring(response: 0.34, dampingFraction: 0.86)
     static let disappear = Animation.easeIn(duration: 0.14)
-    static let layout = Animation.spring(response: 0.36, dampingFraction: 1)
+    static let layout = Animation.spring(response: 0.38, dampingFraction: 0.82)
+    /// Pressing a control: quick to go down, a little bounce coming back.
+    static let press = Animation.spring(response: 0.2, dampingFraction: 0.6)
+    /// Live words settle into place instead of popping in.
+    static let liveText = Animation.smooth(duration: 0.2)
     /// Reduce Motion keeps only a short cross-fade.
     static let reduced = Animation.easeOut(duration: 0.15)
     /// The panel frame follows the content with a fast start and a soft settle, close to `layout`.
@@ -215,8 +241,9 @@ enum OverlayMotion {
     static let hiddenScale: CGFloat = 0.94
     static let hiddenOffset: CGFloat = -6
     /// Each step down the history list is dimmer and a little smaller.
-    static func historyOpacity(depth: Int) -> Double { max(0.3, 0.62 - Double(depth) * 0.14) }
-    static func historyScale(depth: Int) -> CGFloat { 1 - CGFloat(depth) * 0.03 }
+    static func historyOpacity(depth: Int) -> Double { max(0.38, 0.72 - Double(depth) * 0.14) }
+    /// Smaller by one system text style per step, so the sizes still follow the user's text size.
+    static func historyFont(depth: Int) -> Font { [Font.callout, .subheadline, .footnote][min(max(depth, 0), 2)] }
 }
 
 /// Runs an action once a time limit passes without another `restart`.
@@ -565,14 +592,28 @@ struct NotchOverlayView: View {
         HStack(spacing: 10) {
             indicator(state)
                 .frame(width: 20, height: 20)
-            Text(state.title)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.92))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .help(state.title)
-                .accessibilityIdentifier("notch-status")
+            HStack(spacing: 6) {
+                Text(state.title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .contentTransition(.opacity)
+                    .help(state.title)
+                    .accessibilityIdentifier("notch-status")
+                if let target = state.targetName {
+                    Label(target, systemImage: "arrow.turn.down.right")
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .lineLimit(1)
+                        .layoutPriority(-1)
+                        .transition(.opacity)
+                        .accessibilityLabel(String(localized: "입력 중인 앱: \(target)"))
+                        .accessibilityIdentifier("notch-target")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             // Buttons carry a transparent margin around their visible circle, so the gap looks like 6 pt.
             HStack(spacing: 2) {
                 ForEach(state.headerActions, id: \.self) { action in
@@ -592,13 +633,11 @@ struct NotchOverlayView: View {
             if state.isBusy {
                 ProgressView().controlSize(.small).tint(.white)
             } else if state.phase == .recording {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(Color.red)
-                    .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
+                LevelMeter(level: { model.inputLevel })
             } else {
                 Image(systemName: state.symbol)
                     .foregroundStyle(state.phase == .error ? Color.orange : Color.white.opacity(0.82))
+                    .contentTransition(.symbolEffect(.replace))
             }
         }
         .accessibilityElement()
@@ -634,7 +673,7 @@ struct NotchOverlayView: View {
             }
         }
         if !state.transcript.isEmpty {
-            TranscriptViewport(text: state.transcript, followsTail: state.followsTail)
+            TranscriptViewport(text: state.transcript, followsTail: state.followsTail, uncertain: state.uncertainWords)
                 .transition(entering)
         }
         if !state.noteText.isEmpty {
@@ -649,11 +688,11 @@ struct NotchOverlayView: View {
         }
         if let kind = state.retainedKind {
             retainedLine(state.retained, kind: kind)
-        } else if state.offersTranscriptActions {
+        } else if state.offersTranscriptActions, !state.inserted {
             transcriptActions
         }
         if !state.history.isEmpty {
-            historyList(state.history)
+            HistoryList(records: state.history, more: state.moreHistory, entering: entering) { model.copyHistory($0) }
         }
     }
 
@@ -662,37 +701,6 @@ struct NotchOverlayView: View {
         reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top))
     }
 
-    /// Earlier dictations, pushed down by the new one: dimmer and a little smaller the older they are.
-    private func historyList(_ records: [DictationRecord]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(Array(records.enumerated()), id: \.element.id) { depth, record in
-                HStack(alignment: .center, spacing: 8) {
-                    Text(record.text)
-                        .font(.callout)
-                        .foregroundStyle(.white.opacity(OverlayMotion.historyOpacity(depth: depth)))
-                        .lineLimit(2)
-                        .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .scaleEffect(reduceMotion ? 1 : OverlayMotion.historyScale(depth: depth), anchor: .leading)
-                        .help(record.text)
-                        .accessibilityLabel(String(localized: "이전 받아쓰기") + ": " + record.text)
-                        .accessibilityIdentifier("notch-history-row")
-                    OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "이 받아쓰기 복사"),
-                                      id: "notch-history-copy", prominent: false) {
-                        model.copyHistory(record)
-                    }
-                    .opacity(OverlayMotion.historyOpacity(depth: depth) + 0.2)
-                }
-                .transition(entering)
-            }
-        }
-        .padding(.top, 8)
-        // A hairline keeps earlier dictations apart from the current one and its buttons.
-        .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.08)).frame(height: 1) }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "받아쓰기 기록"))
-        .accessibilityIdentifier("notch-history")
-    }
 
     private var transcriptActions: some View {
         HStack(spacing: 8) {
@@ -739,6 +747,7 @@ struct NotchOverlayView: View {
         case .cancel: onCancel()
         case .settings: model.openSettings()
         case .dismiss: model.dismissOverlay()
+        case .copy: model.copyTranscript()
         }
     }
 
@@ -748,6 +757,7 @@ struct NotchOverlayView: View {
         case .finish: "stop.fill"
         case .cancel, .dismiss: "xmark"
         case .settings: "gearshape"
+        case .copy: "doc.on.doc"
         }
     }
 
@@ -758,6 +768,7 @@ struct NotchOverlayView: View {
         case .cancel: state.phase == .recording ? String(localized: "녹음 취소") : String(localized: "받아쓰기 취소")
         case .settings: String(localized: "설정 열기")
         case .dismiss: String(localized: "닫기")
+        case .copy: String(localized: "복사")
         }
     }
 
@@ -776,6 +787,122 @@ struct NotchOverlayView: View {
         case .cancel: "notch-cancel"
         case .settings: "notch-settings"
         case .dismiss: "notch-dismiss"
+        case .copy: "notch-copy"
+        }
+    }
+}
+
+/// Recording indicator: bars that follow the microphone, so the user sees at a glance that their voice arrives.
+/// Reduce Motion freezes it into a still red mark.
+private struct LevelMeter: View {
+    let level: @MainActor () -> Float
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private static let shape: [CGFloat] = [0.55, 1, 0.8, 0.45]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+            // Square root spreads quiet speech over the bars; peaks above about 0.4 fill them.
+            let loudness = reduceMotion ? 0.35 : min(1, CGFloat(level()).squareRoot() * 1.6)
+            let time = context.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 2) {
+                ForEach(Self.shape.indices, id: \.self) { index in
+                    let wobble = reduceMotion ? 1 : 0.8 + 0.2 * sin(time * 9 + Double(index) * 1.7)
+                    Capsule()
+                        .fill(Color.red)
+                        .frame(width: 3, height: 4 + 12 * loudness * Self.shape[index] * wobble)
+                }
+            }
+            .animation(reduceMotion ? nil : .spring(response: 0.18, dampingFraction: 0.65), value: loudness)
+        }
+        .frame(width: 20, height: 20)
+    }
+}
+
+/// Earlier dictations, pushed down by the new one: a labelled inset group, so they never read as the current text,
+/// with each older row dimmer and one text style smaller. "More" opens the rest in a scrolling list.
+private struct HistoryList: View {
+    let records: [DictationRecord]
+    let more: [DictationRecord]
+    let entering: AnyTransition
+    let copy: (DictationRecord) -> Void
+    /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
+    private let showsAll = State(initialValue: false)
+    private let listHeight = State(initialValue: CGFloat(0))
+    static let expandedMaxHeight: CGFloat = 220
+
+    var body: some View {
+        let expanded = showsAll.wrappedValue && !more.isEmpty
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center) {
+                Text(String(localized: "받아쓰기 기록"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 0)
+                if !more.isEmpty {
+                    Button {
+                        showsAll.wrappedValue.toggle()
+                    } label: {
+                        Label(expanded ? String(localized: "접기") : String(localized: "더보기 \(more.count)"),
+                              systemImage: expanded ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(OverlayControlStyle(shape: .capsule, prominent: false))
+                    .accessibilityValue(expanded ? String(localized: "펼침") : String(localized: "접힘"))
+                    .accessibilityIdentifier("notch-history-more")
+                }
+            }
+            if expanded {
+                ScrollView(.vertical) {
+                    rows(records + more)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight.wrappedValue = $0 }
+                }
+                .contentMargins(.trailing, 14, for: .scrollContent)
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(height: min(max(listHeight.wrappedValue, 1), Self.expandedMaxHeight))
+                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            } else {
+                rows(records)
+                    .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+        .padding(.top, 2)
+        // A new dictation folds the list back to its three newest rows.
+        .onChange(of: more.isEmpty) { _, empty in if empty { showsAll.wrappedValue = false } }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(String(localized: "받아쓰기 기록"))
+        .accessibilityIdentifier("notch-history")
+    }
+
+    private func rows(_ shown: [DictationRecord]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(shown.enumerated()), id: \.element.id) { depth, record in
+                VStack(spacing: 0) {
+                    if depth > 0 {
+                        Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.leading, 10)
+                    }
+                    HStack(alignment: .center, spacing: 8) {
+                        Text(record.text)
+                            .font(OverlayMotion.historyFont(depth: depth))
+                            .foregroundStyle(.white.opacity(OverlayMotion.historyOpacity(depth: depth)))
+                            .lineLimit(2)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .help(record.text)
+                            .accessibilityLabel(String(localized: "이전 받아쓰기") + ": " + record.text)
+                            .accessibilityIdentifier("notch-history-row")
+                        OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "이 받아쓰기 복사"),
+                                          id: "notch-history-copy", prominent: false) {
+                            copy(record)
+                        }
+                    }
+                    .padding(.leading, 10)
+                    .padding(.trailing, 2)
+                    .padding(.vertical, 3)
+                }
+                .transition(entering)
+            }
         }
     }
 }
@@ -784,9 +911,24 @@ struct NotchOverlayView: View {
 private struct TranscriptViewport: View {
     let text: String
     let followsTail: Bool
+    var uncertain: [String] = []
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
     private let textHeight = State(initialValue: CGFloat(19))
     private let maxHeight = State(initialValue: NotchOverlayGeometry.fallbackMaxTranscriptHeight)
+    /// Underlines, with dots, each word Soniox was unsure of, found in reading order.
+    static func marked(_ text: String, uncertain: [String]) -> AttributedString {
+        var result = AttributedString(text)
+        var searchFrom = result.startIndex
+        for word in uncertain {
+            guard let range = result[searchFrom...].range(of: word) else { continue }
+            result[range].underlineStyle = Text.LineStyle(pattern: .dot, color: .orange)
+            result[range].foregroundColor = .white.opacity(0.75)
+            searchFrom = range.upperBound
+        }
+        return result
+    }
+
     private static let lineSample = Array(repeating: "Ag", count: NotchOverlayGeometry.maxTranscriptLines)
         .joined(separator: "\n")
 
@@ -796,13 +938,17 @@ private struct TranscriptViewport: View {
 
     var body: some View {
         ScrollView(.vertical) {
-            styled(Text(text))
+            styled(Text(Self.marked(text, uncertain: uncertain)))
                 .foregroundStyle(.white)
+                .contentTransition(reduceMotion ? .identity : .interpolate)
+                .animation(reduceMotion ? nil : OverlayMotion.liveText, value: text)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { textHeight.wrappedValue = $0 }
                 .accessibilityIdentifier("notch-transcript")
         }
+        // The overlay scroller draws over content; a trailing gutter keeps it off the text.
+        .contentMargins(.trailing, 14, for: .scrollContent)
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.automatic)
         .defaultScrollAnchor(followsTail ? .bottom : .top)
@@ -864,6 +1010,7 @@ struct OverlayControlStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let label = configuration.label
             .foregroundStyle(.white.opacity(configuration.isPressed || prominent ? 1 : 0.78))
+        let pressed = configuration.isPressed
         let base = prominent ? 0.18 : 0.08
         let fill = Color.white.opacity(configuration.isPressed ? 0.26 : base)
         return Group {
@@ -881,5 +1028,8 @@ struct OverlayControlStyle: ButtonStyle {
                     .contentShape(Rectangle())
             }
         }
+        // The press is answered at once by the control itself; a scale this small needs no Reduce Motion variant.
+        .scaleEffect(pressed ? 0.92 : 1)
+        .animation(OverlayMotion.press, value: pressed)
     }
 }

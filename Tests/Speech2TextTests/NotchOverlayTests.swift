@@ -203,22 +203,51 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
     @Test func startingANewDictationMovesTheResultIntoHistory() {
         let result = display(.idle, transcript: previous, session: session(.completed, current: true), history: records)
         #expect(result.transcript == previous)
-        #expect(result.history == Array(records[1...3]))
+        #expect(result.history == [records[1]])
         let connecting = display(.preparing, transcript: previous, session: session(), history: records)
         #expect(connecting.transcript.isEmpty)
-        #expect(connecting.history == Array(records[0...2]))
+        #expect(connecting.history == [records[0]])
         #expect(connecting.isExpanded)
         let recording = display(.recording, transcript: live, session: session(current: true), history: records)
         #expect(recording.transcript == live)
-        #expect(recording.history == Array(records[0...2]))
+        #expect(recording.history == [records[0]])
+    }
+
+    /// Owner request: the overlay stays calm. Routine confirmations are not shown, and a result already typed into the
+    /// field offers copy as one header button instead of a row of buttons; problems still show.
+    @Test func routineConfirmationsStayOutOfTheWay() {
+        let typed = DictationDisplayState(speechPhase: .idle, hasError: false, status: "마쳤어요", transcript: live,
+                                          feedback: "입력했어요", session: session(.completed, current: true),
+                                          feedbackIsRoutine: true, targetName: "Discord")
+        #expect(typed.noteText.isEmpty)
+        #expect(typed.inserted)
+        #expect(typed.headerActions == [.copy, .start, .settings, .dismiss])
+        #expect(typed.targetName == "Discord")
+        let kept = display(.idle, transcript: live, feedback: "붙여넣어 주세요", session: session(.completed, current: true))
+        #expect(kept.noteText == "붙여넣어 주세요")
+        #expect(!kept.inserted)
+        #expect(!kept.headerActions.contains(.copy))
+        let listening = DictationDisplayState(speechPhase: .recording, hasError: false, status: "듣고 있어요", transcript: live,
+                                              feedback: "실시간으로 입력해요", session: session(current: true),
+                                              feedbackIsRoutine: true, targetName: "Notes")
+        #expect(listening.noteText.isEmpty)
+        #expect(listening.targetName == "Notes")
+    }
+
+    /// Owner request: after a dictation the rest of the history stays reachable behind "more"; never while dictating.
+    @Test func olderHistoryWaitsBehindMoreOnlyWhenNotDictating() {
+        let result = display(.idle, transcript: previous, session: session(.completed, current: true), history: records)
+        #expect(result.moreHistory == Array(records[2...4]))
+        let recording = display(.recording, transcript: live, session: session(current: true), history: records)
+        #expect(recording.moreHistory.isEmpty)
     }
 
     @Test func historyNeverRepeatsTheLabelledPreviousLineAndHidesWhenIdle() {
         let notice = display(.idle, transcript: previous, feedback: "인식 없음", session: session(.empty), history: records)
         #expect(notice.retained == previous)
-        #expect(notice.history == Array(records[1...3]))
+        #expect(notice.history == [records[1]])
         let unfinished = display(.idle, error: true, transcript: live, session: session(.failed, current: true), history: records)
-        #expect(unfinished.history == Array(records[0...2]))
+        #expect(unfinished.history == [records[0]])
         let idle = display(.idle, transcript: "", session: session(), history: records)
         #expect(idle.history.isEmpty)
         #expect(!idle.isExpanded)

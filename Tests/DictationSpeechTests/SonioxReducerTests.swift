@@ -47,6 +47,23 @@ extension SonioxReducerTests {
   #expect(try r.reduce(Data(#"{"tokens":[]}"#.utf8)) == [.update(.init(turnID: "soniox-0", revision: 2, text: "", isFinal: false))])
  }
 
+ /// Experimental translation: only translated tokens are typed; without it they are never typed.
+ @Test func translationModeTypesOnlyTheTranslation() throws {
+  let frame = Data(#"{"tokens":[{"text":"안녕","is_final":true,"start_ms":0,"translation_status":"original"},{"text":"Hello","is_final":true,"translation_status":"translation"}]}"#.utf8)
+  var translating = SonioxTranscriptReducer(translating: true)
+  var plain = SonioxTranscriptReducer()
+  let texts = { (events: [TranscriptEvent]) in events.compactMap { e -> String? in if case .update(let u) = e { return u.text }; return nil } }
+  #expect(texts(try translating.reduce(frame)) == ["Hello"])
+  #expect(texts(try plain.reduce(frame)) == ["안녕"])
+ }
+
+ @Test func tokensKeepTheirConfidence() throws {
+  var r = SonioxTranscriptReducer()
+  let events = try r.reduce(Data(#"{"tokens":[{"text":"스피치","is_final":false,"start_ms":10,"confidence":0.42}]}"#.utf8))
+  guard case .update(let update) = events.first else { Issue.record("no update"); return }
+  #expect(update.spans == [TimedText(text: "스피치", startMs: 10, confidence: 0.42)])
+ }
+
  /// Each word keeps the time it was spoken, so text can be split where the user acted, not where it arrived.
  @Test func spansKeepWhenEachWordWasSpoken() throws {
   var r = SonioxTranscriptReducer()

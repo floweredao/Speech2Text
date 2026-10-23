@@ -53,6 +53,9 @@ final class AudioPipeline: @unchecked Sendable {
     private var finished = false
     private var heardSignal = false
     private var receivedBytes = 0
+    private var level: Float = 0
+    /// Peak of the latest received audio, 0-1.
+    var inputLevel: Float { lock.lock(); defer { lock.unlock() }; return level }
     /// Seconds of 16 kHz mono 16-bit audio received so far.
     var capturedDuration: TimeInterval { lock.lock(); defer { lock.unlock() }; return Double(receivedBytes) / 32_000 }
     private var signalWaiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
@@ -102,6 +105,7 @@ final class AudioPipeline: @unchecked Sendable {
             resumeWaiters()
         }
         receivedBytes += data.count
+        level = Self.peak(data)
         pending.append(data)
         while pending.count >= chunkBytes {
             let chunk = Data(pending.prefix(chunkBytes))
@@ -109,6 +113,14 @@ final class AudioPipeline: @unchecked Sendable {
             if case .dropped = continuation.yield(chunk) { throw AppError.audioOverflow }
         }
     }
+    private static func peak(_ data: Data) -> Float {
+        var peak: Int32 = 0
+        data.withUnsafeBytes { raw in
+            for sample in raw.bindMemory(to: Int16.self) { peak = max(peak, abs(Int32(Int16(littleEndian: sample)))) }
+        }
+        return Float(peak) / Float(Int16.max)
+    }
+
     /// True once audio other than digital silence arrives. A refused or dead device never gets there.
     func waitForSignal(timeout: Duration) async -> Bool {
         let id = UUID()
@@ -169,6 +181,7 @@ final class AudioPipeline: @unchecked Sendable {
     init(deviceUID: String? = nil) { self.deviceUID = deviceUID }
     var promptsForPermission: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined }
     var capturedDuration: TimeInterval { pipeline?.capturedDuration ?? 0 }
+    var inputLevel: Float { pipeline?.inputLevel ?? 0 }
     func start(format: CaptureFormat) async throws -> AsyncThrowingStream<Data, Error> {
         await stop()
         let id = UUID(); generation = id

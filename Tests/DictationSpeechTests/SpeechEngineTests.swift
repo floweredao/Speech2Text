@@ -21,7 +21,9 @@ actor TestSocket: SocketTransport {
     /// Signalled for every audio frame, so a test can wait for audio while it holds the main actor.
     nonisolated let audioSent = DispatchSemaphore(value: 0)
 
-    func connect(url: URL) {
+    private(set) var apiKey: String?
+    func connect(url: URL, apiKey: String) {
+        self.apiKey = apiKey
         connections += 1
         connectWaiters.forEach { $0.resume() }
         connectWaiters.removeAll()
@@ -214,10 +216,25 @@ actor TestCredentials: CredentialStoring {
         await socket.waitUntilSent(.binary(pcm))
         await socket.push(.text(#"{"tokens":[{"text":"첫","is_final":true,"start_ms":0},{"text":" 문장","is_final":true,"start_ms":400},{"text":"<end>","is_final":true},{"text":" 둘째","is_final":false,"start_ms":2100},{"text":" 문장","is_final":false,"start_ms":2600}]}"#))
         try await waitUntil { engine.transcript == "첫 문장 둘째 문장" }
-        #expect(engine.transcript(spokenBefore: 2500) == "첫 문장 둘째")
-        #expect(engine.transcript(spokenBefore: 300) == "첫")
-        #expect(engine.transcript(spokenBefore: 0) == "")
-        #expect(engine.transcript(spokenBefore: 9000) == engine.transcript)
+        #expect(engine.spokenTurns(from: 2500) == [SpokenTurn(text: " 문장", isFinal: false)])
+        #expect(engine.spokenTurns(from: 300) == [SpokenTurn(text: " 문장", isFinal: true),
+                                                  SpokenTurn(text: " 둘째 문장", isFinal: false)])
+        #expect(engine.spokenTurns(from: 9000).isEmpty)
+        #expect(engine.spokenTurns(from: nil) == [SpokenTurn(text: "첫 문장", isFinal: true),
+                                                  SpokenTurn(text: " 둘째 문장", isFinal: false)])
+        engine.cancel()
+    }
+
+    /// A word already under way when the user moved on belongs to the old field, even when it was cut into tokens.
+    @Test func aWordCutInTokensAtTheSplitStaysBeforeIt() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        await socket.waitUntilSent(.binary(pcm))
+        await socket.push(.text(#"{"tokens":[{"text":"격리된","is_final":false,"start_ms":0},{"text":" 바다","is_final":false,"start_ms":500},{"text":"쓰기","is_final":false,"start_ms":800},{"text":" 입력","is_final":false,"start_ms":1200}]}"#))
+        try await waitUntil { engine.transcript == "격리된 바다쓰기 입력" }
+        #expect(engine.spokenTurns(from: 700) == [SpokenTurn(text: " 입력", isFinal: false)])
         engine.cancel()
     }
 
@@ -817,7 +834,10 @@ struct SonioxTransportTests {
             Issue.record("Missing configuration"); return
         }
         let config = try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
-        #expect(config["api_key"] as? String == "fixture")
+        // Soniox refuses a key in the start message from 2027-01-15; it rides on the upgrade request.
+        #expect(config["api_key"] == nil)
+        #expect(await socket.apiKey == "fixture")
+        #expect(config["translation"] == nil)
         #expect(config["audio_format"] as? String == "pcm_s16le")
         #expect(config["sample_rate"] as? Int == 16000)
         #expect(config["model"] as? String == "stt-rt-v5")
