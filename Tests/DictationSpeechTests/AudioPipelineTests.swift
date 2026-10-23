@@ -121,3 +121,33 @@ extension AudioPipelineTests {
         #expect(data.suffix(2) == Data([0, 192]))
     }
 }
+
+extension AudioPipelineTests {
+    /// Pieces of any size leave as 20 ms chunks in arrival order, with the short tail flushed at the end.
+    @Test func smallPiecesAreRechunkedInOrder() async throws {
+        let pipeline = try AudioPipeline(format: .pcm16Mono16k)
+        let audio = Data((0..<1_500).map { UInt8(truncatingIfNeeded: $0) })
+        for start in stride(from: 0, to: audio.count, by: 300) {
+            pipeline.receivePCM(Data(audio[start..<min(start + 300, audio.count)]))
+        }
+        pipeline.finish()
+        var chunks: [Data] = []
+        for try await chunk in pipeline.stream { chunks.append(chunk) }
+        let joined = chunks.reduce(into: Data()) { $0.append($1) }
+        #expect(chunks.map(\.count) == [640, 640, 220])
+        #expect(joined == audio)
+    }
+
+    @Test func durationAndLevelFollowTheReceivedSamples() throws {
+        let pipeline = try AudioPipeline(format: .pcm16Mono16k)
+        #expect(pipeline.capturedDuration == 0)
+        #expect(pipeline.inputLevel == 0)
+        // 8,000 samples of 0x4000 (half scale) are half a second of 16 kHz mono audio.
+        pipeline.receivePCM(Data(Array(repeating: [UInt8(0x00), 0x40], count: 8_000).joined()))
+        #expect(pipeline.capturedDuration == 0.5)
+        #expect(pipeline.inputLevel == Float(16_384) / Float(Int16.max))
+        pipeline.receivePCM(Data(repeating: 0, count: 640))
+        #expect(pipeline.capturedDuration == 0.52)
+        #expect(pipeline.inputLevel == 0)
+    }
+}

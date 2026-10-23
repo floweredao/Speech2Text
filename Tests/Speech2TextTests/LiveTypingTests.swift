@@ -69,6 +69,16 @@ import Testing
         #expect(LiveTyper.keystrokes(for: LiveTextEdit(removed: "", insert: "")).isEmpty)
     }
 
+    /// Korean revisions often change only the last syllable (a final consonant arrives, or a vowel is corrected);
+    /// exactly that syllable is replaced, with one backspace per character, never per code unit.
+    @Test func syllableRevisionsReplaceWholeCharacters() {
+        #expect(LiveTextEdit.between("오늘은 회으", "오늘은 회의") == LiveTextEdit(removed: "으", insert: "의"))
+        #expect(LiveTextEdit.between("하", "한") == LiveTextEdit(removed: "하", insert: "한"))
+        #expect(LiveTextEdit.between("👍", "👍🏽") == LiveTextEdit(removed: "👍", insert: "👍🏽"))
+        #expect(LiveTyper.keystrokes(for: LiveTextEdit.between("가나다 👍🏽", "가"))
+            == Array(repeating: LiveTyper.Keystroke(key: 51, text: "\u{8}"), count: 4))
+    }
+
     @Test func lineBreaksNeverReachTheTarget() {
         #expect(LiveTextEdit.sanitize("첫 줄\n둘째 줄\r\n끝") == "첫 줄 둘째 줄  끝")
     }
