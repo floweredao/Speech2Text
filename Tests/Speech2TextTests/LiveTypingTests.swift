@@ -60,6 +60,15 @@ import Testing
         #expect(LiveTyper.startMode(selectionLength: 0) == .accessibility)
     }
 
+    /// Regression: a character longer than one keystroke's 16 UTF-16 units was preceded by an empty keystroke,
+    /// a key event on key code 0 (the A key) that carried no text.
+    @Test func aCharacterLongerThanOneKeystrokeIsSentWholeWithoutAnEmptyOne() {
+        let accented = "a" + String(repeating: "\u{301}", count: 16)
+        #expect(accented.count == 1 && accented.utf16.count == 17)
+        #expect(LiveTyper.keystrokes(for: LiveTextEdit(removed: "", insert: accented + "가")).map(\.text) == [accented, "가"])
+        #expect(LiveTyper.keystrokes(for: LiveTextEdit(removed: "", insert: "")).isEmpty)
+    }
+
     @Test func lineBreaksNeverReachTheTarget() {
         #expect(LiveTextEdit.sanitize("첫 줄\n둘째 줄\r\n끝") == "첫 줄 둘째 줄  끝")
     }
