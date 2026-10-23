@@ -65,6 +65,21 @@ final class AppModel {
             speech.vocabulary = recognitionTerms
         }
     }
+    /// Choices for the two automatic timeouts, in seconds; 0 turns one off.
+    static let timeoutChoices = [0, 10, 15, 20, 30, 45, 60, 120, 180, 300]
+    /// A recording with no newly recognized speech for this long finishes by itself.
+    var silenceStopSeconds = UserDefaults.standard.object(forKey: "silenceStopSeconds") as? Int ?? 30 {
+        didSet {
+            UserDefaults.standard.set(silenceStopSeconds, forKey: "silenceStopSeconds")
+            speech.silenceLimit = Self.limit(silenceStopSeconds)
+        }
+    }
+    /// The overlay closes by itself after this long without dictation or any change on it.
+    var overlayAutoCloseSeconds = UserDefaults.standard.object(forKey: "overlayAutoCloseSeconds") as? Int ?? 30 {
+        didSet { UserDefaults.standard.set(overlayAutoCloseSeconds, forKey: "overlayAutoCloseSeconds") }
+    }
+    var overlayAutoCloseLimit: Duration? { Self.limit(overlayAutoCloseSeconds) }
+    static func limit(_ seconds: Int) -> Duration? { seconds > 0 ? .seconds(seconds) : nil }
     private(set) var dictionary = AppModel.storedDictionary() {
         didSet {
             UserDefaults.standard.set(dictionary, forKey: "dictionaryTerms")
@@ -102,6 +117,7 @@ final class AppModel {
         speech.onFinal = { [weak self] text in self?.complete(text) }
         speech.onTurnFinal = { [weak self] text in self?.turnFinalized(text) }
         speech.vocabulary = recognitionTerms
+        speech.silenceLimit = Self.limit(silenceStopSeconds)
         deviceObservation = AudioInputDevices.observe { [weak self] in self?.refreshInputDevices() }
     }
 

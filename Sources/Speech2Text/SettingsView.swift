@@ -301,11 +301,37 @@ struct SettingsView: View {
                     .multilineTextAlignment(.trailing)
                     .accessibilityIdentifier("settings-spoken-enter-phrase")
             }
+            Picker(selection: $model.silenceStopSeconds) {
+                timeoutChoices
+            } label: {
+                Text("말이 없으면 받아쓰기 마치기")
+                Text("새로 인식된 말이 없으면 들은 데까지 마쳤요.")
+            }
+            .accessibilityIdentifier("settings-silence-stop")
+            Picker(selection: $model.overlayAutoCloseSeconds) {
+                timeoutChoices
+            } label: {
+                Text("화면 위쪽 표시 자동으로 닫기")
+                Text("받아쓰기 없이 그대로면 닫아요. 포인터가 위에 있으면 기다려요.")
+            }
+            .accessibilityIdentifier("settings-overlay-auto-close")
             LabeledContent("화면 위쪽 표시") {
                 Button("열기") { model.showOverlay() }
                     .accessibilityIdentifier("settings-show-overlay")
             }
         }
+    }
+
+    private var timeoutChoices: some View {
+        ForEach(AppModel.timeoutChoices, id: \.self) { seconds in
+            Text(Self.timeoutLabel(seconds)).tag(seconds)
+        }
+    }
+
+    static func timeoutLabel(_ seconds: Int) -> String {
+        if seconds <= 0 { return String(localized: "끄기") }
+        if seconds < 60 { return String(localized: "\(seconds)초") }
+        return String(localized: "\(seconds / 60)분")
     }
 
     private var vocabularySection: some View {

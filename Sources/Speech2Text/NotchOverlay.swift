@@ -116,6 +116,7 @@ struct DictationDisplayState: Equatable {
     }
 
     var isBusy: Bool { phase == .connecting || phase == .finalizing }
+    var isDictating: Bool { phase == .connecting || phase == .recording || phase == .finalizing }
     var followsTail: Bool { phase == .recording || phase == .finalizing }
     var isExpanded: Bool {
         !message.isEmpty || !transcript.isEmpty || !retained.isEmpty || !noteText.isEmpty || !history.isEmpty
@@ -218,6 +219,24 @@ enum OverlayMotion {
     static func historyScale(depth: Int) -> CGFloat { 1 - CGFloat(depth) * 0.03 }
 }
 
+/// Runs an action once a time limit passes without another `restart`.
+@MainActor final class IdleCountdown {
+    private var task: Task<Void, Never>?
+
+    func restart(after limit: Duration, _ action: @escaping @MainActor () -> Void) {
+        task?.cancel()
+        task = Task {
+            do { try await Task.sleep(for: limit) } catch { return }
+            action()
+        }
+    }
+
+    func stop() {
+        task?.cancel()
+        task = nil
+    }
+}
+
 /// Whether the overlay is shown or on its way out; the view animates its entrance and exit from it.
 @MainActor @Observable final class OverlayPresence {
     var shown = false
@@ -243,6 +262,7 @@ final class NotchOverlayController: NSObject {
     /// Bumped by every show and hide, so an exit animation that finishes after a new show never orders the panel out.
     private var visibilityGeneration = 0
     private var hiding = false
+    private let autoClose = IdleCountdown()
     private var running = false
     private var observationGeneration = UUID()
     private var selectedScreen: NSScreen?
@@ -281,6 +301,7 @@ final class NotchOverlayController: NSObject {
     }
 
     func stop() {
+        autoClose.stop()
         running = false
         observationGeneration = UUID()
         NotificationCenter.default.removeObserver(self)
@@ -306,6 +327,7 @@ final class NotchOverlayController: NSObject {
     private func synchronize() {
         let state = DictationDisplayState(model: model)
         guard model.overlayVisible else {
+            autoClose.stop()
             hide()
             announcedPhase = nil
             dragStart = nil
@@ -316,6 +338,26 @@ final class NotchOverlayController: NSObject {
         expanded = state.isExpanded
         show(animateResize: resized)
         announce(state)
+        // Every change on the overlay restarts the wait, so it only closes after the user has left it alone.
+        if let limit = Self.autoCloseLimit(state, setting: model.overlayAutoCloseLimit) {
+            autoClose.restart(after: limit) { [weak self] in self?.autoCloseExpired(after: limit) }
+        } else {
+            autoClose.stop()
+        }
+    }
+
+    /// The overlay closes by itself only while no dictation runs and the setting is on.
+    nonisolated static func autoCloseLimit(_ state: DictationDisplayState, setting: Duration?) -> Duration? {
+        state.isDictating ? nil : setting
+    }
+
+    /// Never closes under the pointer: the user is about to click or still reading.
+    private func autoCloseExpired(after limit: Duration) {
+        if let panel, NSMouseInRect(NSEvent.mouseLocation, panel.frame, false) {
+            autoClose.restart(after: limit) { [weak self] in self?.autoCloseExpired(after: limit) }
+            return
+        }
+        model.dismissOverlay()
     }
 
     /// The user's close button drops the dragged position; hiding for focused Settings keeps it.

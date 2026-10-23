@@ -224,6 +224,19 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(!idle.isExpanded)
     }
 
+    /// Owner request: the overlay closes by itself only while no dictation runs, and never when the setting is off.
+    @Test func overlayAutoClosesOnlyWhenNotDictating() {
+        let limit = Duration.seconds(30)
+        for phase in [SpeechPhase.preparing, .recording, .finishing] {
+            #expect(NotchOverlayController.autoCloseLimit(display(phase, transcript: live, session: session(current: true)),
+                                                          setting: limit) == nil)
+        }
+        let result = display(.idle, transcript: live, session: session(.completed, current: true))
+        #expect(NotchOverlayController.autoCloseLimit(result, setting: limit) == limit)
+        #expect(NotchOverlayController.autoCloseLimit(display(.idle, transcript: "", session: session()), setting: limit) == limit)
+        #expect(NotchOverlayController.autoCloseLimit(result, setting: nil) == nil)
+    }
+
     /// Regression: cancelling during finalization was shown as a finished result.
     @Test func cancelledRunShowsOnlyThePreviousResult() {
         let state = display(.idle, transcript: previous, feedback: "취소했어요", session: session(.cancelled))
@@ -303,6 +316,34 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(SetupReadiness(hasKey: true, microphone: .granted, controlGranted: true).missingCount == 0)
         #expect(SetupReadiness(hasKey: true, microphone: .notDetermined, controlGranted: true).missingCount == 0)
         #expect(SetupReadiness(hasKey: false, microphone: .denied, controlGranted: false).missingCount == 3)
+    }
+}
+
+// MARK: Timeouts
+
+@MainActor @Suite(.timeLimit(.minutes(1))) struct TimeoutTests {
+    /// Time is the behavior under test: a restart postpones the action, and stop cancels it.
+    @Test func countdownFiresOnceAfterTheLastRestart() async throws {
+        let countdown = IdleCountdown()
+        let fired = AsyncStream<ContinuousClock.Instant>.makeStream()
+        let start = ContinuousClock.now
+        countdown.restart(after: .milliseconds(300)) { Issue.record("a replaced countdown fired") }
+        try await Task.sleep(for: .milliseconds(150))
+        countdown.restart(after: .milliseconds(300)) { fired.continuation.yield(.now) }
+        var iterator = fired.stream.makeAsyncIterator()
+        let at = try #require(await iterator.next())
+        #expect(at - start >= .milliseconds(450))
+        let stopped = IdleCountdown()
+        stopped.restart(after: .milliseconds(50)) { Issue.record("a stopped countdown fired") }
+        stopped.stop()
+        try await Task.sleep(for: .milliseconds(200))
+    }
+
+    @Test func timeoutsDefaultToThirtySecondsAndZeroTurnsThemOff() {
+        #expect(AppModel.limit(30) == .seconds(30))
+        #expect(AppModel.limit(0) == nil)
+        #expect(AppModel.timeoutChoices.contains(30))
+        #expect(SettingsView.timeoutLabel(0) == String(localized: "끄기"))
     }
 }
 

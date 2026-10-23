@@ -151,3 +151,11 @@
 "입력 위치가 바뀔 때까지 한 말은 다른 칸에 넣지 않았어요. 복사하거나 붙여넣어 주세요." = "Words spoken before the input field changed were not typed elsewhere. Copy or paste them.";
 "이 받아쓰기 복사" = "Copy This Dictation";
 "받아쓰기 기록" = "Dictation History";
+"%lld초 동안 말이 없어 받아쓰기를 마쳤어요." = "No speech for %lld seconds, so dictation finished.";
+"말이 없으면 받아쓰기 마치기" = "Finish When Nothing Is Said";
+"새로 인식된 말이 없으면 들은 데까지 마쳐요." = "Finishes with what was heard when no new speech is recognized.";
+"화면 위쪽 표시 자동으로 닫기" = "Close Top-of-Screen Display Automatically";
+"받아쓰기 없이 그대로면 닫아요. 포인터가 위에 있으면 기다려요." = "Closes when left alone without dictation. Waits while the pointer is over it.";
+"끄기" = "Off";
+"%lld초" = "%lld sec";
+"%lld분" = "%lld min";

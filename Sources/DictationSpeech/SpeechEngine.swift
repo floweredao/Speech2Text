@@ -21,6 +21,10 @@ public enum KeyActivity: Sendable {
     public var inputDeviceUID: String?
     /// Words sent to Soniox as context when a dictation starts; changes apply to the next one.
     public var vocabulary: [String] = []
+    /// A recording finishes by itself once this long passes without newly recognized text. Nil keeps listening.
+    public var silenceLimit: Duration? = .seconds(30)
+    /// The last recording was finished by `silenceLimit`, not by the user.
+    public private(set) var finishedForSilence = false
     public private(set) var transcript = ""
     public private(set) var status = String(localized: "받아쓰기 준비가 됐어요.")
     public private(set) var phase = SpeechPhase.idle
@@ -53,6 +57,7 @@ public enum KeyActivity: Sendable {
     @ObservationIgnored private(set) var runTask: Task<Void, Never>?
     @ObservationIgnored private var senderTask: Task<Void, Never>?
     @ObservationIgnored private var timerTask: Task<Void, Never>?
+    @ObservationIgnored private var silenceTask: Task<Void, Never>?
     @ObservationIgnored private var stopTask: Task<Void, Never>?
     @ObservationIgnored private let sessionFactory: @MainActor () -> any STTSession
     @ObservationIgnored private let audioFactory: @MainActor (String?) -> any AudioCapturing
@@ -123,6 +128,7 @@ public enum KeyActivity: Sendable {
         hasCurrentTranscript = false
         turns = []
         audioOrigin = nil
+        finishedForSilence = false
         let terms = vocabulary
         let previousTranscript = lastFinalTranscript
         // Keep the previous transcript until new speech arrives, even if startup fails.
@@ -143,6 +149,7 @@ public enum KeyActivity: Sendable {
                 guard generation == epoch, !Task.isCancelled else { return }
                 audioOrigin = ProcessInfo.processInfo.systemUptime - capture.capturedDuration
                 phase = .recording
+                armSilenceLimit(epoch: epoch)
                 status = String(localized: "듣고 있어요 · 연결 중…")
                 let (provider, events) = try await (early ?? connect(client, apiKey: key, terms: terms, epoch: epoch)).value
                 guard generation == epoch, !Task.isCancelled else { return }
@@ -185,7 +192,10 @@ public enum KeyActivity: Sendable {
                         }
                     }
                     // Once per batch: revisions that arrived while live typing was busy are typed as one edit.
-                    if changed { onLiveText?(transcript) }
+                    if changed {
+                        armSilenceLimit(epoch: epoch)
+                        onLiveText?(transcript)
+                    }
                 }
                 guard generation == epoch, !Task.isCancelled else { return }
                 guard completed, phase == .finishing else {
@@ -206,7 +216,11 @@ public enum KeyActivity: Sendable {
                 audio = nil
                 phase = .idle
                 hasError = false
-                status = result.isEmpty ? String(localized: "인식된 음성이 없어요.") : String(localized: "받아쓰기를 마쳤어요.")
+                if finishedForSilence, let seconds = silenceLimit.map({ Int($0.components.seconds) }) {
+                    status = String(localized: "\(seconds)초 동안 말이 없어 받아쓰기를 마쳤어요.")
+                } else {
+                    status = result.isEmpty ? String(localized: "인식된 음성이 없어요.") : String(localized: "받아쓰기를 마쳤어요.")
+                }
                 onFinal?(result)
             } catch { fail(error, epoch: epoch) }
         }
@@ -278,7 +292,20 @@ public enum KeyActivity: Sendable {
         return true
     }
 
+    /// Restarts the wait for new speech. Only a recording can be finished this way, never one already finishing.
+    private func armSilenceLimit(epoch: UUID) {
+        silenceTask?.cancel()
+        guard let silenceLimit, phase == .recording else { return }
+        silenceTask = Task { [weak self] in
+            do { try await Task.sleep(for: silenceLimit) } catch { return }
+            guard let self, self.generation == epoch, self.phase == .recording else { return }
+            self.finishedForSilence = true
+            self.finish()
+        }
+    }
+
     private func beginFinishing(epoch: UUID) {
+        silenceTask?.cancel()
         guard phase != .finishing else { return }
         phase = .finishing
         status = String(localized: "남은 음성을 마무리하고 있어요.")
@@ -315,6 +342,7 @@ public enum KeyActivity: Sendable {
         runTask?.cancel()
         senderTask?.cancel()
         timerTask?.cancel()
+        silenceTask?.cancel()
         let oldAudio = audio, oldSession = session
         audio = nil
         session = nil

@@ -456,6 +456,46 @@ actor TestCredentials: CredentialStoring {
         #expect(!engine.isBusy)
     }
 
+    /// Owner request: a recording that recognizes nothing new for the silence limit finishes by itself and keeps
+    /// what it heard.
+    @Test func recordingFinishesAfterTheSilenceLimitAndKeepsTheText() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        engine.silenceLimit = .milliseconds(300)
+        var finals: [String] = []
+        engine.onFinal = { finals.append($0) }
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        await socket.waitUntilSent(.binary(pcm))
+        await socket.push(.text(#"{"tokens":[{"text":"hello","is_final":false}]}"#))
+        try await waitUntil { engine.transcript == "hello" }
+        await socket.waitUntilSent(.text(""))
+        #expect(engine.phase == .finishing)
+        await socket.push(.text(#"{"tokens":[{"text":"hello","is_final":true}],"finished":true}"#))
+        await engine.runTask?.value
+        #expect(finals == ["hello"])
+        #expect(engine.finishedForSilence)
+    }
+
+    /// The limit counts from the last recognized text, so steady speech is never cut off. Time is the behavior here.
+    @Test func newTextKeepsTheSilenceLimitFromFinishing() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        engine.silenceLimit = .seconds(1)
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        await socket.waitUntilSent(.binary(pcm))
+        for word in 1...8 {
+            await socket.push(.text(#"{"tokens":[{"text":"w\#(word)","is_final":false}]}"#))
+            try await waitUntil { engine.transcript == "w\(word)" }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        #expect(engine.isRecording)
+        #expect(!engine.finishedForSilence)
+        engine.silenceLimit = nil
+        engine.cancel()
+    }
+
     @Test func finalizationTimeoutRetainsTextAndSuppressesCallback() async throws {
         let socket = TestSocket(), audio = TestAudio()
         let engine = engine(socket, audio, finishTimeout: .zero)
