@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         default: true
         }
     }
-    @objc private func showOverlay() { model.overlayVisible = true; overlay?.present() }
+    @objc private func showOverlay() { model.showOverlay(); overlay?.present() }
     @objc private func showSettings() { model.openSettings() }
     @objc private func checkForUpdates() { updater?.checkForUpdates() }
     private func presentSettings() {

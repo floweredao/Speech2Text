@@ -265,6 +265,12 @@ final class AppModel {
         feedback = insertion.insert(transcript, expected: nil)
     }
     func dismissOverlay() { overlayVisible = false }
+    /// An explicit Show wins over focused Settings, whose own button is pressed with Settings focused. Settings hides
+    /// the overlay again only when it regains focus.
+    func showOverlay() {
+        overlayVisible = true
+        settingsFocused = false
+    }
     func requestAccessibility() {
         insertion.requestPermission()
         accessibilityGranted = insertion.isTrusted

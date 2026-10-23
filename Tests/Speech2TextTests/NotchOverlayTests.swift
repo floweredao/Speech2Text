@@ -220,12 +220,16 @@ private func display(_ phase: SpeechPhase, error: Bool = false, transcript: Stri
         model.settingsAction = nil
     }
 
-    @MainActor @Test func explicitShowCannotCoverFocusedSettingsAndResumesAfterLeaving() {
+    /// Regression: Show in Settings did nothing, because Settings always has focus while its button is pressed.
+    @MainActor @Test func showFromFocusedSettingsShowsTheOverlayUntilSettingsIsFocusedAgain() {
         let model = AppModel()
         model.openSettings()
-        model.overlayVisible = true
+        model.dismissOverlay()
+        model.showOverlay()
+        #expect(model.overlayVisible)
+        model.appActivationChanged(isActive: true, settingsIsKey: true)
         #expect(!model.overlayVisible)
-        model.settingsFocused = false
+        model.appActivationChanged(isActive: false, settingsIsKey: true)
         #expect(model.overlayVisible)
     }
 

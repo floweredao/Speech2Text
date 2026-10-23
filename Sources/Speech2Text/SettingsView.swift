@@ -302,7 +302,7 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings-spoken-enter-phrase")
             }
             LabeledContent("화면 위쪽 표시") {
-                Button("열기") { model.overlayVisible = true }
+                Button("열기") { model.showOverlay() }
                     .accessibilityIdentifier("settings-show-overlay")
             }
         }
