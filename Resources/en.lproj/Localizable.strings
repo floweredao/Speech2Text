@@ -168,6 +168,8 @@
 "고칠 글이 없어요." = "Nothing to edit.";
 "'%@'을(를) 찾지 못해 바꾸지 않았어요." = "Couldn’t find “%@”, so nothing was replaced.";
 "입력 중인 앱: %@" = "Typing into: %@";
+"%@에 입력 중" = "Typing in %@";
+"%@에 입력됨" = "Typed in %@";
 "실험적 기능" = "Experimental";
 "실시간 번역" = "Live Translation";
 "말한 내용을 고른 언어로 번역해 입력해요. 말로 고치기·엔터는 번역된 글 기준이라 잘 안 될 수 있어요." = "Types a translation of what you say. Voice edits and spoken Enter work on the translated text, so they may not catch.";

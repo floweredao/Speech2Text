@@ -627,15 +627,9 @@ struct NotchOverlayView: View {
                     .help(state.title)
                     .accessibilityIdentifier("notch-status")
                 if let target = state.targetName {
-                    Label(target, systemImage: "arrow.turn.down.right")
-                        .labelStyle(.titleAndIcon)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.5))
-                        .lineLimit(1)
+                    OverlayTargetChip(name: target, icon: model.liveTargetIcon, typed: state.inserted)
                         .layoutPriority(-1)
                         .transition(.opacity)
-                        .accessibilityLabel(String(localized: "입력 중인 앱: \(target)"))
-                        .accessibilityIdentifier("notch-target")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -998,6 +992,40 @@ private struct TranscriptViewport: View {
                 .accessibilityHidden(true)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { maxHeight.wrappedValue = $0 }
         }
+    }
+}
+
+/// Where the dictated text goes: the app's own icon and a short sentence naming it ("Typing in Discord"), so the
+/// destination reads without a symbol to decode. A capsule groups icon and words and keeps them centered on the title.
+struct OverlayTargetChip: View {
+    let name: String
+    let icon: NSImage?
+    /// The text is already in the field, so the sentence moves to the past tense.
+    let typed: Bool
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            if let icon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 16, height: 16)
+                    .accessibilityHidden(true)
+            }
+            Text(typed ? String(localized: "\(name)에 입력됨") : String(localized: "\(name)에 입력 중"))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white.opacity(0.72))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .padding(.leading, icon == nil ? Spacing.s : Spacing.xxs)
+        .padding(.trailing, Spacing.s)
+        .frame(height: 20)
+        .background(.white.opacity(0.08), in: Capsule())
+        .help(String(localized: "입력 중인 앱: \(name)"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "입력 중인 앱: \(name)"))
+        .accessibilityIdentifier("notch-target")
     }
 }
 

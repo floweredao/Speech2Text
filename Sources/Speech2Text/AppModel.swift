@@ -29,6 +29,8 @@ final class AppModel {
     private(set) var feedbackIsRoutine = false
     /// The app live typing writes into, shown beside the title.
     private(set) var liveTargetName: String?
+    /// The icon of that app, shown beside its name so the destination reads at a glance.
+    private(set) var liveTargetIcon: NSImage?
     /// Language codes offered for the experimental live translation; nil types the spoken language.
     static let translationChoices: [String?] = [nil, "en", "ko", "ja", "zh"]
     var translationTarget = UserDefaults.standard.string(forKey: "translationTarget") {
@@ -359,6 +361,7 @@ final class AppModel {
         case .failed:
             self.live = nil
             liveTargetName = nil
+            liveTargetIcon = nil
             feedback = String(localized: "이 칸에는 실시간 입력을 할 수 없어요. 결과는 여기에 보관해요.")
         case .userEdited:
             moveOn(at: live.userActedAt ?? ProcessInfo.processInfo.systemUptime)
@@ -377,6 +380,7 @@ final class AppModel {
     private func moveOn(at uptime: TimeInterval) {
         live = nil
         liveTargetName = nil
+        liveTargetIcon = nil
         cutMs = speech.audioMilliseconds(atUptime: uptime) ?? Int.max
         awaitingTarget = true
         feedback = String(localized: "입력 위치가 바뀌었어요. 입력 칸에 커서를 두고 말하면 그 칸에 이어서 써요.")
@@ -589,6 +593,7 @@ final class AppModel {
         accessibilityGranted = insertion.isTrusted
         live = nil
         liveTargetName = nil
+        liveTargetIcon = nil
         awaitingTarget = false
         cutMs = nil
         reportedEdits = 0
@@ -613,7 +618,9 @@ final class AppModel {
         live = LiveTyper(target: target, insertion: insertion) { [weak self] chord in
             self?.shortcuts.bindings.keys.contains { $0.trigger == .key(chord) } ?? false
         }
-        liveTargetName = NSRunningApplication(processIdentifier: target.pid)?.localizedName
+        let app = NSRunningApplication(processIdentifier: target.pid)
+        liveTargetName = app?.localizedName
+        liveTargetIcon = app?.icon
         awaitingTarget = false
         return true
     }
@@ -642,6 +649,7 @@ final class AppModel {
         let removed = hadTyped && live?.sync("") == .applied
         live = nil
         liveTargetName = nil
+        liveTargetIcon = nil
         awaitingTarget = false
         cutMs = nil
         speech.cancel()
