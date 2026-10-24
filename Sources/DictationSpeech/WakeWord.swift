@@ -1,4 +1,4 @@
-import CSherpaOnnx
+internal import CSherpaOnnx
 import Foundation
 import os
 
@@ -139,6 +139,10 @@ private struct ProtoReader {
 /// One sherpa-onnx keyword spotter and its stream. Used by one task at a time: the listener creates it, feeds it
 /// and drops it on the same detached task.
 final class WakeSpotter: @unchecked Sendable {
+    /// onnxruntime keeps one process-wide logging manager, and two spotters set up or torn down at the same moment can
+    /// fail with "Only one instance of LoggingManager ... can exist" (seen once in the test suite). A listener restarts
+    /// while the phrase is typed, so loading and freeing take turns.
+    private static let lifecycle = NSLock()
     private let spotter: OpaquePointer
     private let stream: OpaquePointer
 
@@ -161,20 +165,25 @@ final class WakeSpotter: @unchecked Sendable {
         config.keywords_threshold = sensitivity.threshold
         config.keywords_buf = UnsafePointer(strings[5])
         config.keywords_buf_size = Int32(strlen(strings[5]!))
-        guard let spotter = SherpaOnnxCreateKeywordSpotter(&config) else {
-            throw AppError.invalidResponse("Wake word model could not load")
+        let created: (OpaquePointer, OpaquePointer?)? = Self.lifecycle.withLock {
+            guard let spotter = SherpaOnnxCreateKeywordSpotter(&config) else { return nil }
+            guard let stream = SherpaOnnxCreateKeywordStream(spotter) else {
+                SherpaOnnxDestroyKeywordSpotter(spotter)
+                return (spotter, nil)
+            }
+            return (spotter, stream)
         }
-        guard let stream = SherpaOnnxCreateKeywordStream(spotter) else {
-            SherpaOnnxDestroyKeywordSpotter(spotter)
-            throw AppError.invalidResponse("Wake word stream could not start")
-        }
-        self.spotter = spotter
+        guard let created else { throw AppError.invalidResponse("Wake word model could not load") }
+        guard let stream = created.1 else { throw AppError.invalidResponse("Wake word stream could not start") }
+        spotter = created.0
         self.stream = stream
     }
 
     deinit {
-        SherpaOnnxDestroyOnlineStream(stream)
-        SherpaOnnxDestroyKeywordSpotter(spotter)
+        Self.lifecycle.withLock {
+            SherpaOnnxDestroyOnlineStream(stream)
+            SherpaOnnxDestroyKeywordSpotter(spotter)
+        }
     }
 
     /// Feeds 16 kHz mono 16-bit little-endian audio; true when the phrase ended inside it.
