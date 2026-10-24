@@ -186,7 +186,7 @@
 "음성 제어는 켜져 있는 동안 계속 듣고, 말한 내용을 직접 입력하기도 해요. 글이 두 번 들어가면 음성 제어를 명령 모드로 바꿔 주세요." = "Voice Control keeps listening while it is on and can type what you say itself. If text comes in twice, switch Voice Control to Command Mode.";
 "단축어 앱 열기" = "Open Shortcuts";
 "이 앱은 받아쓰는 동안에만 마이크를 켜요." = "This app turns the microphone on only while dictating.";
-"'%@'을(를) '%@'(으)로 바꿨어요. '%@ 되돌려'라고 말하면 되돌려요." = "Replaced “%@” with “%@”. Say “%@ undo” to undo it.";
+"'%@'을(를) '%@'(으)로 바꿨어요. '%@'라고 말하면 되돌려요." = "Replaced “%@” with “%@”. Say “%@” to undo it.";
 "‘%@ 지워’, ‘%@ 되돌려’, ‘%@ A를 B로 바꿔’처럼 말하면 고쳐요." = "Say “%@ delete that”, “%@ undo”, or “%@ replace A with B” to edit.";
 "‘%@’라고 말하면 받아쓰기를 시작하고, 받아쓰다 끝에 다시 말하면 마쳐요." = "Say “%@” to start dictating, and again at the end to finish.";
 "고른 마이크를 찾지 못해 호출어를 듣지 않고 있어요." = "Not listening for the wake phrase: the chosen microphone wasn't found.";
@@ -199,9 +199,9 @@
 "마이크 권한이 없어 호출어를 들을 수 없어요." = "Can't listen for the wake phrase without microphone access.";
 "마이크가 끊겨 호출어를 듣지 않고 있어요." = "Not listening for the wake phrase: the microphone stopped.";
 "마이크를 열지 못해 호출어를 듣지 않고 있어요." = "Not listening for the wake phrase: the microphone couldn't be opened.";
-"마지막 단어를 지웠어요. '%@ 되돌려'라고 말하면 되돌려요." = "Deleted the last word. Say “%@ undo” to undo it.";
-"마지막 문장을 지웠어요. '%@ 되돌려'라고 말하면 되돌려요." = "Deleted the last sentence. Say “%@ undo” to undo it.";
-"받아쓴 글을 모두 지웠어요. '%@ 되돌려'라고 말하면 되돌려요." = "Cleared the dictated text. Say “%@ undo” to undo it.";
+"마지막 단어를 지웠어요. '%@'라고 말하면 되돌려요." = "Deleted the last word. Say “%@” to undo it.";
+"마지막 문장을 지웠어요. '%@'라고 말하면 되돌려요." = "Deleted the last sentence. Say “%@” to undo it.";
+"받아쓴 글을 모두 지웠어요. '%@'라고 말하면 되돌려요." = "Cleared the dictated text. Say “%@” to undo it.";
 "명령 앞에 붙이는 말이에요. 없이 말한 ‘지워’는 그대로 글로 써요." = "Say it before a command. A command said without it is typed as text.";
 "트리거 단어" = "Trigger Word";
 "트리거 단어가 비어 있으면 말로 고치기와 엔터가 먹지 않아요." = "Without a trigger word, voice edits and spoken Return don't work.";
@@ -211,3 +211,12 @@
 "영어 글자로 적어요." = "In English letters.";
 "호출어로 시작·끝내기" = "Start and Finish by Wake Phrase";
 "호출어를 듣는 동안 마이크가 켜져 있어요(메뉴 막대에 주황색 점). 들은 소리는 이 맥 안에서만 처리하고 저장하거나 보내지 않아요. 블루투스 이어폰 마이크로 들으면 그동안 이어폰 음질이 낮아질 수 있어요." = "The microphone stays on while listening for the wake phrase (an orange dot in the menu bar). What it hears is processed only on this Mac and is never stored or sent. Listening through a Bluetooth headset's microphone can lower the headset's sound quality meanwhile.";
+"되돌려" = "undo";
+"Jev 키를 저장했어요." = "Saved the Jev key.";
+"Jev 키를 저장하지 못했어요." = "Couldn't save the Jev key.";
+"끝에 ‘%@’라고 말하면 Jev가 명령이라고 판단할 때 엔터를 눌러요." = "Say “%@” at the end; Return is pressed when Jev judges it a command.";
+"Jev가 판단" = "Jev Decides";
+"‘지워’, ‘되돌려’, ‘A를 B로 바꿔’를 따로 말하면 Jev가 명령인지 글인지 판단해요. 애매하면 글로 써요. 그 말과 앞 글 일부를 TypeSafe로 보내요." = "Say “delete that”, “undo” or “replace A with B” on its own and Jev decides whether it’s a command or text; when unsure, it’s typed. That phrase and some of the text before it go to TypeSafe.";
+"명령을 듣지 않고 모두 글로 써요." = "Commands aren’t listened for; everything is typed.";
+"Jev API 키" = "Jev API Key";
+"Jev 키가 없으면 명령처럼 들린 말도 모두 글로 써요." = "Without a Jev key, anything that sounds like a command is typed as text.";

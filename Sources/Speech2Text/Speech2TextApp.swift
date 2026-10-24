@@ -29,6 +29,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             checkWakePhrase(in: URL(fileURLWithPath: launchArguments[index + 1]), arguments: launchArguments)
             return
         }
+        // Setup: stores the Jev key read from a file in this app's Keychain without showing it, then quits.
+        if let index = launchArguments.firstIndex(of: "--store-jev-key"), launchArguments.indices.contains(index + 1) {
+            let key = try? String(contentsOfFile: launchArguments[index + 1], encoding: .utf8)
+            print(key.map(JevKeychain.save) == true ? "JEV_KEY_STORED" : "JEV_KEY_NOT_STORED")
+            exit(0)
+        }
         let updater = AppUpdater()
         self.updater = updater
         model.settingsAction = { [weak self] in self?.presentSettings() }
@@ -69,18 +75,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             model.autoInsert = !arguments.contains("--no-auto-insert")
             model.printsTurnsAndQuits = arguments.contains("--print-turns")
             let url = URL(fileURLWithPath: arguments[index + 1])
+            // Diagnostics: another command judge or Jev key for this run only.
+            if let mode = Self.value(after: "--command-judge", in: arguments).flatMap(CommandJudgeMode.init) {
+                model.commandJudgeOverride = mode
+            }
+            if let file = Self.value(after: "--jev-key-file", in: arguments) {
+                model.jevKeyOverride = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+            } else {
+                model.loadJevKey()
+            }
             Task {
                 await model.speech.loadKey()
                 model.transcribeFile(url)
             }
         } else {
             model.loadKey()
+            model.loadJevKey()
             model.beginWakeListening()
             showSettings()
         }
     }
     /// Diagnostic: runs the bundled wake-phrase model over an audio file, with no window, microphone or network.
     /// Prints `WAKE <n>` per detection and `WAKE_TOTAL <n>` at the end, then quits.
+    private static func value(after flag: String, in arguments: [String]) -> String? {
+        arguments.firstIndex(of: flag).flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
+    }
+
     private func checkWakePhrase(in file: URL, arguments: [String]) {
         let phrase = arguments.firstIndex(of: "--wake-phrase").flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
             ?? model.wakePhrase

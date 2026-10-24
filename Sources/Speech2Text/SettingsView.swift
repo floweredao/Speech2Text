@@ -295,7 +295,11 @@ struct SettingsView: View {
             .accessibilityIdentifier("settings-auto-insert")
             Toggle(isOn: $model.spokenEnterEnabled) {
                 Text("말로 엔터 누르기")
-                Text("끝에 ‘\(model.triggerWord) \(model.spokenEnterPhrase)’라고 말하고 잠깐 멈추면 엔터를 눌러요.")
+                if model.commandJudge == .jev {
+                    Text("끝에 ‘\(model.spokenEnterPhrase)’라고 말하면 Jev가 명령이라고 판단할 때 엔터를 눌러요.")
+                } else {
+                    Text("끝에 ‘\(model.triggerWord) \(model.spokenEnterPhrase)’라고 말하고 잠깐 멈추면 엔터를 눌러요.")
+                }
             }
             .accessibilityIdentifier("settings-spoken-enter")
             if model.spokenEnterEnabled {
@@ -303,12 +307,43 @@ struct SettingsView: View {
                     .multilineTextAlignment(.trailing)
                     .accessibilityIdentifier("settings-spoken-enter-phrase")
             }
-            Toggle(isOn: $model.voiceEditingEnabled) {
+            Picker(selection: $model.commandJudge) {
+                Text("트리거 단어").tag(CommandJudgeMode.trigger)
+                Text("Jev가 판단").tag(CommandJudgeMode.jev)
+                Text("끄기").tag(CommandJudgeMode.off)
+            } label: {
                 Text("말로 고치기")
-                Text("‘\(model.triggerWord) 지워’, ‘\(model.triggerWord) 되돌려’, ‘\(model.triggerWord) A를 B로 바꿔’처럼 말하면 고쳐요.")
+                switch model.commandJudge {
+                case .trigger:
+                    Text("‘\(model.triggerWord) 지워’, ‘\(model.triggerWord) 되돌려’, ‘\(model.triggerWord) A를 B로 바꿔’처럼 말하면 고쳐요.")
+                case .jev:
+                    Text("‘지워’, ‘되돌려’, ‘A를 B로 바꿔’를 따로 말하면 Jev가 명령인지 글인지 판단해요. 애매하면 글로 써요. 그 말과 앞 글 일부를 TypeSafe로 보내요.")
+                case .off:
+                    Text("명령을 듣지 않고 모두 글로 써요.")
+                }
             }
-            .accessibilityIdentifier("settings-voice-editing")
-            if model.voiceEditingEnabled || model.spokenEnterEnabled {
+            .accessibilityIdentifier("settings-command-judge")
+            if model.commandJudge == .jev {
+                SecureField("Jev API 키", text: $model.jevKey, prompt: Text("키를 붙여넣으세요"))
+                    .textContentType(.password)
+                    .accessibilityIdentifier("settings-jev-key")
+                HStack {
+                    Button("저장") { model.saveJevKey() }
+                        .disabled(model.jevKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .help("이 앱 전용 Keychain 항목에 저장해요.")
+                        .accessibilityIdentifier("settings-save-jev-key")
+                    Spacer()
+                    if !model.jevKeyMessage.isEmpty {
+                        Text(model.jevKeyMessage).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if model.jevKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("Jev 키가 없으면 명령처럼 들린 말도 모두 글로 써요.")
+                        .font(.caption)
+                        .foregroundStyle(Color.warningText)
+                }
+            }
+            if model.commandJudge == .trigger || (model.commandJudge == .off && model.spokenEnterEnabled) {
                 TextField(text: $model.triggerWord, prompt: Text(AppModel.defaultTriggerWord)) {
                     Text("트리거 단어")
                     Text("명령 앞에 붙이는 말이에요. 없이 말한 ‘지워’는 그대로 글로 써요.")

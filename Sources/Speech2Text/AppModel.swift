@@ -114,7 +114,8 @@ final class AppModel {
     }
     /// The command phrase goes to Soniox as context too; without it "엔터" after a pause is often heard as "센터".
     private var recognitionTerms: [String] {
-        let commands = (spokenEnter?.terms ?? []) + (voiceEditingEnabled ? VoiceCommand.terms + trigger.terms : [])
+        let commands = (spokenEnter?.terms ?? []) + (voiceEditingEnabled ? VoiceCommand.terms : [])
+            + (judgeMode == .trigger ? trigger.terms : [])
             + (wakeListeningEnabled ? wakeSpoken.terms : [])
         return commands.reduce(dictionary) { DictionaryTerms.adding($1, to: $0) }
     }
@@ -171,18 +172,40 @@ final class AppModel {
     @ObservationIgnored var onWake: (() -> Void)?
     @ObservationIgnored private var wakeListener: WakeWordListener?
     @ObservationIgnored private var wakeAllowed = false
-    /// Hands-free edits: a command said on its own after a pause edits the dictated text instead of being typed.
-    var voiceEditingEnabled = UserDefaults.standard.object(forKey: "voiceEditingEnabled") as? Bool ?? true {
+    /// How a spoken edit is told from dictated words; `.off` types everything. Settings written before this choice
+    /// existed keep their voice-editing switch: on is the trigger word, off is off.
+    var commandJudge = UserDefaults.standard.string(forKey: "commandJudge").flatMap(CommandJudgeMode.init)
+        ?? (UserDefaults.standard.object(forKey: "voiceEditingEnabled") as? Bool == false ? .off : .trigger) {
         didSet {
-            UserDefaults.standard.set(voiceEditingEnabled, forKey: "voiceEditingEnabled")
+            UserDefaults.standard.set(commandJudge.rawValue, forKey: "commandJudge")
             speech.vocabulary = recognitionTerms
         }
     }
+    /// Diagnostics (`--command-judge`) use another mode for one run without changing the setting.
+    @ObservationIgnored var commandJudgeOverride: CommandJudgeMode? {
+        didSet { speech.vocabulary = recognitionTerms }
+    }
+    private var judgeMode: CommandJudgeMode { commandJudgeOverride ?? commandJudge }
+    var voiceEditingEnabled: Bool { judgeMode != .off }
+    /// The Jev API key from this app's Keychain.
+    var jevKey = ""
+    private(set) var jevKeyMessage = ""
+    /// Diagnostics (`--jev-key-file`) use another key for one run without storing it.
+    @ObservationIgnored var jevKeyOverride: String?
+    @ObservationIgnored var jevJudge = JevJudge()
+    @ObservationIgnored private var verdicts: [String: CommandVerdict] = [:]
+    @ObservationIgnored private var judgeTasks: [String: Task<Void, Never>] = [:]
+    /// Jev's answers in this dictation, printed by `--print-turns`.
+    @ObservationIgnored private var judgeLog: [(CommandQuestion, JudgeAnswer)] = []
+    /// The dictation ended while Jev was still deciding; it completes when the last answer arrives.
+    @ObservationIgnored private var completionPending = false
+    @ObservationIgnored private var unansweredAsText = false
     /// Commands already reported for the current field, so each one is announced once.
     @ObservationIgnored private var reportedEdits = 0
     private var spokenEnter: SpokenEnter? {
         spokenEnterEnabled
-            ? SpokenEnter(setting: spokenEnterPhrase, shownDefault: String(localized: "엔터 보내기"), trigger: trigger) : nil
+            ? SpokenEnter(setting: spokenEnterPhrase, shownDefault: String(localized: "엔터 보내기"),
+                          trigger: judgeMode == .jev ? nil : trigger) : nil
     }
     /// Kept current by a CoreAudio listener, so Settings reflects plugged-in or removed microphones at once.
     private(set) var inputDevices = AudioInputDevices.all()
@@ -315,7 +338,7 @@ final class AppModel {
 
     private func mirror(_: String) {
         let field = edited(from: cutMs)
-        if field.outcomes.count > reportedEdits, let last = field.outcomes.last { feedback = Self.describe(last, trigger: triggerWord) }
+        if field.outcomes.count > reportedEdits, let last = field.outcomes.last { feedback = Self.describe(last, undo: undoPhrase) }
         reportedEdits = field.outcomes.count
         if live == nil, awaitingTarget {
             guard acquireLiveTarget() else { return }
@@ -353,17 +376,100 @@ final class AppModel {
 
     /// The text for the field in use: words spoken after `cut` (all when nil), with voice edits applied.
     private func edited(from cut: Int?) -> VoiceEditor.Result {
-        VoiceEditor.apply(speech.spokenTurns(from: cut), commandsEnabled: voiceEditingEnabled, trigger: trigger)
+        let gate: VoiceEditor.Gate = switch judgeMode {
+        case .off: .off
+        case .trigger: .trigger(trigger)
+        case .jev: .judged(verdicts, unanswered: unansweredAsText ? .text : nil)
+        }
+        let result = VoiceEditor.apply(speech.spokenTurns(from: cut), gate: gate)
+        if let question = result.question { ask(question) }
+        return result
     }
 
-    static func describe(_ outcome: VoiceEditor.Outcome, trigger: String) -> String {
+    /// What to say to undo a voice edit.
+    var undoPhrase: String {
+        judgeMode == .trigger ? "\(triggerWord) " + String(localized: "되돌려") : String(localized: "되돌려")
+    }
+
+    private func ask(_ question: CommandQuestion) {
+        guard verdicts[question.key] == nil, judgeTasks[question.key] == nil else { return }
+        let judge = jevJudge, key = jevKeyOverride ?? jevKey
+        judgeTasks[question.key] = Task { [weak self] in
+            let answer = await judge.judge(question, key: key)
+            guard !Task.isCancelled else { return }
+            self?.judged(question, answer)
+        }
+    }
+
+    private func judged(_ question: CommandQuestion, _ answer: JudgeAnswer) {
+        judgeTasks[question.key] = nil
+        verdicts[question.key] = answer.verdict
+        judgeLog.append((question, answer))
+        mirror("")
+        if speech.isRecording { turnFinalized("") }
+        if completionPending, !waitsForJudge() {
+            completionPending = false
+            complete("")
+        }
+    }
+
+    /// Starts every question the finished dictation still needs; true while any is unanswered.
+    private func waitsForJudge() -> Bool {
+        let full = edited(from: nil)
+        let field = edited(from: cutMs)
+        if case .pending = enterCommand(in: full.text) { return true }
+        return full.question != nil || field.question != nil
+    }
+
+    /// A new dictation or a cancel stops waiting: what Jev has not answered yet stays text.
+    private func stopJudging() {
+        if completionPending {
+            unansweredAsText = true
+            completionPending = false
+            complete("")
+        }
+        judgeTasks.values.forEach { $0.cancel() }
+        judgeTasks = [:]
+        verdicts = [:]
+        judgeLog = []
+        unansweredAsText = false
+    }
+
+    func saveJevKey() {
+        jevKeyMessage = JevKeychain.save(jevKey) ? String(localized: "Jev 키를 저장했어요.") : String(localized: "Jev 키를 저장하지 못했어요.")
+    }
+
+    func loadJevKey() { jevKey = JevKeychain.load() ?? "" }
+
+    private enum EnterCommand {
+        case none, said(before: String), pending(before: String), typed
+    }
+
+    /// Whether the text ends with the spoken Return. With Jev it counts once Jev calls it a command; until then
+    /// it is pending, and the phrase is held back from the field.
+    private func enterCommand(in text: String) -> EnterCommand {
+        guard let before = spokenEnter?.strip(text) else { return .none }
+        guard judgeMode == .jev, !before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .said(before: before) }
+        let last = speech.spokenTurns(from: nil).last.map(VoiceEditor.questionKey) ?? ""
+        let question = CommandQuestion(key: "enter|" + last, textBefore: before, utterance: spokenEnterPhrase,
+                                       joint: .ownChunk, effect: "press Return to send the dictated text")
+        switch verdicts[question.key] ?? (unansweredAsText ? .text : nil) {
+        case .command?: return .said(before: before)
+        case .text?: return .typed
+        case nil:
+            ask(question)
+            return .pending(before: before)
+        }
+    }
+
+    static func describe(_ outcome: VoiceEditor.Outcome, undo: String) -> String {
         switch outcome {
-        case .applied(.deleteLastSentence): String(localized: "마지막 문장을 지웠어요. '\(trigger) 되돌려'라고 말하면 되돌려요.")
-        case .applied(.deleteLastWord): String(localized: "마지막 단어를 지웠어요. '\(trigger) 되돌려'라고 말하면 되돌려요.")
-        case .applied(.clearAll): String(localized: "받아쓴 글을 모두 지웠어요. '\(trigger) 되돌려'라고 말하면 되돌려요.")
+        case .applied(.deleteLastSentence): String(localized: "마지막 문장을 지웠어요. '\(undo)'라고 말하면 되돌려요.")
+        case .applied(.deleteLastWord): String(localized: "마지막 단어를 지웠어요. '\(undo)'라고 말하면 되돌려요.")
+        case .applied(.clearAll): String(localized: "받아쓴 글을 모두 지웠어요. '\(undo)'라고 말하면 되돌려요.")
         case .applied(.undo): String(localized: "되돌렸어요.")
         case .applied(.replace(let old, let new)):
-            String(localized: "'\(old)'을(를) '\(new)'(으)로 바꿨어요. '\(trigger) 되돌려'라고 말하면 되돌려요.")
+            String(localized: "'\(old)'을(를) '\(new)'(으)로 바꿨어요. '\(undo)'라고 말하면 되돌려요.")
         case .nothingToChange(.undo): String(localized: "되돌릴 것이 없어요.")
         case .nothingToChange: String(localized: "고칠 글이 없어요.")
         case .notFound(let old): String(localized: "'\(old)'을(를) 찾지 못해 바꾸지 않았어요.")
@@ -371,7 +477,10 @@ final class AppModel {
     }
 
     private func withoutEnterCommand(_ text: String) -> String {
-        withoutWakeStop(spokenEnter?.strip(text) ?? text)
+        switch enterCommand(in: text) {
+        case .said(let before), .pending(let before): withoutWakeStop(before)
+        case .none, .typed: withoutWakeStop(text)
+        }
     }
 
     /// The wake phrase said at the end of a dictation finishes it and is not typed. While it is still being said
@@ -388,22 +497,31 @@ final class AppModel {
     private func turnFinalized(_: String) {
         let text = edited(from: nil).text
         let wakeStop = wakeListeningEnabled && wakeSpoken.strippingSuffix(text) != nil
-        if spokenEnter?.strip(text) != nil || wakeStop { speech.finish() }
+        if case .said = enterCommand(in: text) { speech.finish() } else if wakeStop { speech.finish() }
     }
 
     private func complete(_: String) {
         overlayVisible = true
+        if judgeMode == .jev, waitsForJudge() {
+            completionPending = true
+            return
+        }
         let spoken = edited(from: nil).text
         if printsTurnsAndQuits {
             for turn in speech.spokenTurns(from: nil) {
                 print("\(turn.pauseBeforeMs.map(String.init) ?? "-")\t\(turn.text.trimmingCharacters(in: .whitespaces))")
+            }
+            for (question, answer) in judgeLog {
+                let probability = answer.commandProbability.map { String(format: "%.2f", $0) } ?? "-"
+                print("jev\t\(answer.verdict)\t\(probability)\t\(answer.milliseconds)ms\t\(answer.inputTokens)tok\t\(question.utterance)\t\(answer.failure ?? "")")
             }
             print("=>\t\(spoken)")
             fflush(stdout)
             NSApp.terminate(nil)
             return
         }
-        let command = spokenEnter?.strip(spoken)
+        var command: String?
+        if case .said(let before) = enterCommand(in: spoken) { command = before }
         let text = withoutWakeStop(command ?? spoken)
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if !empty {
@@ -491,6 +609,7 @@ final class AppModel {
         overlayVisible = true
         if isRecording { speech.finish() }
         else if !isBusy {
+            stopJudging()
             startLiveTypingIfAdmitted()
             speech.start()
         }
@@ -502,7 +621,10 @@ final class AppModel {
         }
     }
     func cancel() {
-        guard isBusy else { return }
+        guard isBusy || completionPending else { return }
+        completionPending = false
+        judgeTasks.values.forEach { $0.cancel() }
+        judgeTasks = [:]
         let hadTyped = !(live?.typed.isEmpty ?? true)
         let removed = hadTyped && live?.sync("") == .applied
         live = nil
@@ -517,6 +639,7 @@ final class AppModel {
     func transcribeFile(_ url: URL) {
         guard !isBusy else { return }
         overlayVisible = true
+        stopJudging()
         startLiveTypingIfAdmitted()
         speech.start(audioFile: url)
     }

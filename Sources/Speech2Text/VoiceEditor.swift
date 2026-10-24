@@ -53,10 +53,19 @@ enum VoiceCommand: Equatable {
     }
 }
 
-/// Turns spoken turns into the text to type. A command only counts right after the trigger word ("<trigger> 지워"),
+/// Turns spoken turns into the text to type. With a trigger word a command only counts right after it ("<trigger> 지워"),
 /// in the same turn or, when the speaker paused after the trigger word, as the next turn; the same words without it
-/// are ordinary text. Words after the trigger word that are no command are typed as said. See DESIGN.md, "말로 고치기".
+/// are ordinary text. Words after the trigger word that are no command are typed as said. With Jev a finished turn
+/// ending in a command waits for Jev's verdict. See DESIGN.md, "말로 고치기".
 struct VoiceEditor {
+    enum Gate: Equatable {
+        case off
+        case trigger(SpokenPhrase)
+        /// Verdicts Jev gave so far, by `CommandQuestion.key`; `unanswered` settles turns not answered yet instead of
+        /// waiting for them.
+        case judged([String: CommandVerdict], unanswered: CommandVerdict? = nil)
+    }
+
     enum Outcome: Equatable {
         case applied(VoiceCommand)
         case nothingToChange(VoiceCommand)
@@ -66,9 +75,18 @@ struct VoiceEditor {
     struct Result: Equatable {
         var text = ""
         var outcomes: [Outcome] = []
+        /// The turn waiting for Jev; it and every later turn are left out of `text` until it is answered.
+        var question: CommandQuestion?
     }
 
     static func apply(_ turns: [SpokenTurn], commandsEnabled: Bool, trigger: SpokenPhrase) -> Result {
+        apply(turns, gate: commandsEnabled ? .trigger(trigger) : .off)
+    }
+
+    static func apply(_ turns: [SpokenTurn], gate: Gate) -> Result {
+        if case .judged(let verdicts, let unanswered) = gate { return judged(turns, verdicts: verdicts, unanswered: unanswered) }
+        var commandsEnabled = false, trigger = SpokenPhrase("")
+        if case .trigger(let phrase) = gate { (commandsEnabled, trigger) = (true, phrase) }
         var result = Result()
         var undo: [String] = []
         var index = turns.startIndex
@@ -104,6 +122,57 @@ struct VoiceEditor {
                 result.outcomes.append(perform(parsed, on: &result.text, undo: &undo))
             } else {
                 append(said, to: &result.text)
+            }
+        }
+        return result
+    }
+
+    static func questionKey(_ turn: SpokenTurn) -> String { "\(turn.pauseBeforeMs ?? -1)|\(turn.text)" }
+
+    /// Only edits Jev may get wrong are asked. Nothing dictated yet, nothing to undo, or a word to replace that was
+    /// never said makes the words text; "되돌려" right after an edit undoes it, so a wrong edit is always revertible.
+    private static func settled(_ command: VoiceCommand, before: String, canUndo: Bool, afterEdit: Bool) -> CommandVerdict? {
+        switch command {
+        case .undo: return canUndo ? (afterEdit ? .command : nil) : .text
+        case .replace(let old, _) where before.range(of: old, options: .caseInsensitive) == nil: return .text
+        default: return before.trimmingCharacters(in: .whitespaces).isEmpty ? .text : nil
+        }
+    }
+
+    private static func judged(_ turns: [SpokenTurn], verdicts: [String: CommandVerdict], unanswered: CommandVerdict?) -> Result {
+        var result = Result()
+        var undo: [String] = []
+        var afterEdit = false
+        for turn in turns {
+            let spoken = turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !spoken.isEmpty else { continue }
+            guard let candidate = CommandCandidate(spoken) else {
+                append(spoken, to: &result.text)
+                afterEdit = false
+                continue
+            }
+            // A command still being said never flashes into the field.
+            guard turn.isFinal else {
+                append(candidate.before, to: &result.text)
+                continue
+            }
+            var before = result.text
+            append(candidate.before, to: &before)
+            let key = questionKey(turn)
+            switch settled(candidate.command, before: before, canUndo: !undo.isEmpty, afterEdit: afterEdit) ?? verdicts[key] ?? unanswered {
+            case .command?:
+                result.text = before
+                let outcome = perform(candidate.command, on: &result.text, undo: &undo)
+                result.outcomes.append(outcome)
+                if case .applied = outcome { afterEdit = true }
+            case .text?:
+                append(spoken, to: &result.text)
+                afterEdit = false
+            case nil:
+                result.text = before
+                result.question = CommandQuestion(key: key, textBefore: before, utterance: candidate.tail,
+                                                  joint: candidate.joint, effect: candidate.effect)
+                return result
             }
         }
         return result
