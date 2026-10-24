@@ -1,133 +1,159 @@
 <p align="center">
-  <img src="Resources/AppIcon.png" width="128" alt="Speech2Text app icon">
+  <img src="Resources/AppIcon.png" width="128" height="128" alt="Malgeul app icon">
 </p>
 
-<h1 align="center">Speech2Text</h1>
+<h1 align="center">말글 · Malgeul</h1>
 
 <p align="center">
-  Native macOS dictation that types what you say into the field you're already in.
-  <br>
+  Speak, and the words land in the text field you are already in.<br>
+  A menu bar dictation app for macOS.
+</p>
+
+<p align="center">
   <b>English</b> · <a href="README-ko.md">한국어</a>
 </p>
 
 <p align="center">
-  <img src="docs/images/hero-en.png" width="820" alt="Speech2Text listening under the menu bar while the transcript is typed live into a note">
+  <a href="https://github.com/floweredao/malgeul/releases/latest"><b>Download the latest release</b></a>
+  &nbsp;·&nbsp; macOS 15 or later, Apple silicon
+  &nbsp;·&nbsp; <a href="LICENSE">MIT</a>
 </p>
-
-Speech2Text is a menu bar app. Press a shortcut, speak, and your words appear in whatever text field you clicked, whether that's a terminal, a browser, or a notes app. A small overlay under the notch shows the live transcript. The app never reads your speech as commands and never rewrites it.
 
 <p align="center">
-  <a href="https://github.com/floweredao/malgeul/releases/latest"><b>Download the latest release</b></a>
+  <img src="docs/images/demo-en.gif" width="640" alt="The overlay under the menu bar listens, shows the sentence as it is recognized, and finishes with the result kept on screen">
 </p>
+
+## What it is
+
+Malgeul is a small menu bar app. Click into any text field, press a shortcut (or say "Hey Computer"), and talk. The words are typed into that field while you speak, and a compact overlay under the notch shows what is being recognized. Speech goes to [Soniox](https://soniox.com) for recognition with your own API key; nothing is stored, and transcripts live only in memory until you quit.
+
+It types what you said. It does not rewrite your sentences, and a spoken edit only counts when you ask for it with a trigger word.
+
+## Why it is good
+
+- **Types live, into the field you chose.** Standard Mac text fields are edited through accessibility; web editors and terminals get key events sent to that app only. When recognition revises an earlier word, only the changed tail is retyped.
+- **Stays out of the way.** The overlay never takes keyboard focus, so you keep typing and clicking in your app. Drag it anywhere; it closes by itself after 30 seconds of quiet (configurable).
+- **Nothing is lost.** The result stays until you dismiss it, with Copy and Paste for the times a field would not accept text. The last 20 dictations sit in a collapsible history, in memory only.
+- **Edit by voice.** "자비스 지워" deletes the last sentence, "자비스 되돌려" undoes it, "자비스 A를 B로 바꿔" replaces a word, and "자비스 엔터 보내기" presses Return. English works too: "delete that", "undo", "replace A with B", "send enter". The trigger word (default "자비스") is yours to change.
+- **Starts by voice.** Two Shortcuts actions, Start Dictation and Finish Dictation, work with the Shortcuts app and Voice Control. Or turn on the wake phrase and say "Hey Computer", recognized entirely on your Mac.
+- **Korean and English.** The app, the overlay and this README come in both languages, and recognition is hinted toward Korean and English.
+- **Keeps itself current.** Updates install from inside the app through GitHub Releases, with a daily check or **Check for Updates…** in the menu.
 
 ## A look around
 
-<table>
-  <tr>
-    <td width="56%" valign="top">
-      <b>Idle</b>: one compact capsule under the notch<br><br>
-      <img src="docs/images/notch-idle-en.png" width="340" alt="Idle overlay"><br><br>
-      <b>Listening</b>: the transcript updates live as you speak<br><br>
-      <img src="docs/images/notch-recording-en.png" width="480" alt="Overlay while recording"><br><br>
-      <b>Done</b>: the result stays until you dismiss it, with Copy and Paste for recovery<br><br>
-      <img src="docs/images/notch-result-en.png" width="480" alt="Overlay after dictation finishes">
-    </td>
-    <td width="44%" valign="top">
-      <b>Settings</b>: API key, microphone, permissions, input, and shortcuts<br><br>
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark-en.png">
-        <img src="docs/images/settings-light-en.png" width="360" alt="Settings window">
-      </picture>
-    </td>
-  </tr>
-</table>
+The overlay sits under the notch. Idle, it is one capsule:
+
+<p align="center">
+  <img src="docs/images/notch-idle-en.png" width="340" alt="Idle overlay: Press ⌃⌥D to dictate, with start, settings and close buttons">
+</p>
+
+While you speak, it shows the live transcript, the app it is typing into, and your earlier dictations:
+
+<p align="center">
+  <img src="docs/images/notch-recording-en.png" width="480" alt="Overlay while recording: Listening, Typing in Notes, the sentence so far, and the Dictation History">
+</p>
+
+When you finish, the result stays with Copy and Paste in case it could not be typed:
+
+<p align="center">
+  <img src="docs/images/notch-result-en.png" width="480" alt="Overlay after dictation: Dictation finished, the sentence, Copy and Paste buttons, and the Dictation History">
+</p>
+
+Settings holds the API key, microphone and permissions, input behavior, dictionary, shortcuts, and voice start. Light, then dark:
+
+<p align="center">
+  <img src="docs/images/settings-light-en.png" width="400" alt="Settings window in light mode: status, Setup with the Soniox API key, microphone and permission rows, and Input options">
+  &nbsp;&nbsp;
+  <img src="docs/images/settings-dark-en.png" width="400" alt="Settings window in dark mode, same content">
+</p>
+
+The overlay is dark in both appearances by design.
 
 ## Install
 
-Requires macOS 15 or later on Apple Silicon.
+1. Download the `.zip` from the [latest release](https://github.com/floweredao/malgeul/releases/latest), unzip it, and move `Speech2Text.app` to Applications. The bundle is still named `Speech2Text.app` on disk; it shows up as **Malgeul** (**말글** on a Korean Mac) in the menu bar, its windows and Settings. The file name and bundle identifier stay as they were so that permissions you already granted and the updater keep working.
+2. Open it. If macOS says it cannot open the app, go to System Settings › Privacy & Security, scroll to Security, and click **Open Anyway**. Once per version.
+3. From then on, updates install from inside the app.
 
-1. Download the `.zip` from the [latest release](https://github.com/floweredao/malgeul/releases/latest), unzip it, and move `Speech2Text.app` to Applications.
-2. Open it. If macOS says it can't open the app, go to System Settings › Privacy & Security, scroll to Security, and click **Open Anyway** next to Speech2Text. You only need to do this once per version.
-3. Later versions install from inside the app: it checks GitHub Releases once a day, or choose **Check for Updates…** from the menu bar icon.
+## Set up
 
-## Dictating
+Open **Settings…** from the waveform icon in the menu bar. Settings opens by itself while something is missing.
 
-1. In Settings, paste your Soniox API key and press **Save**. The key is kept only in Speech2Text's own Keychain item (`com.speech2text.credentials`) and is loaded on the next launch. **Remove Saved Key** deletes it from this Mac. Pick a microphone under **Input Microphone**; the default is the system input.
-2. Grant the Accessibility permission. macOS also asks for microphone access the first time you record.
-3. **Click the text field** you want to type into first, in any app: terminal, browser, notes.
-4. Press **Control+Option+D** (the default; see "Changing shortcuts" below) and speak. The overlay under the notch shows what's being recognized.
-   - Recording starts as soon as the microphone is on, so you can talk right away. The Soniox connection finishes in the background, and the overlay shows "connecting" meanwhile. If the connection fails once, the app retries once automatically.
-   - With no internet connection, the app refuses to start and tells you so immediately.
-5. Text is typed into the field you picked as you speak. When recognition revises earlier words, only the changed tail is erased and retyped. Press the same shortcut or the finish button to settle on the final text. Recordings are limited to 30 minutes.
-   - Standard Mac text fields (Notes, TextEdit, most apps) are edited through accessibility text replacement. Where that isn't supported, such as terminals, the app sends key events to that app only. This works with a Korean input method active.
-   - If you switch to another field or app mid-way, live typing stops and the result is kept in the overlay. In terminals, typing or clicking in the field while dictating also stops it, because terminals don't report where the cursor is. Cancelling erases only the text typed in this session. The app never sends newlines or Return, so it can't run a command in a terminal.
-   - Settings › Input › **Punctuation** chooses what is typed: **As Is** (the default), **Drop Commas** (periods, question marks and exclamation marks stay; commas inside numbers such as 1,000 stay), or **Drop All** (numbers such as 3.14 stay). Voice commands are still recognized from the words as heard.
+1. **Soniox API key.** Paste it and press **Save**. The key is kept only in the app's own Keychain item and loaded on the next launch; **Remove Saved Key** deletes it from this Mac. Soniox usage charges apply.
+2. **Microphone.** macOS asks the first time you record. Choose the microphone under **Input Microphone**; the default is the system input.
+3. **Accessibility.** Live typing into other apps and modifier-only shortcuts need the permission that controls other apps. Press **Request Access**, then allow Malgeul in System Settings. On macOS 27 the pane is called **Device Control and Data Management**; on macOS 26 and earlier it is **Accessibility**. Settings refreshes the status when you come back.
 
-## Changing shortcuts
+If the list shows the app as allowed but it still reports no permission, remove the entry with **−** and add `/Applications/Speech2Text.app` again with **+**.
 
-In Settings › **Shortcuts**, click an action's shortcut button and press the keys you want. Esc cancels recording, and ✕ turns that shortcut off.
+## Dictate
 
-- **Key chords**: a key pressed with at least one of ⌃, ⌥, or ⌘ (for example ⌃⌥D or ⌘⇧K), or F1–F20. Keys that would block typing (a letter with no modifier, or ⇧ plus a letter) aren't allowed.
-- **Modifiers only**: pressing and releasing modifiers alone, such as both ⇧ keys together, the right ⌘ by itself, both ⌥ keys, or ⌘+⌥. Left and right are recorded separately. It doesn't count as a shortcut if you type another key or click while holding, or hold for longer than 0.6 seconds. This mode needs the device control (Accessibility) permission.
-- **Multi-tap**: while recording, press the same key or modifier combination two or three times within 0.5 seconds to save it as a double or triple tap. If a single tap and a double tap of the same key are assigned to different actions, the single tap runs after a 0.5 second wait.
+1. Click the text field you want to type into, in any app.
+2. Press **⌃⌥D** and speak. Recording starts as soon as the microphone is on, so talk right away; the Soniox connection finishes in the background and is retried once if it fails. With no internet connection the app refuses to start and says so.
+3. Press **⌃⌥D** again, click the stop button, or stop talking: after 30 seconds without new words the dictation finishes by itself (Settings › Input › **Finish When Nothing Is Said**). Recordings are limited to 30 minutes.
 
-## Starting by voice
+What to expect while typing live:
 
-Speech2Text can start and finish dictation when you ask by voice, without keeping its own microphone on. It adds two actions, **Start Dictation** and **Finish Dictation**, that the Shortcuts app and Voice Control can run. Start never ends a dictation already running, and Finish never starts one. Settings › **Start by Voice** shows the same steps.
+- If you move to another field or app mid-sentence, live typing stops and the result is kept in the overlay. Words you said before switching are never typed into the new field; what you say after goes there.
+- In terminals, typing or clicking in the field also stops it, because terminals do not report where the cursor is. The app never sends Return on its own, so it cannot run a command. The spoken Return command is the one exception, and it goes to the same field only.
+- Cancelling erases only the text typed in this dictation.
+- **Punctuation** (Settings › Input): **As Is**, **Drop Commas** (periods, question and exclamation marks stay, and so do commas inside numbers like 1,000), or **Drop All** (numbers like 3.14 stay). Voice commands are matched on the words as heard.
+- **Dictionary** (Settings › Dictionary): words listed here are sent to Soniox as context so they are recognized as written.
 
-- **Wake phrase** (off by default): turn on Settings › Start by Voice › **Start and Finish by Wake Phrase**, then say "Hey Computer" to start dictating and say it again at the end to finish. The phrase is a setting (English letters). Listening runs entirely on this Mac: a small built-in keyword model, plus macOS's own on-device speech recognition on macOS 26 and later, which also catches "Hey Computer" said with a Korean accent ("헤이 컴퓨터"). Nothing it hears is stored or sent. The microphone stays on while it listens (the orange dot in the menu bar) and is released while you dictate. A real English word is heard far more reliably than a made-up name.
-- **Voice Control**: in the Shortcuts app, make a shortcut with the Speech2Text action **Start Dictation**. Then in System Settings › Accessibility › Voice Control › Commands, click +, type the phrase you will say, set the action to **Run Shortcut**, and pick that shortcut. Do the same for **Finish Dictation**. Voice Control keeps listening while it's on and can type what you say itself; if text comes in twice, switch Voice Control to Command Mode.
+### Shortcuts
 
-Click the field you want to type into first, as with the keyboard shortcut.
+Settings › **Shortcuts** has one row per action: start/finish dictation (default ⌃⌥D), paste the last dictation (default ⌃⌥V), and cancel (no default). Click the shortcut button and press the keys you want; Esc cancels recording and ✕ turns a shortcut off.
 
-Voice edits and spoken Return need the **trigger word** (Settings › Input, placeholder "자비스") right before them: "자비스 지워" deletes the last sentence and "자비스 엔터 보내기" presses Return, while "지워" on its own is typed as text. Settings › Input › Edit by Voice can instead let **Jev** decide: say "지워", "되돌려" or "A를 B로 바꿔" without a trigger word and the TypeSafe Jev model judges from the text before it whether you meant an edit or words to type. Only a phrase that ends in a command and up to 400 characters before it are sent; when Jev is unsure, fails or takes over 1.5 seconds, the words are typed. "되돌려" right after an edit always undoes it. The Jev API key is stored in this app's Keychain.
+- **Key chords**: a key with at least one of ⌃, ⌥, ⌘, or F1–F20. Keys that would block typing (a bare letter, ⇧ plus a letter) are refused.
+- **Modifiers only**: press and release modifiers alone, such as both ⇧ keys, the right ⌘, or ⌘+⌥. Left and right count separately. Typing another key or clicking while holding, or holding longer than 0.6 seconds, does not count. Needs the Accessibility permission.
+- **Multi-tap**: while recording a shortcut, press the same keys two or three times within 0.5 seconds to save a double or triple tap.
 
-## When text wasn't typed
+### Edit by voice
 
-If you move to another app or field while speaking, automatic typing stops. The result stays in the overlay.
+A command counts only right after the **trigger word** (Settings › Input, default "자비스"), so the same words said on their own are typed as text.
 
-- **Copy**: copies the current dictation to the clipboard. Paste it with ⌘V wherever you like.
-- **Paste** or **Control+Option+V**: sends it to the currently selected field. The overlay's buttons never take keyboard focus.
-- Without a mouse: the menu bar icon's menu has **Cancel Dictation** and **Copy Last Dictation** too (reach it with Control+F8 and the arrow keys). Cancel Dictation has no default shortcut; you can set one in Settings › Shortcuts.
-- For fields that don't support accessibility, copy and paste by hand.
+| Say | Effect |
+| --- | --- |
+| "자비스 지워" · "자비스 delete that" | Deletes the last sentence |
+| "자비스 한 단어 지워" · "자비스 delete last word" | Deletes the last word |
+| "자비스 다 지워" · "자비스 clear all" | Clears everything dictated so far |
+| "자비스 되돌려" · "자비스 undo" | Undoes the last edit |
+| "자비스 A를 B로 바꿔" · "자비스 replace A with B" | Replaces the last A with B |
+| "자비스 엔터 보내기" · "자비스 send enter" | Finishes and presses Return in the same field |
 
-Some apps don't report whether input succeeded. In that case the app shows **Paste requested** instead of claiming success. The default paste path replaces the clipboard contents with the dictation. Automatic typing isn't guaranteed to work in every third-party app.
+Settings › Input › **Edit by Voice** can instead let **Jev** decide: say "지워", "되돌려" or "replace A with B" without a trigger word and the TypeSafe Jev model judges from the text before it whether you meant an edit. Only a phrase that ends in a command and up to 400 characters before it are sent; when Jev is unsure, fails, or takes over 1.5 seconds, the words are typed. The Jev API key lives in the app's Keychain. **Off** types everything.
 
-## Input setup you finish yourself
+## Start by voice
 
-Open the menu bar waveform icon → **Settings…** and set the following.
+Malgeul adds two actions, **Start Dictation** and **Finish Dictation**, that the Shortcuts app and Voice Control can run. Start never ends a dictation that is already running, and Finish never starts one. Click the field you want first, as with the keyboard shortcut. Settings › **Start by Voice** shows the same steps.
 
-1. Under permissions, press **Request Access** for Accessibility, then **Open System Settings** and allow Speech2Text in the macOS list yourself. The app never changes permissions on its own.
-2. Scroll down to **Input → Type While Speaking** to turn live typing on or off. When it's off, the transcript is kept and you copy or paste it when you choose.
-3. Click the field you want, then use the overlay's **Paste** or **Control+Option+V**. To avoid the permission entirely, use **Copy** and press ⌘V yourself.
+- **Wake phrase** (off by default). Turn on **Start and Finish by Wake Phrase**, then say "Hey Computer" to start and say it again at the end to finish. Listening runs entirely on this Mac: a small keyword model built into the app, plus macOS's own on-device speech recognizer on macOS 26 and later. The recognizer is what hears "Hey Computer" said with a Korean accent ("헤이 컴퓨터"), which the English keyword model alone misses. Nothing it hears is stored or sent. The microphone stays on while it listens (the orange dot in the menu bar) and is handed to the dictation while you speak; a Bluetooth headset's sound quality can drop meanwhile. The phrase is a setting in English letters, with **Sensitivity** low, standard or high; a real English word is heard far more reliably than a made-up name.
+- **Voice Control.** In the Shortcuts app, make a shortcut with the Malgeul action **Start Dictation**. In System Settings › Accessibility › Voice Control › Commands, click +, type the phrase you will say, set the action to **Run Shortcut**, and pick that shortcut. Do the same for **Finish Dictation**. Voice Control keeps listening while it is on and can type what you say itself; if text comes in twice, switch Voice Control to Command Mode.
 
-Permission status refreshes when you come back from System Settings. You enter passwords and approve macOS permissions yourself.
+## Troubleshooting
 
-Depending on your macOS version, the relevant Privacy & Security item may be labelled **Device Control and Data Management**. That's different from the **Accessibility** screen in the sidebar that configures Zoom, VoiceOver, and so on.
+- **Nothing was typed.** The result is in the overlay. **Copy** puts it on the clipboard for ⌘V; **Paste** (or ⌃⌥V) sends it to the field that is selected now. The menu bar menu has Cancel Dictation, Copy Last Dictation and Paste Last Dictation too, reachable with ⌃F8 and the arrow keys. Some apps do not report whether a paste landed; then the overlay says **Paste requested** rather than claiming success.
+- **"No permission" although the app is listed.** Remove the entry in the privacy pane with **−** and add `/Applications/Speech2Text.app` again with **+**. Modifier-only shortcuts need the same permission.
+- **Recording will not start.** Settings shows which of the three setup items is missing. A missing key, a microphone that is denied, unavailable or silent, and a Soniox 401/403 are reported in the overlay with **Check Settings** only, because retrying would repeat them; every other error, including no internet connection, offers **Try Again** as well.
+- **The wake phrase never fires.** Make sure the microphone it listens on is the one in Settings, raise **Sensitivity**, and prefer a real English word. On macOS 26 and later the system recognizer joins in only when an on-device model for one of your preferred languages is installed.
+- **Live typing stops in a terminal.** Terminals do not expose the cursor, so any key or click there ends live typing. Finish, then paste.
+- **Voice Control types the words twice.** Switch Voice Control to Command Mode.
+- **macOS refuses to open the app.** System Settings › Privacy & Security › Security › **Open Anyway**, once per version.
 
-If the list shows Speech2Text as enabled but the app still reports no permission, remove the Speech2Text entry with **−**, add `/Applications/Speech2Text.app` again with **+**, and allow it.
+## Build from source
 
-## Data
-
-Audio is sent to Soniox while recording, and Soniox usage charges apply. The key is never written to source or logs. Transcripts live only in memory and disappear when the app quits. The app doesn't save recordings or capture the screen.
-
-## Local verification
-
-```sh
-bash scripts/test.sh
-bash -n scripts/build-app.sh
-bash scripts/build-app.sh
-codesign --verify --deep --strict build/Speech2Text.app
-```
-
-With the Swift 6.4 Command Line Tools on this Mac, the default test command can't find the `TestingMacros`/`Testing` paths. `scripts/test.sh` passes the installed framework and macro paths explicitly and doesn't skip any tests. The current toolchain prints a deprecation warning for the `native` build backend.
-
-You can also run a diagnostic that sends a real audio file through the same recognition path. Quit the app first.
+Requires Xcode and the Command Line Tools on Apple silicon.
 
 ```sh
-open build/Speech2Text.app --args --audio-file /absolute/path/sample.aiff --no-auto-insert
+bash scripts/test.sh          # unit tests
+bash scripts/build-app.sh     # build/Speech2Text.app, signed with "Apple Development" by default
 ```
 
-This run also uses Soniox and the key in the app's own Keychain. Without `--no-auto-insert`, the result is typed automatically if the field that was focused at launch is still focused.
+`scripts/fetch-wake-model.sh` downloads the pinned sherpa-onnx libraries and the keyword model into `Vendor/` (not committed) before a build or test run. Set `SPEECH2TEXT_SIGNING_IDENTITY=-` for an ad-hoc signature. `bash scripts/capture-readme-images.sh` renders the screenshots and GIFs in `docs/images` through the app's own `--demo-capture` mode: synthetic text, no microphone, network or window on screen.
 
-Add `--print-turns` and run the binary itself (`build/Speech2Text.app/Contents/MacOS/Speech2Text --audio-file ... --no-auto-insert --print-turns`) to print each recognized turn with the silence before it in milliseconds, then the edited result, and quit.
+## Privacy
+
+Audio is sent to Soniox only while a dictation runs, over a connection authorized with your key. The wake phrase is heard on this Mac only. Nothing is recorded to disk, transcripts and the dictation history live in memory and disappear when the app quits, and the app does not capture the screen.
+
+## License
+
+Malgeul is released under the [MIT License](LICENSE). The app also ships Sparkle, sherpa-onnx, ONNX Runtime and a keyword model under their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
