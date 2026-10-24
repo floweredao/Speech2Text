@@ -33,11 +33,12 @@ struct DictationDisplayState: Equatable {
     let noteText: String
     /// The error comes from setup (key, microphone, permission), so retrying without a change repeats it.
     let needsSettings: Bool
-    /// Earlier dictations below the current one, newest first. Never includes the text shown as the body or the
-    /// labelled retained line.
+    /// Every earlier dictation, newest first, in the one "Dictation History" group: collapsed it shows only the
+    /// newest, and its expand button shows the rest. The previous result is the group's newest row, not a line of its
+    /// own; only the finished result shown as the body stays out of it.
     let history: [DictationRecord]
-    /// Older records behind the "more" button; offered only while no dictation runs.
-    let moreHistory: [DictationRecord]
+    /// The newest history row is the previous result `model.transcript` still holds, so it offers paste as well.
+    let historyPastesNewest: Bool
     /// The app live typing writes into, shown quietly beside the title while it matters.
     let targetName: String?
     /// The result already went into the field, so copy and paste step back to one header button.
@@ -109,17 +110,25 @@ struct DictationDisplayState: Equatable {
         inserted = phase == .result && feedbackIsRoutine
         self.targetName = phase == .recording || phase == .finalizing || inserted ? targetName : nil
         self.uncertainWords = uncertainWords
-        // The newest record is the finished result itself, or the "previous" line, until a new dictation starts.
-        let older: ArraySlice<DictationRecord>
+        // The newest record is the finished result itself until a new dictation starts; the previous result joins the
+        // history group instead of a separate "previous" line.
         switch phase {
-        case .idle: older = []
-        case .result: older = history.dropFirst()
-        default: older = retainedKind == .previous ? history.dropFirst() : history[...]
+        case .idle: self.history = []
+        case .result: self.history = Array(history.dropFirst())
+        default: self.history = history
         }
-        self.history = Array(older.prefix(NotchOverlayGeometry.historyRows))
-        let dictating = phase == .connecting || phase == .recording || phase == .finalizing
-        moreHistory = dictating ? [] : Array(older.dropFirst(NotchOverlayGeometry.historyRows))
+        historyPastesNewest = retainedKind == .previous && !self.history.isEmpty
     }
+
+    /// The previous result has no history row (it was only a spoken command), so it keeps its own labelled line;
+    /// unconfirmed text heard before an error is never history.
+    var showsRetainedLine: Bool { retainedKind == .unfinished || (retainedKind == .previous && !historyPastesNewest) }
+
+    /// Rows the history group shows: the newest one until the user expands it.
+    func historyRows(expanded: Bool) -> [DictationRecord] {
+        expanded ? history : Array(history.prefix(NotchOverlayGeometry.collapsedHistoryRows))
+    }
+    var historyCanExpand: Bool { history.count > NotchOverlayGeometry.collapsedHistoryRows }
 
     /// What changes the overlay's layout, so motion follows these changes but not every revision of live text.
     struct LayoutKey: Hashable {
@@ -182,8 +191,8 @@ enum NotchOverlayGeometry {
     /// The transcript grows to this many lines of its text style, then scrolls. The view measures the lines,
     /// so the cap follows the system text size.
     static let maxTranscriptLines = 5
-    /// Earlier dictations shown under the current one; older ones stay in `AppModel.history`.
-    static let historyRows = 1
+    /// History rows shown until the user expands the group (owner decision 2026-10-23: one row until expanded).
+    static let collapsedHistoryRows = 1
     /// Used only until the five-line sample has been measured.
     static let fallbackMaxTranscriptHeight: CGFloat = 96
     /// Smallest hit area of an overlay button, whatever its visible size.
@@ -708,13 +717,15 @@ struct NotchOverlayView: View {
                 .help(state.noteText)
                 .accessibilityIdentifier("notch-feedback")
         }
-        if let kind = state.retainedKind {
+        if state.showsRetainedLine, let kind = state.retainedKind {
             retainedLine(state.retained, kind: kind)
-        } else if state.offersTranscriptActions, !state.inserted {
+        } else if state.phase == .result, !state.inserted {
             transcriptActions
         }
         if !state.history.isEmpty {
-            HistoryList(records: state.history, more: state.moreHistory, entering: entering) { model.copyHistory($0) }
+            HistoryList(state: state, entering: entering,
+                        paste: { model.pasteTranscript() },
+                        pasteLabel: String(localized: "붙여넣기") + shortcutHint(.pasteTranscript)) { model.copyHistory($0) }
         }
     }
 
@@ -840,21 +851,34 @@ private struct LevelMeter: View {
     }
 }
 
-/// Earlier dictations, pushed down by the new one: a labelled inset group, so they never read as the current text,
-/// with each older row dimmer and one text style smaller. "More" opens the rest in a scrolling list.
-private struct HistoryList: View {
-    let records: [DictationRecord]
-    let more: [DictationRecord]
+/// Every earlier dictation in one labelled inset group, so none reads as the current text. Collapsed it shows only the
+/// newest; the expand/collapse button (owner request 2026-10-23, 2026-10-24) shows the rest in a scrolling list, each
+/// older row dimmer and one text style smaller. A new dictation folds it back.
+struct HistoryList: View {
+    let state: DictationDisplayState
     let entering: AnyTransition
+    let paste: () -> Void
+    let pasteLabel: String
     let copy: (DictationRecord) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
-    private let showsAll = State(initialValue: false)
+    private let showsAll: State<Bool>
     private let listHeight = State(initialValue: CGFloat(0))
     static let expandedMaxHeight: CGFloat = 220
 
+    init(state: DictationDisplayState, entering: AnyTransition, expanded: Bool = false, paste: @escaping () -> Void,
+         pasteLabel: String, copy: @escaping (DictationRecord) -> Void) {
+        self.state = state
+        self.entering = entering
+        self.paste = paste
+        self.pasteLabel = pasteLabel
+        self.copy = copy
+        showsAll = State(initialValue: expanded)
+    }
+
     var body: some View {
-        let expanded = showsAll.wrappedValue && !more.isEmpty
+        let expanded = showsAll.wrappedValue && state.historyCanExpand
+        let motion = reduceMotion ? OverlayMotion.reduced : OverlayMotion.layout
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(alignment: .center) {
                 Text(String(localized: "받아쓰기 기록"))
@@ -862,42 +886,50 @@ private struct HistoryList: View {
                     .foregroundStyle(.white.opacity(0.5))
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
-                if !more.isEmpty {
+                if state.historyCanExpand {
                     Button {
-                        // Animated like every other layout change, so the list opens with the panel instead of
-                        // jumping while the panel frame is still growing.
-                        withAnimation(reduceMotion ? OverlayMotion.reduced : OverlayMotion.layout) {
-                            showsAll.wrappedValue.toggle()
-                        }
+                        // On the panel's own curve, so the list opens with the panel instead of being cut while the
+                        // panel frame is still growing.
+                        withAnimation(motion) { showsAll.wrappedValue.toggle() }
                     } label: {
-                        Label(expanded ? String(localized: "접기") : String(localized: "더보기 \(more.count)"),
-                              systemImage: expanded ? "chevron.up" : "chevron.down")
-                            .font(.caption.weight(.semibold))
-                            .labelStyle(.titleAndIcon)
+                        HStack(spacing: Spacing.xs) {
+                            Text(expanded ? String(localized: "접기") : String(localized: "펼치기"))
+                                .contentTransition(.opacity)
+                            // One chevron that turns over, so the button reads as the same control in both states;
+                            // Reduce Motion swaps the symbol instead of turning it.
+                            if reduceMotion {
+                                Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            } else {
+                                Image(systemName: "chevron.down").rotationEffect(.degrees(expanded ? -180 : 0))
+                            }
+                        }
+                        .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(OverlayControlStyle(shape: .capsule, prominent: false))
+                    .help(expanded ? String(localized: "접기") : String(localized: "받아쓰기 기록 \(state.history.count)개 모두 보기"))
                     .accessibilityValue(expanded ? String(localized: "펼침") : String(localized: "접힘"))
-                    .accessibilityIdentifier("notch-history-more")
+                    .accessibilityIdentifier("notch-history-toggle")
                 }
             }
-            if expanded {
-                ScrollView(.vertical) {
-                    rows(records + more)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight.wrappedValue = $0 }
-                }
-                .contentMargins(.trailing, Spacing.m, for: .scrollContent)
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(height: min(max(listHeight.wrappedValue, 1), Self.expandedMaxHeight))
-                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            } else {
-                rows(records)
-                    .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            ScrollView(.vertical) {
+                rows(state.historyRows(expanded: expanded))
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight.wrappedValue = $0 }
             }
+            // The overlay scroller draws over content; a trailing gutter keeps it off the text. It stays when collapsed,
+            // so the newest row's buttons don't shift sideways as the list opens.
+            .contentMargins(.trailing, Spacing.m, for: .scrollContent)
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDisabled(!expanded)
+            .frame(height: min(max(listHeight.wrappedValue, 1), Self.expandedMaxHeight))
+            .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         // The history group sits a step further from the current dictation than its parts sit from each other.
         .padding(.top, Spacing.xs)
-        // A new dictation folds the list back to its three newest rows.
-        .onChange(of: more.isEmpty) { _, empty in if empty { showsAll.wrappedValue = false } }
+        // A new dictation folds the group back to its newest row.
+        .onChange(of: state.isDictating) { _, dictating in
+            if dictating { withAnimation(motion) { showsAll.wrappedValue = false } }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "받아쓰기 기록"))
         .accessibilityIdentifier("notch-history")
@@ -923,6 +955,10 @@ private struct HistoryList: View {
                         OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "이 받아쓰기 복사"),
                                           id: "notch-history-copy", prominent: false) {
                             copy(record)
+                        }
+                        if depth == 0 && state.historyPastesNewest {
+                            OverlayIconButton(symbol: "arrow.down.doc", label: pasteLabel, id: "notch-paste",
+                                              prominent: false, action: paste)
                         }
                     }
                     // The copy circle sits 4 pt from the group's edges (2 pt padding + its 2 pt hit margin).

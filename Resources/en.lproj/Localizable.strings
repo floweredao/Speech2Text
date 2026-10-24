@@ -159,8 +159,9 @@
 "%lld초" = "%lld sec";
 "%lld분" = "%lld min";
 "말로 고치기" = "Edit by Voice";
-"더보기 %lld" = "%lld More";
-"접기" = "Show Less";
+"펼치기" = "Expand";
+"받아쓰기 기록 %lld개 모두 보기" = "Show All %lld Dictations";
+"접기" = "Collapse";
 "펼침" = "Expanded";
 "접힘" = "Collapsed";
 "되돌렸어요." = "Undone.";

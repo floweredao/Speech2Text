@@ -203,14 +203,14 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
     @Test func startingANewDictationMovesTheResultIntoHistory() {
         let result = display(.idle, transcript: previous, session: session(.completed, current: true), history: records)
         #expect(result.transcript == previous)
-        #expect(result.history == [records[1]])
+        #expect(result.history == Array(records[1...]))
         let connecting = display(.preparing, transcript: previous, session: session(), history: records)
         #expect(connecting.transcript.isEmpty)
-        #expect(connecting.history == [records[0]])
+        #expect(connecting.history == records)
         #expect(connecting.isExpanded)
         let recording = display(.recording, transcript: live, session: session(current: true), history: records)
         #expect(recording.transcript == live)
-        #expect(recording.history == [records[0]])
+        #expect(recording.history == records)
     }
 
     /// Owner request: the overlay stays calm. Routine confirmations are not shown, and a result already typed into the
@@ -234,20 +234,39 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(listening.targetName == "Notes")
     }
 
-    /// Owner request: after a dictation the rest of the history stays reachable behind "more"; never while dictating.
-    @Test func olderHistoryWaitsBehindMoreOnlyWhenNotDictating() {
+    /// Owner request (2026-10-23, 2026-10-24): the history shows one row until its expand button is pressed, and the
+    /// button shows every row, while dictating too.
+    @Test func historyShowsOneRowUntilExpanded() {
         let result = display(.idle, transcript: previous, session: session(.completed, current: true), history: records)
-        #expect(result.moreHistory == Array(records[2...4]))
+        #expect(result.historyRows(expanded: false) == [records[1]])
+        #expect(result.historyRows(expanded: true) == Array(records[1...]))
+        #expect(result.historyCanExpand)
         let recording = display(.recording, transcript: live, session: session(current: true), history: records)
-        #expect(recording.moreHistory.isEmpty)
+        #expect(recording.historyRows(expanded: false) == [records[0]])
+        #expect(recording.historyRows(expanded: true) == records)
+        let single = display(.idle, transcript: previous, session: session(.completed, current: true),
+                             history: Array(records[0...1]))
+        #expect(!single.historyCanExpand)
     }
 
-    @Test func historyNeverRepeatsTheLabelledPreviousLineAndHidesWhenIdle() {
-        let notice = display(.idle, transcript: previous, feedback: "인식 없음", session: session(.empty), history: records)
-        #expect(notice.retained == previous)
-        #expect(notice.history == [records[1]])
+    /// Owner request (2026-10-24): no separate "Previous dictation" line beside "Dictation History"; the previous
+    /// result is the history's newest row, with paste kept on it.
+    @Test func previousResultJoinsTheOneHistory() {
+        for state in [display(.idle, transcript: previous, feedback: "인식 없음", session: session(.empty), history: records),
+                      display(.idle, transcript: previous, feedback: "취소했어요", session: session(.cancelled), history: records),
+                      display(.idle, error: true, transcript: previous, session: session(.failed), history: records)] {
+            #expect(state.retainedKind == .previous)
+            #expect(!state.showsRetainedLine)
+            #expect(state.history == records)
+            #expect(state.historyRows(expanded: false) == [records[0]])
+            #expect(state.historyPastesNewest)
+        }
         let unfinished = display(.idle, error: true, transcript: live, session: session(.failed, current: true), history: records)
-        #expect(unfinished.history == [records[0]])
+        #expect(unfinished.showsRetainedLine)
+        #expect(unfinished.history == records)
+        #expect(!unfinished.historyPastesNewest)
+        let noRecord = display(.idle, transcript: previous, feedback: "인식 없음", session: session(.empty))
+        #expect(noRecord.showsRetainedLine)
         let idle = display(.idle, transcript: "", session: session(), history: records)
         #expect(idle.history.isEmpty)
         #expect(!idle.isExpanded)
