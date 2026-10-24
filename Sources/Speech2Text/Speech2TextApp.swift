@@ -36,6 +36,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             print(key.map(JevKeychain.save) == true ? "JEV_KEY_STORED" : "JEV_KEY_NOT_STORED")
             exit(0)
         }
+        // A --print-turns file run is a diagnostic that quits when done: no overlay, menu bar item, shortcuts or
+        // update check, so it never shows up next to the running app.
+        if let index = launchArguments.firstIndex(of: "--audio-file"), launchArguments.indices.contains(index + 1),
+           launchArguments.contains("--print-turns") {
+            transcribeFile(launchArguments[index + 1], arguments: launchArguments)
+            return
+        }
         let updater = AppUpdater()
         self.updater = updater
         model.settingsAction = { [weak self] in self?.presentSettings() }
@@ -73,22 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         applyShortcuts()
         let arguments = ProcessInfo.processInfo.arguments
         if let index = arguments.firstIndex(of: "--audio-file"), arguments.indices.contains(index + 1) {
-            model.autoInsert = !arguments.contains("--no-auto-insert")
-            model.printsTurnsAndQuits = arguments.contains("--print-turns")
-            let url = URL(fileURLWithPath: arguments[index + 1])
-            // Diagnostics: another command judge or Jev key for this run only.
-            if let mode = Self.value(after: "--command-judge", in: arguments).flatMap(CommandJudgeMode.init) {
-                model.commandJudgeOverride = mode
-            }
-            if let file = Self.value(after: "--jev-key-file", in: arguments) {
-                model.jevKeyOverride = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
-            } else {
-                model.loadJevKey()
-            }
-            Task {
-                await model.speech.loadKey()
-                model.transcribeFile(url)
-            }
+            transcribeFile(arguments[index + 1], arguments: arguments)
         } else {
             model.loadJevKey()
             model.beginWakeListening()
@@ -101,6 +93,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     controlGranted: AXIsProcessTrusted())
                 if readiness.missingCount > 0 { showSettings() }
             }
+        }
+    }
+
+    private func transcribeFile(_ path: String, arguments: [String]) {
+        model.autoInsert = !arguments.contains("--no-auto-insert")
+        model.printsTurnsAndQuits = arguments.contains("--print-turns")
+        // Diagnostics: another command judge, Soniox context terms ("" for none) or Jev key for this run only.
+        if let mode = Self.value(after: "--command-judge", in: arguments).flatMap(CommandJudgeMode.init) {
+            model.commandJudgeOverride = mode
+        }
+        if let list = Self.value(after: "--context-terms", in: arguments) {
+            model.contextTermsOverride = DictionaryTerms.adding(list, to: [])
+        }
+        if let file = Self.value(after: "--jev-key-file", in: arguments) {
+            model.jevKeyOverride = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+        } else {
+            model.loadJevKey()
+        }
+        Task {
+            await model.speech.loadKey()
+            model.transcribeFile(URL(fileURLWithPath: path))
         }
     }
     /// Diagnostic: runs the bundled wake-phrase model over an audio file, with no window, microphone or network.

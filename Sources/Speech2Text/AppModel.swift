@@ -114,6 +114,7 @@ final class AppModel {
     }
     /// The command phrase goes to Soniox as context too; without it "엔터" after a pause is often heard as "센터".
     private var recognitionTerms: [String] {
+        if let contextTermsOverride { return contextTermsOverride }
         let commands = (spokenEnter?.terms ?? []) + (voiceEditingEnabled ? VoiceCommand.terms : [])
             + (judgeMode == .trigger ? trigger.terms : [])
             + (wakeListeningEnabled ? wakeSpoken.terms : [])
@@ -186,6 +187,10 @@ final class AppModel {
         didSet { speech.vocabulary = recognitionTerms }
     }
     private var judgeMode: CommandJudgeMode { commandJudgeOverride ?? commandJudge }
+    /// Diagnostics (`--context-terms`) send these Soniox context terms (none when empty) for one run.
+    @ObservationIgnored var contextTermsOverride: [String]? {
+        didSet { speech.vocabulary = recognitionTerms }
+    }
     var punctuationStyle = UserDefaults.standard.string(forKey: "punctuationStyle").flatMap(PunctuationStyle.init) ?? .asIs {
         didSet { UserDefaults.standard.set(punctuationStyle.rawValue, forKey: "punctuationStyle") }
     }
