@@ -7,7 +7,7 @@ enum MenuBarIcon {
 
     static var image: NSImage {
         let configuration = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
-        let image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Speech2Text")?
+        let image = NSImage(systemSymbolName: "waveform", accessibilityDescription: String(localized: "말글"))?
             .withSymbolConfiguration(configuration) ?? NSImage()
         image.isTemplate = true
         return image

@@ -240,8 +240,10 @@ final class WakeSpotter: @unchecked Sendable {
         tokenizer = try WakePhraseTokenizer(sentencepieceModel: model.appendingPathComponent("bpe.model"))
     }
 
-    /// Starts listening for `pieces` (from `tokenizer`), replacing any earlier listening.
-    public func start(pieces: [String], sensitivity: WakeSensitivity, deviceUID: String?) {
+    /// Starts listening for `pieces` (from `tokenizer`), replacing any earlier listening. When `spoken` is given and
+    /// the system has an on-device recognizer for the user's language, its words are checked with `spoken` too.
+    public func start(pieces: [String], sensitivity: WakeSensitivity, deviceUID: String?,
+                      spoken: (@Sendable (String) -> Bool)? = nil) {
         stop()
         generation += 1
         let epoch = generation
@@ -250,21 +252,35 @@ final class WakeSpotter: @unchecked Sendable {
         isListening = true
         let model = model
         task = Task { [weak self] in
+            var transcriber: (any WakeTranscribing)?
             do {
                 let spotter = try await Task.detached(priority: .utility) {
                     try WakeSpotter(model: model, pieces: pieces, sensitivity: sensitivity)
                 }.value
-                try Task.checkCancellation()
-                let chunks = try await capture.start(format: .pcm16Mono16k)
-                Self.log.notice("listening")
-                try await Task.detached(priority: .utility) {
-                    for try await chunk in chunks where spotter.accept(pcm: chunk) {
-                        await MainActor.run { self?.heard(epoch) }
+                if let spoken, #available(macOS 26, *) {
+                    transcriber = await WakeTranscriber.make(matches: spoken) {
+                        await MainActor.run { self?.heard(epoch, by: "recognizer") }
                     }
-                }.value
+                }
+                try await withTaskCancellationHandler {
+                    try Task.checkCancellation()
+                    let chunks = try await capture.start(format: .pcm16Mono16k)
+                    Self.log.notice("listening (recognizer: \(transcriber?.localeName ?? "none", privacy: .public))")
+                    let feed = transcriber
+                    try await Task.detached(priority: .utility) {
+                        for try await chunk in chunks {
+                            feed?.accept(pcm: chunk)
+                            if spotter.accept(pcm: chunk) { await MainActor.run { self?.heard(epoch, by: "keyword model") } }
+                        }
+                    }.value
+                    await transcriber?.finish()
+                } onCancel: { [transcriber] in
+                    Task { await transcriber?.cancel() }
+                }
                 try Task.checkCancellation()
                 self?.ended(epoch, message: String(localized: "마이크가 끊겨 호출어를 듣지 않고 있어요."))
             } catch {
+                await transcriber?.cancel()
                 guard !Task.isCancelled else { return }
                 Self.log.error("stopped: \(String(describing: error), privacy: .public)")
                 self?.ended(epoch, message: Self.message(for: error))
@@ -283,9 +299,9 @@ final class WakeSpotter: @unchecked Sendable {
         }
     }
 
-    private func heard(_ epoch: Int) {
+    private func heard(_ epoch: Int, by detector: String) {
         guard epoch == generation else { return }
-        Self.log.notice("wake phrase heard")
+        Self.log.notice("wake phrase heard by \(detector, privacy: .public)")
         onWake?()
     }
 

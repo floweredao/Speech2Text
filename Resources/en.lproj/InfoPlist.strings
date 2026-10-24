@@ -1,1 +1,3 @@
-"NSMicrophoneUsageDescription" = "Speech2Text needs the microphone to transcribe what you say. Audio is sent to Soniox only while dictation is running.";
+"CFBundleName" = "Malgeul";
+"CFBundleDisplayName" = "Malgeul";
+"NSMicrophoneUsageDescription" = "Malgeul needs the microphone to transcribe what you say. Audio is sent to Soniox only while dictation is running.";

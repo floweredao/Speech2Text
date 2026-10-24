@@ -1,1 +1,3 @@
+"CFBundleName" = "말글";
+"CFBundleDisplayName" = "말글";
 "NSMicrophoneUsageDescription" = "말씀하신 내용을 받아쓰려면 마이크가 필요해요. 받아쓰는 동안에만 Soniox로 음성을 보내요.";

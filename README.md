@@ -17,7 +17,7 @@
 Speech2Text is a menu bar app. Press a shortcut, speak, and your words appear in whatever text field you clicked, whether that's a terminal, a browser, or a notes app. A small overlay under the notch shows the live transcript. The app never reads your speech as commands and never rewrites it.
 
 <p align="center">
-  <a href="https://github.com/floweredao/Speech2Text/releases/latest"><b>Download the latest release</b></a>
+  <a href="https://github.com/floweredao/malgeul/releases/latest"><b>Download the latest release</b></a>
 </p>
 
 ## A look around
@@ -46,7 +46,7 @@ Speech2Text is a menu bar app. Press a shortcut, speak, and your words appear in
 
 Requires macOS 15 or later on Apple Silicon.
 
-1. Download the `.zip` from the [latest release](https://github.com/floweredao/Speech2Text/releases/latest), unzip it, and move `Speech2Text.app` to Applications.
+1. Download the `.zip` from the [latest release](https://github.com/floweredao/malgeul/releases/latest), unzip it, and move `Speech2Text.app` to Applications.
 2. Open it. If macOS says it can't open the app, go to System Settings › Privacy & Security, scroll to Security, and click **Open Anyway** next to Speech2Text. You only need to do this once per version.
 3. Later versions install from inside the app: it checks GitHub Releases once a day, or choose **Check for Updates…** from the menu bar icon.
 
@@ -75,7 +75,7 @@ In Settings › **Shortcuts**, click an action's shortcut button and press the k
 
 Speech2Text can start and finish dictation when you ask by voice, without keeping its own microphone on. It adds two actions, **Start Dictation** and **Finish Dictation**, that the Shortcuts app and Voice Control can run. Start never ends a dictation already running, and Finish never starts one. Settings › **Start by Voice** shows the same steps.
 
-- **Wake phrase** (off by default): turn on Settings › Start by Voice › **Start and Finish by Wake Phrase**, then say "Hey Computer" to start dictating and say it again at the end to finish. The phrase is a setting (English letters); "Hey Computer" is a placeholder until the app's name is settled. Listening runs entirely on this Mac with a small built-in keyword model, and nothing it hears is stored or sent. The microphone stays on while it listens (the orange dot in the menu bar) and is released while you dictate. A real English word is heard far more reliably than a made-up name.
+- **Wake phrase** (off by default): turn on Settings › Start by Voice › **Start and Finish by Wake Phrase**, then say "Hey Computer" to start dictating and say it again at the end to finish. The phrase is a setting (English letters). Listening runs entirely on this Mac: a small built-in keyword model, plus macOS's own on-device speech recognition on macOS 26 and later, which also catches "Hey Computer" said with a Korean accent ("헤이 컴퓨터"). Nothing it hears is stored or sent. The microphone stays on while it listens (the orange dot in the menu bar) and is released while you dictate. A real English word is heard far more reliably than a made-up name.
 - **Voice Control**: in the Shortcuts app, make a shortcut with the Speech2Text action **Start Dictation**. Then in System Settings › Accessibility › Voice Control › Commands, click +, type the phrase you will say, set the action to **Run Shortcut**, and pick that shortcut. Do the same for **Finish Dictation**. Voice Control keeps listening while it's on and can type what you say itself; if text comes in twice, switch Voice Control to Command Mode.
 
 Click the field you want to type into first, as with the keyboard shortcut.

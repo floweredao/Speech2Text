@@ -26,10 +26,10 @@ TOOLS="$STAGING/tools/bin"
 # -p only reads the existing key; a mismatch stops before any asset is written.
 [[ "$("$TOOLS/generate_keys" --account "$KEY_ACCOUNT" -p)" == "$PUBLIC_KEY" ]] \
   || { printf '%s\n' 'Keychain Sparkle key does not match SUPublicEDKey.' >&2; exit 65; }
-ZIP_NAME="Speech2Text-$VERSION-macOS.zip"
+ZIP_NAME="Malgeul-$VERSION-macOS.zip"
 ditto -c -k --keepParent "$APP" "$STAGING/release/$ZIP_NAME"
 "$TOOLS/generate_appcast" --account "$KEY_ACCOUNT" --maximum-deltas 0 \
-  --download-url-prefix "https://github.com/floweredao/Speech2Text/releases/download/v$VERSION/" \
+  --download-url-prefix "https://github.com/floweredao/malgeul/releases/download/v$VERSION/" \
   -o "$STAGING/release/appcast.xml" "$STAGING/release"
 SIGNATURE="$(xmllint --xpath 'string(/rss/channel/item/enclosure/@*[local-name()="edSignature"])' "$STAGING/release/appcast.xml")"
 [[ -n "$SIGNATURE" ]] || { printf '%s\n' 'Appcast has no EdDSA signature.' >&2; exit 65; }
