@@ -10,6 +10,7 @@ enum VoiceCommand: Equatable {
     /// freely ("지워 줘", "지워줘").
     private static let phrases: [(VoiceCommand, [String])] = [
         (.deleteLastSentence, ["지워", "그거지워", "방금거지워", "방금문장지워", "마지막문장지워", "문장지워",
+                               "방금말한거지워", "방금말한것지워", "방금한말지워", "말한거지워", "방금말한문장지워",
                                "deletethat", "scratchthat", "deletelastsentence"]),
         (.deleteLastWord, ["단어지워", "한단어지워", "마지막단어지워", "deletelastword", "deleteword"]),
         (.clearAll, ["다지워", "전부지워", "모두지워", "전체지워", "clearall", "deleteall", "deleteeverything"]),
@@ -77,6 +78,10 @@ struct VoiceEditor {
         var outcomes: [Outcome] = []
         /// The turn waiting for Jev; it and every later turn are left out of `text` until it is answered.
         var question: CommandQuestion?
+        /// `text` right after the last outcome; nil when no edit was asked for.
+        var textAtLastEdit: String?
+        /// Words were typed after the last edit, so a note about that edit would read as if it were about them.
+        var saidMoreAfterEdit: Bool { textAtLastEdit.map { $0 != text } ?? false }
     }
 
     static func apply(_ turns: [SpokenTurn], commandsEnabled: Bool, trigger: SpokenPhrase) -> Result {
@@ -120,6 +125,7 @@ struct VoiceEditor {
             if let parsed = VoiceCommand.parse(command) {
                 append(before, to: &result.text)
                 result.outcomes.append(perform(parsed, on: &result.text, undo: &undo))
+                result.textAtLastEdit = result.text
             } else {
                 append(said, to: &result.text)
             }
@@ -164,6 +170,7 @@ struct VoiceEditor {
                 result.text = before
                 let outcome = perform(candidate.command, on: &result.text, undo: &undo)
                 result.outcomes.append(outcome)
+                result.textAtLastEdit = result.text
                 if case .applied = outcome { afterEdit = true }
             case .text?:
                 append(spoken, to: &result.text)

@@ -348,7 +348,8 @@ final class AppModel {
 
     private func mirror(_: String) {
         let field = edited(from: cutMs)
-        if field.outcomes.count > reportedEdits, let last = field.outcomes.last { feedback = Self.describe(last, undo: undoPhrase) }
+        let note = Self.editNote(feedback, reported: reportedEdits, field: field, undo: undoPhrase)
+        if note != feedback { feedback = note }
         reportedEdits = field.outcomes.count
         if live == nil, awaitingTarget {
             guard acquireLiveTarget() else { return }
@@ -472,6 +473,14 @@ final class AppModel {
             ask(question)
             return .pending(before: before)
         }
+    }
+
+    /// The feedback line after a voice edit: what the newest edit did, until more words are typed after it. Kept
+    /// longer, "Deleted the last sentence" sat under a transcript that still showed the sentence said after it.
+    static func editNote(_ current: String, reported: Int, field: VoiceEditor.Result, undo: String) -> String {
+        guard let last = field.outcomes.last else { return current }
+        if field.outcomes.count > reported { return describe(last, undo: undo) }
+        return field.saidMoreAfterEdit && current == describe(last, undo: undo) ? "" : current
     }
 
     static func describe(_ outcome: VoiceEditor.Outcome, undo: String) -> String {

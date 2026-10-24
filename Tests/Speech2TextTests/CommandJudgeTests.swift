@@ -81,6 +81,20 @@ private func key(_ text: String) -> String { VoiceEditor.questionKey(final(text)
         #expect(result.text == "이 파일은 지워도 돼요. 내일 다시")
         #expect(result.question == nil)
     }
+
+    /// "Deleted the last sentence" must not stay under words typed after the edit.
+    @MainActor @Test func theEditNoteLastsOnlyUntilMoreWordsAreTyped() {
+        let turns = [final("오늘 회의는 세 시예요."), final("지워.")]
+        let verdicts = [key("지워."): CommandVerdict.command]
+        let edit = judged(turns, verdicts)
+        let note = AppModel.editNote("", reported: 0, field: edit, undo: "되돌려")
+        #expect(note == AppModel.describe(.applied(.deleteLastSentence), undo: "되돌려"))
+        #expect(AppModel.editNote(note, reported: 1, field: edit, undo: "되돌려") == note)
+        let more = judged(turns + [final("아니다 그냥 방금 걸로 가.")], verdicts)
+        #expect(more.text == "아니다 그냥 방금 걸로 가.")
+        #expect(AppModel.editNote(note, reported: 1, field: more, undo: "되돌려") == "")
+        #expect(AppModel.editNote("입력 위치가 바뀌었어요.", reported: 1, field: more, undo: "되돌려") == "입력 위치가 바뀌었어요.")
+    }
 }
 
 private actor Calls {
