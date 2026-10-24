@@ -106,6 +106,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if let list = Self.value(after: "--context-terms", in: arguments) {
             model.contextTermsOverride = DictionaryTerms.adding(list, to: [])
         }
+        if let list = Self.value(after: "--add-context-terms", in: arguments) {
+            model.addedContextTerms = DictionaryTerms.adding(list, to: [])
+        }
+        if let text = Self.value(after: "--context-text", in: arguments) { model.speech.contextText = text }
         if let file = Self.value(after: "--jev-key-file", in: arguments) {
             model.jevKeyOverride = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
         } else {

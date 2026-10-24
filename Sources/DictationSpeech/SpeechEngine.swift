@@ -21,6 +21,8 @@ public enum KeyActivity: Sendable {
     public var inputDeviceUID: String?
     /// Words sent to Soniox as context when a dictation starts; changes apply to the next one.
     public var vocabulary: [String] = []
+    /// Example sentences sent to Soniox as context text with `vocabulary`; nil for none.
+    public var contextText: String?
     /// A recording finishes by itself once this long passes without newly recognized text. Nil keeps listening.
     public var silenceLimit: Duration? = .seconds(30)
     /// A language code to type a live translation instead of the spoken words (experimental); nil for none.
@@ -134,6 +136,7 @@ public enum KeyActivity: Sendable {
         audioOrigin = nil
         finishedForSilence = false
         let terms = vocabulary
+        let text = contextText
         let target = translationTarget
         let previousTranscript = lastFinalTranscript
         // Keep the previous transcript until new speech arrives, even if startup fails.
@@ -149,14 +152,14 @@ public enum KeyActivity: Sendable {
                 guard generation == epoch, !Task.isCancelled else { return }
                 // The microphone starts at once and buffers while the provider connects, so the first
                 // words are kept. A pending permission prompt comes first: Soniox drops idle sockets.
-                let early = capture.promptsForPermission ? nil : connect(client, apiKey: key, terms: terms, target: target, epoch: epoch)
+                let early = capture.promptsForPermission ? nil : connect(client, apiKey: key, terms: terms, text: text, target: target, epoch: epoch)
                 let chunks = try await capture.start(format: .pcm16Mono16k)
                 guard generation == epoch, !Task.isCancelled else { return }
                 audioOrigin = ProcessInfo.processInfo.systemUptime - capture.capturedDuration
                 phase = .recording
                 armSilenceLimit(epoch: epoch)
                 status = String(localized: "듣고 있어요 · 연결 중…")
-                let (provider, events) = try await (early ?? connect(client, apiKey: key, terms: terms, target: target, epoch: epoch)).value
+                let (provider, events) = try await (early ?? connect(client, apiKey: key, terms: terms, text: text, target: target, epoch: epoch)).value
                 guard generation == epoch, !Task.isCancelled else { return }
                 // Finishing while connecting already armed its own timeout; keep it.
                 if phase == .recording {
@@ -233,18 +236,18 @@ public enum KeyActivity: Sendable {
 
     /// Opens the provider while audio buffers. A failed connection is retried once on a fresh session:
     /// no audio has been sent yet, so the retry loses nothing.
-    private func connect(_ first: any STTSession, apiKey key: String, terms: [String], target: String?, epoch: UUID)
+    private func connect(_ first: any STTSession, apiKey key: String, terms: [String], text: String?, target: String?, epoch: UUID)
         -> Task<(any STTSession, AsyncThrowingStream<TranscriptEvent, Error>), Error> {
         Task {
             guard generation == epoch else { throw AppError.cancelled }
             do {
-                return (first, try await first.open(apiKey: key, terms: terms, translateTo: target))
+                return (first, try await first.open(apiKey: key, terms: terms, text: text, translateTo: target))
             } catch AppError.connectionFailed {
                 guard generation == epoch else { throw AppError.cancelled }
                 let retry = sessionFactory()
                 session = retry
                 if phase == .recording { status = String(localized: "듣고 있어요 · 다시 연결 중…") }
-                return (retry, try await retry.open(apiKey: key, terms: terms, translateTo: target))
+                return (retry, try await retry.open(apiKey: key, terms: terms, text: text, translateTo: target))
             }
         }
     }

@@ -120,7 +120,7 @@ final class AppModel {
         let commands = (spokenEnter?.terms ?? []) + (voiceEditingEnabled ? VoiceCommand.terms : [])
             + (judgeMode == .trigger ? trigger.terms : [])
             + (wakeListeningEnabled ? wakeSpoken.terms : [])
-        return commands.reduce(dictionary) { DictionaryTerms.adding($1, to: $0) }
+        return (commands + addedContextTerms).reduce(dictionary) { DictionaryTerms.adding($1, to: $0) }
     }
     /// Placeholders until the owner settles on the app's name and the trigger word; Settings can change both.
     /// The on-device model hears real English words far better than made-up names (DESIGN.md, "호출어").
@@ -191,6 +191,10 @@ final class AppModel {
     private var judgeMode: CommandJudgeMode { commandJudgeOverride ?? commandJudge }
     /// Diagnostics (`--context-terms`) send these Soniox context terms (none when empty) for one run.
     @ObservationIgnored var contextTermsOverride: [String]? {
+        didSet { speech.vocabulary = recognitionTerms }
+    }
+    /// Diagnostics (`--add-context-terms`) send these after the usual terms for one run.
+    @ObservationIgnored var addedContextTerms: [String] = [] {
         didSet { speech.vocabulary = recognitionTerms }
     }
     var punctuationStyle = UserDefaults.standard.string(forKey: "punctuationStyle").flatMap(PunctuationStyle.init) ?? .asIs {
