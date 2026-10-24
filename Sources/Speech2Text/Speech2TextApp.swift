@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import DictationSpeech
 import SwiftUI
 
@@ -89,10 +90,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 model.transcribeFile(url)
             }
         } else {
-            model.loadKey()
             model.loadJevKey()
             model.beginWakeListening()
-            showSettings()
+            // Settings opens by itself only while setup is missing something, so a relaunch after an update stays quiet.
+            Task {
+                await model.speech.loadKey()
+                let readiness = SetupReadiness(
+                    hasKey: !model.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    microphone: MicrophoneAccess(AVCaptureDevice.authorizationStatus(for: .audio)),
+                    controlGranted: AXIsProcessTrusted())
+                if readiness.missingCount > 0 { showSettings() }
+            }
         }
     }
     /// Diagnostic: runs the bundled wake-phrase model over an audio file, with no window, microphone or network.
