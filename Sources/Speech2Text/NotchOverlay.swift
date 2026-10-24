@@ -624,7 +624,9 @@ struct NotchOverlayView: View {
         HStack(spacing: Spacing.s) {
             indicator(state)
                 .frame(width: NotchOverlayGeometry.indicatorSize, height: NotchOverlayGeometry.indicatorSize)
-            HStack(spacing: Spacing.s) {
+            // The destination finishes the status sentence, so it stands a wider gap from the title than its icon
+            // stands from its own words: nearer means more closely related.
+            HStack(spacing: Spacing.m) {
                 Text(state.title)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.92))
@@ -1032,25 +1034,22 @@ private struct TranscriptViewport: View {
 }
 
 /// Where the dictated text goes: the app's own icon and a short sentence naming it ("Typing in Discord"), so the
-/// destination reads without a symbol to decode. A capsule groups icon and words and keeps them centered on the title.
+/// destination reads without a symbol to decode.
+///
+/// It is a label, not a control, so it wears no capsule: in this overlay a filled capsule or circle means "press me"
+/// (HIG Buttons, Layout: differentiate controls from content). It continues the title's sentence at the title's size,
+/// one step down in hierarchy through weight and the secondary label color (HIG Labels, Typography), and the icon is
+/// sized to the 16 pt body line like a Finder row.
 struct OverlayTargetChip: View {
     let name: String
     let icon: NSImage?
     /// The text is already in the field, so the sentence moves to the past tense.
     let typed: Bool
 
-    /// Owner request 2026-10-24: the visible gaps (capsule end to icon, icon to words, words to capsule end) are equal
-    /// and the icon is concentric with the rounded end. App icons keep a transparent margin of 100/1024 of their size,
-    /// so a 16 pt icon draws about 12.9 pt and the visible gap is (22 - 12.9) / 2 = 4.5 pt. Paddings subtract the icon
-    /// margin (1.5) and the text's side bearing (about 0.75 leading, 0.5 trailing), measured on 4x renders.
-    static let height: CGFloat = 22
     static let iconSize: CGFloat = 16
-    static let leading: CGFloat = 3
-    static let iconToText: CGFloat = 2.25
-    static let trailing: CGFloat = 4
 
     var body: some View {
-        HStack(spacing: Self.iconToText) {
+        HStack(spacing: Spacing.xs) {
             if let icon {
                 Image(nsImage: icon)
                     .resizable()
@@ -1059,15 +1058,11 @@ struct OverlayTargetChip: View {
                     .accessibilityHidden(true)
             }
             Text(typed ? String(localized: "\(name)에 입력됨") : String(localized: "\(name)에 입력 중"))
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.72))
+                .font(.body)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
-        .padding(.leading, icon == nil ? Self.trailing : Self.leading)
-        .padding(.trailing, Self.trailing)
-        .frame(height: Self.height)
-        .background(.white.opacity(0.08), in: Capsule())
         .help(String(localized: "입력 중인 앱: \(name)"))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "입력 중인 앱: \(name)"))
