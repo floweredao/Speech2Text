@@ -15,7 +15,7 @@ for lang in en ko; do
   # Launch-argument defaults keep this Mac's stored settings out of the pictures; the capture writes none back.
   "$WORK/Speech2Text.app/Contents/MacOS/Speech2Text" --demo-capture "$WORK/$lang" --demo "$lang" \
     -AppleLanguages "($lang)" -inputDeviceUID demo-mic -shortcuts x -wakeListeningEnabled NO \
-    -wakePhrase "Hey Computer" -wakeSensitivity standard -commandJudge trigger -triggerWord 자비스 \
+    -wakePhrase "Hey Computer" -wakeSensitivity standard -commandJudge jev \
     -punctuationStyle asIs -spokenEnterEnabled YES -spokenEnterPhrase "$enter" -marksUncertainWords NO \
     -silenceStopSeconds 30 -overlayAutoCloseSeconds 30 -dictionaryTerms "$terms"
   ffmpeg -y -loglevel error -framerate 12 -i "$WORK/$lang/frames-$lang/frame-%03d.png" \

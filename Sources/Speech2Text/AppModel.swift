@@ -780,6 +780,7 @@ final class AppModel {
     func configureForDemoCapture() {
         let microphone = AudioInputDevice(uid: "demo-mic", name: "MacBook Pro Microphone")
         apiKey = "soniox-demo-synthetic-api-key-0123456789"
+        jevKey = "jev-demo-synthetic-api-key-0123456789"
         accessibilityGranted = true
         microphoneAccessOverride = .granted
         defaultInputDevice = microphone

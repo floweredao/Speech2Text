@@ -8,7 +8,7 @@ enum DemoCapturer {
     static let expandedOverlayWidth: CGFloat = 480
     /// Ends on the row separator after Punctuation at the default text size, so the last row is not cut through.
     static func settingsSize(for locale: AppModel.DemoLocale) -> NSSize {
-        NSSize(width: 480, height: locale == .en ? 743 : 715)
+        NSSize(width: 480, height: locale == .en ? 787 : 745)
     }
     static let stageSize = NSSize(width: 640, height: 212)
     static let offscreenOrigin = NSPoint(x: -10_000, y: -10_000)
