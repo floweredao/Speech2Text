@@ -125,3 +125,5 @@ open build/Speech2Text.app --args --audio-file /absolute/path/sample.aiff --no-a
 ```
 
 This run also uses Soniox and the key in the app's own Keychain. Without `--no-auto-insert`, the result is typed automatically if the field that was focused at launch is still focused.
+
+Add `--print-turns` and run the binary itself (`build/Speech2Text.app/Contents/MacOS/Speech2Text --audio-file ... --no-auto-insert --print-turns`) to print each recognized turn with the silence before it in milliseconds, then the edited result, and quit.

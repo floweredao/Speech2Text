@@ -125,3 +125,5 @@ open build/Speech2Text.app --args --audio-file /absolute/path/sample.aiff --no-a
 ```
 
 이 실행도 Soniox와 앱 전용 Keychain의 키를 사용합니다. `--no-auto-insert`를 빼면 실행 당시 입력 칸이 그대로 유지되는 경우 자동 입력합니다.
+
+실행 파일을 직접 실행하면서 `--print-turns`를 붙이면(`build/Speech2Text.app/Contents/MacOS/Speech2Text --audio-file ... --no-auto-insert --print-turns`) 인식된 덩이마다 그 앞의 쉼(밀리초)을 출력하고, 고친 결과를 출력한 뒤 종료합니다.
