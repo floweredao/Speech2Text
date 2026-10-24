@@ -74,9 +74,12 @@ In Settings › **Shortcuts**, click an action's shortcut button and press the k
 
 Speech2Text can start and finish dictation when you ask by voice, without keeping its own microphone on. It adds two actions, **Start Dictation** and **Finish Dictation**, that the Shortcuts app and Voice Control can run. Start never ends a dictation already running, and Finish never starts one. Settings › **Start by Voice** shows the same steps.
 
+- **Wake phrase** (off by default): turn on Settings › Start by Voice › **Start and Finish by Wake Phrase**, then say "Hey Computer" to start dictating and say it again at the end to finish. The phrase is a setting (English letters); "Hey Computer" is a placeholder until the app's name is settled. Listening runs entirely on this Mac with a small built-in keyword model, and nothing it hears is stored or sent. The microphone stays on while it listens (the orange dot in the menu bar) and is released while you dictate. A real English word is heard far more reliably than a made-up name.
 - **Voice Control**: in the Shortcuts app, make a shortcut with the Speech2Text action **Start Dictation**. Then in System Settings › Accessibility › Voice Control › Commands, click +, type the phrase you will say, set the action to **Run Shortcut**, and pick that shortcut. Do the same for **Finish Dictation**. Voice Control keeps listening while it's on and can type what you say itself; if text comes in twice, switch Voice Control to Command Mode.
 
 Click the field you want to type into first, as with the keyboard shortcut.
+
+Voice edits and spoken Return need the **trigger word** (Settings › Input, placeholder "자비스") right before them: "자비스 지워" deletes the last sentence and "자비스 엔터 보내기" presses Return, while "지워" on its own is typed as text.
 
 ## When text wasn't typed
 
