@@ -36,6 +36,7 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$STAGING/Speech2Text.app/Contents/Resources/AppIcon.icns"
 cp -R Resources/en.lproj Resources/ko.lproj "$STAGING/Speech2Text.app/Contents/Resources/"
+cp LICENSE THIRD_PARTY_NOTICES.md "$STAGING/Speech2Text.app/Contents/Resources/"
 # The on-device wake-phrase model (Apache-2.0); its sample recordings stay out of the app.
 mkdir -p "$STAGING/Speech2Text.app/Contents/Resources/WakeWord"
 cp Vendor/wake-model/encoder.onnx Vendor/wake-model/decoder.onnx Vendor/wake-model/joiner.onnx \
