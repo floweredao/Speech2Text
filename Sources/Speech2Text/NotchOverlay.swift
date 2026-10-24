@@ -1039,13 +1039,23 @@ struct OverlayTargetChip: View {
     /// The text is already in the field, so the sentence moves to the past tense.
     let typed: Bool
 
+    /// Owner request 2026-10-24: the visible gaps (capsule end to icon, icon to words, words to capsule end) are equal
+    /// and the icon is concentric with the rounded end. App icons keep a transparent margin of 100/1024 of their size,
+    /// so a 16 pt icon draws about 12.9 pt and the visible gap is (22 - 12.9) / 2 = 4.5 pt. Paddings subtract the icon
+    /// margin (1.5) and the text's side bearing (about 0.75 leading, 0.5 trailing), measured on 4x renders.
+    static let height: CGFloat = 22
+    static let iconSize: CGFloat = 16
+    static let leading: CGFloat = 3
+    static let iconToText: CGFloat = 2.25
+    static let trailing: CGFloat = 4
+
     var body: some View {
-        HStack(spacing: Spacing.xs) {
+        HStack(spacing: Self.iconToText) {
             if let icon {
                 Image(nsImage: icon)
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: 16, height: 16)
+                    .frame(width: Self.iconSize, height: Self.iconSize)
                     .accessibilityHidden(true)
             }
             Text(typed ? String(localized: "\(name)에 입력됨") : String(localized: "\(name)에 입력 중"))
@@ -1054,9 +1064,9 @@ struct OverlayTargetChip: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
-        .padding(.leading, icon == nil ? Spacing.s : Spacing.xxs)
-        .padding(.trailing, Spacing.s)
-        .frame(height: 20)
+        .padding(.leading, icon == nil ? Self.trailing : Self.leading)
+        .padding(.trailing, Self.trailing)
+        .frame(height: Self.height)
         .background(.white.opacity(0.08), in: Capsule())
         .help(String(localized: "입력 중인 앱: \(name)"))
         .accessibilityElement(children: .ignore)
