@@ -17,7 +17,7 @@
 Speech2Text is a menu bar app. Press a shortcut, speak, and your words appear in whatever text field you clicked, whether that's a terminal, a browser, or a notes app. A small overlay under the notch shows the live transcript. The app never reads your speech as commands and never rewrites it.
 
 <p align="center">
-  <a href="https://github.com/floweredao/Speech2Text/releases/latest"><b>Download the latest release</b></a>
+  <a href="https://github.com/floweredao/malgeul/releases/latest"><b>Download the latest release</b></a>
 </p>
 
 ## A look around
@@ -46,7 +46,7 @@ Speech2Text is a menu bar app. Press a shortcut, speak, and your words appear in
 
 Requires macOS 15 or later on Apple Silicon.
 
-1. Download the `.zip` from the [latest release](https://github.com/floweredao/Speech2Text/releases/latest), unzip it, and move `Speech2Text.app` to Applications.
+1. Download the `.zip` from the [latest release](https://github.com/floweredao/malgeul/releases/latest), unzip it, and move `Speech2Text.app` to Applications.
 2. Open it. If macOS says it can't open the app, go to System Settings › Privacy & Security, scroll to Security, and click **Open Anyway** next to Speech2Text. You only need to do this once per version.
 3. Later versions install from inside the app: it checks GitHub Releases once a day, or choose **Check for Updates…** from the menu bar icon.
 
