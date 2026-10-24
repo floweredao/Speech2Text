@@ -72,9 +72,8 @@ In Settings › **Shortcuts**, click an action's shortcut button and press the k
 
 ## Starting by voice
 
-Speech2Text can start and finish dictation when you ask by voice, without keeping its own microphone on. It adds two actions, **Start Dictation** and **Finish Dictation**, that Siri, the Shortcuts app, and Voice Control can run. Start never ends a dictation already running, and Finish never starts one. Settings › **Start by Voice** shows the same steps.
+Speech2Text can start and finish dictation when you ask by voice, without keeping its own microphone on. It adds two actions, **Start Dictation** and **Finish Dictation**, that the Shortcuts app and Voice Control can run. Start never ends a dictation already running, and Finish never starts one. Settings › **Start by Voice** shows the same steps.
 
-- **Siri**: say "Start dictation in Speech2Text" or "Finish dictation in Speech2Text". Nothing to set up beyond turning Siri on. With Korean Siri, say "Speech2Text 받아쓰기 시작" or "Speech2Text 받아쓰기 끝내기". The phrases for each language are listed under Speech2Text in the Shortcuts app.
 - **Voice Control**: in the Shortcuts app, make a shortcut with the Speech2Text action **Start Dictation**. Then in System Settings › Accessibility › Voice Control › Commands, click +, type the phrase you will say, set the action to **Run Shortcut**, and pick that shortcut. Do the same for **Finish Dictation**. Voice Control keeps listening while it's on and can type what you say itself; if text comes in twice, switch Voice Control to Command Mode.
 
 Click the field you want to type into first, as with the keyboard shortcut.
