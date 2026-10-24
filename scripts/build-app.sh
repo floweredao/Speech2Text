@@ -51,7 +51,7 @@ find "$PWD/Sources/Speech2Text" -name '*.swift' | sort > "$INTENTS/sources.txt"
 printf '%s' '["AppIntent","EntityQuery","AppEntity","TransientEntity","AppEnum","AppShortcutProviding","AppShortcutsProvider","AnyResolverProviding","AppIntentsPackage","DynamicOptionsProvider"]' > "$INTENTS/protocols.json"
 SDK_ROOT="$(xcrun --sdk macosx --show-sdk-path)"
 swiftc -wmo -parse-as-library -swift-version 6 -module-name Speech2Text -sdk "$SDK_ROOT" -target arm64-apple-macos15.0 \
-  -I "$BIN_DIR" -F "$BIN_DIR" -emit-module -emit-module-path "$INTENTS/Speech2Text.swiftmodule" \
+  -I "$BIN_DIR" -I "$PWD/Sources/CSherpaOnnx/include" -F "$BIN_DIR" -emit-module -emit-module-path "$INTENTS/Speech2Text.swiftmodule" \
   -emit-const-values-path "$INTENTS/Speech2Text.swiftconstvalues" \
   -Xfrontend -const-gather-protocols-file -Xfrontend "$INTENTS/protocols.json" $(cat "$INTENTS/sources.txt")
 printf '%s\n' "$INTENTS/Speech2Text.swiftconstvalues" > "$INTENTS/constvalues.txt"

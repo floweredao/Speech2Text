@@ -1,4 +1,4 @@
-internal import CSherpaOnnx
+import CSherpaOnnx
 import Foundation
 import os
 
