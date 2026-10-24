@@ -1,4 +1,0 @@
-"Start dictation in ${applicationName}" = "${applicationName} 받아쓰기 시작";
-"Start ${applicationName}" = "${applicationName} 시작";
-"Finish dictation in ${applicationName}" = "${applicationName} 받아쓰기 끝내기";
-"Stop dictation in ${applicationName}" = "${applicationName} 받아쓰기 그만";

@@ -1,6 +1,6 @@
 import AppIntents
 
-/// What a Shortcuts, Siri or Voice Control request does to dictation. Unlike the toggle shortcut, a spoken "start"
+/// What a Shortcuts or Voice Control request does to dictation. Unlike the toggle shortcut, a spoken "start"
 /// never ends a running dictation and a spoken "finish" never starts one, because the speaker may not see the overlay.
 enum DictationRequest: Equatable {
     case start, finish
@@ -58,29 +58,5 @@ struct FinishDictationIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         await DictationIntentRoute.perform(.finish)
         return .result()
-    }
-}
-
-/// Siri phrases that work without making a shortcut first. Phrases are translated in AppShortcuts.strings.
-struct Speech2TextShortcuts: AppShortcutsProvider {
-    static var appShortcuts: [AppShortcut] {
-        AppShortcut(
-            intent: StartDictationIntent(),
-            phrases: [
-                "Start dictation in \(.applicationName)",
-                "Start \(.applicationName)",
-            ],
-            shortTitle: "받아쓰기 시작",
-            systemImageName: "mic"
-        )
-        AppShortcut(
-            intent: FinishDictationIntent(),
-            phrases: [
-                "Finish dictation in \(.applicationName)",
-                "Stop dictation in \(.applicationName)",
-            ],
-            shortTitle: "받아쓰기 끝내기",
-            systemImageName: "stop.circle"
-        )
     }
 }

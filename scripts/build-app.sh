@@ -35,7 +35,7 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$STAGING/Speech2Text.app/Contents/Resources/AppIcon.icns"
 cp -R Resources/en.lproj Resources/ko.lproj "$STAGING/Speech2Text.app/Contents/Resources/"
-# Shortcuts, Siri and Voice Control find the App Intents through Metadata.appintents. Xcode normally writes it;
+# Shortcuts and Voice Control find the App Intents through Metadata.appintents. Xcode normally writes it;
 # the Command Line Tools lack the processor, so take it from Xcode and feed it the compiler's constant values.
 XCODE_TOOLCHAIN="${SPEECH2TEXT_XCODE_TOOLCHAIN:-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain}"
 INTENTS_PROCESSOR="$XCODE_TOOLCHAIN/usr/bin/appintentsmetadataprocessor"

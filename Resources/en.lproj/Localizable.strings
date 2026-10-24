@@ -187,10 +187,8 @@
 "지금 선택한 입력 칸에 받아쓰기를 시작해요. 이미 받아쓰는 중이면 그대로 둬요." = "Starts dictation into the text field you have selected. Does nothing if dictation is already running.";
 "받아쓰던 내용을 마무리해요. 받아쓰는 중이 아니면 아무것도 하지 않아요." = "Finishes the dictation in progress. Does nothing if nothing is being dictated.";
 "음성으로 시작" = "Start by Voice";
-"Siri" = "Siri";
-"Siri에게 \"Speech2Text 받아쓰기 시작\" 또는 \"Speech2Text 받아쓰기 끝내기\"라고 말해요. 따로 설정할 것은 없어요." = "Say \"Start dictation in Speech2Text\" or \"Finish dictation in Speech2Text\" to Siri. There is nothing to set up.";
 "음성 제어" = "Voice Control";
 "1. 단축어 앱에서 새 단축어를 만들고 Speech2Text의 '받아쓰기 시작' 동작을 넣어요.\n2. 시스템 설정 › 손쉬운 사용 › 음성 제어 › 명령에서 +를 눌러 말할 문구를 적고, 동작은 '단축어 실행'으로 골라 그 단축어를 지정해요.\n3. '받아쓰기 끝내기'도 같은 방법으로 만들어요." = "1. In the Shortcuts app, make a new shortcut with the Speech2Text action 'Start Dictation'.\n2. In System Settings › Accessibility › Voice Control › Commands, click +, type the phrase you will say, set the action to 'Run Shortcut', and pick that shortcut.\n3. Do the same for 'Finish Dictation'.";
 "음성 제어는 켜져 있는 동안 계속 듣고, 말한 내용을 직접 입력하기도 해요. 글이 두 번 들어가면 음성 제어를 명령 모드로 바꿔 주세요." = "Voice Control keeps listening while it is on and can type what you say itself. If text comes in twice, switch Voice Control to Command Mode.";
 "단축어 앱 열기" = "Open Shortcuts";
-"이 앱은 받아쓰는 동안에만 마이크를 켜요. 다른 언어의 Siri 문구는 단축어 앱의 Speech2Text 항목에서 볼 수 있어요." = "This app turns the microphone on only while dictating. Siri phrases for other languages are listed under Speech2Text in the Shortcuts app.";
+"이 앱은 받아쓰는 동안에만 마이크를 켜요." = "This app turns the microphone on only while dictating.";

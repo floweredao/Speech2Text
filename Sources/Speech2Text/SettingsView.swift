@@ -332,15 +332,6 @@ struct SettingsView: View {
     private var voiceStartSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Siri")
-                Text("Siri에게 \"Speech2Text 받아쓰기 시작\" 또는 \"Speech2Text 받아쓰기 끝내기\"라고 말해요. 따로 설정할 것은 없어요.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("settings-voice-siri")
-            VStack(alignment: .leading, spacing: 4) {
                 Text("음성 제어")
                 Text("1. 단축어 앱에서 새 단축어를 만들고 Speech2Text의 '받아쓰기 시작' 동작을 넣어요.\n2. 시스템 설정 › 손쉬운 사용 › 음성 제어 › 명령에서 +를 눌러 말할 문구를 적고, 동작은 '단축어 실행'으로 골라 그 단축어를 지정해요.\n3. '받아쓰기 끝내기'도 같은 방법으로 만들어요.")
                     .font(.caption)
@@ -362,7 +353,7 @@ struct SettingsView: View {
         } header: {
             Text("음성으로 시작")
         } footer: {
-            Text("이 앱은 받아쓰는 동안에만 마이크를 켜요. 다른 언어의 Siri 문구는 단축어 앱의 Speech2Text 항목에서 볼 수 있어요.")
+            Text("이 앱은 받아쓰는 동안에만 마이크를 켜요.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

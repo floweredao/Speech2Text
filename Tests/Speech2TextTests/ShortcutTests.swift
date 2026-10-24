@@ -125,7 +125,7 @@ import Testing
 }
 
 @Suite struct DictationRequestTests {
-    /// Siri, Shortcuts and Voice Control requests are not a toggle: a repeated "start" must not end the dictation.
+    /// Shortcuts and Voice Control requests are not a toggle: a repeated "start" must not end the dictation.
     @Test func spokenStartNeverEndsADictationAndSpokenFinishNeverStartsOne() {
         #expect(DictationRequest.start.effect(isRecording: false, isBusy: false) == .start)
         #expect(DictationRequest.start.effect(isRecording: true, isBusy: true) == .none)
