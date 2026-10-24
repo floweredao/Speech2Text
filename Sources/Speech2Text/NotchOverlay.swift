@@ -153,6 +153,11 @@ struct DictationDisplayState: Equatable {
         }
     }
 
+    /// When recording ends, Settings takes the slot Finish had; a second click on Finish must not open it.
+    /// A header button ignores clicks until it has been on screen this long.
+    static let pressGuard: Duration = .milliseconds(800)
+    nonisolated static func acceptsPress(shownFor: Duration) -> Bool { shownFor >= pressGuard }
+
     /// Recovery actions shown as labelled buttons below an error message.
     var recoveryActions: [Action] {
         guard phase == .error else { return [] }
@@ -972,9 +977,13 @@ private struct OverlayIconButton: View {
     let id: String
     let prominent: Bool
     let action: () -> Void
+    /// Kept per action, so a button that replaces another in the same slot starts its own wait.
+    private let appearedState = State(initialValue: ContinuousClock.now)
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            if DictationDisplayState.acceptsPress(shownFor: ContinuousClock.now - appearedState.wrappedValue) { action() }
+        } label: {
             Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
         }
         .buttonStyle(OverlayControlStyle(shape: .circle, prominent: prominent))

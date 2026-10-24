@@ -266,6 +266,19 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(NotchOverlayController.autoCloseLimit(result, setting: nil) == nil)
     }
 
+    /// Regression: Settings opened by itself after a dictation. Its button appears where Finish was, so a second
+    /// or late click on Finish landed on it; a header button that just appeared ignores that click.
+    @Test func clickOnFinishThatLandsOnTheNewSettingsButtonIsIgnored() {
+        let recording = display(.recording, transcript: live, session: session(current: true)).headerActions
+        let result = display(.idle, transcript: live, session: session(.completed, current: true)).headerActions
+        let slotFromRight = { (actions: [DictationDisplayState.Action], action: DictationDisplayState.Action) in
+            actions.firstIndex(of: action).map { actions.count - 1 - $0 }
+        }
+        #expect(slotFromRight(recording, .finish) == slotFromRight(result, .settings))
+        #expect(!DictationDisplayState.acceptsPress(shownFor: .milliseconds(300)))
+        #expect(DictationDisplayState.acceptsPress(shownFor: .seconds(1)))
+    }
+
     /// Regression: cancelling during finalization was shown as a finished result.
     @Test func cancelledRunShowsOnlyThePreviousResult() {
         let state = display(.idle, transcript: previous, feedback: "취소했어요", session: session(.cancelled))
