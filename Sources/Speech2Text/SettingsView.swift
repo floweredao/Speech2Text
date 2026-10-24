@@ -77,6 +77,9 @@ struct SettingsView: View {
     private let recorderState = State(initialValue: ShortcutRecorder())
     private var recorder: ShortcutRecorder { recorderState.wrappedValue }
     private let newTermState = State(initialValue: "")
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Rows a switch or picker reveals slide in with the overlay's layout curve; Reduce Motion shows them at once.
+    private var rowMotion: Animation? { reduceMotion ? nil : OverlayMotion.layout }
 
     private let pane = ControlPermissionPane.current
     private var state: DictationDisplayState { DictationDisplayState(model: model) }
@@ -120,13 +123,13 @@ struct SettingsView: View {
 
     private var statusSection: some View {
         Section {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Spacing.m) {
                 Image(systemName: statusSymbol)
                     .font(.title2)
                     .foregroundStyle(statusTint)
                     .frame(width: 28)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(state.phase == .error ? state.title : model.status)
                         .font(.headline)
                         .accessibilityIdentifier("settings-status")
@@ -147,7 +150,7 @@ struct SettingsView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .trailing, spacing: 6) {
+                VStack(alignment: .trailing, spacing: Spacing.s) {
                     Button(recordButtonTitle, systemImage: model.isRecording ? "stop.fill" : "mic.fill") {
                         model.toggleRecording()
                     }
@@ -203,7 +206,7 @@ struct SettingsView: View {
                 Text("다시 받아쓰려면 키를 새로 붙여넣고 저장해야 해요.")
             }
             if let activity = keyActivityText {
-                HStack(spacing: 6) {
+                HStack(spacing: Spacing.s) {
                     ProgressView().controlSize(.small)
                     Text(activity)
                 }
@@ -293,7 +296,7 @@ struct SettingsView: View {
                 Text("선택한 칸에 실시간으로 쓰고, 인식이 고쳐지면 바로 고쳐요.")
             }
             .accessibilityIdentifier("settings-auto-insert")
-            Toggle(isOn: $model.spokenEnterEnabled) {
+            Toggle(isOn: $model.spokenEnterEnabled.animation(rowMotion)) {
                 Text("말로 엔터 누르기")
                 if model.commandJudge == .jev {
                     Text("끝에 ‘\(model.spokenEnterPhrase)’라고 말하면 Jev가 명령이라고 판단할 때 엔터를 눌러요.")
@@ -307,7 +310,7 @@ struct SettingsView: View {
                     .multilineTextAlignment(.trailing)
                     .accessibilityIdentifier("settings-spoken-enter-phrase")
             }
-            Picker(selection: $model.commandJudge) {
+            Picker(selection: $model.commandJudge.animation(rowMotion)) {
                 Text("트리거 단어").tag(CommandJudgeMode.trigger)
                 Text("Jev가 판단").tag(CommandJudgeMode.jev)
                 Text("끄기").tag(CommandJudgeMode.off)
@@ -344,12 +347,16 @@ struct SettingsView: View {
                 }
             }
             if model.commandJudge == .trigger || (model.commandJudge == .off && model.spokenEnterEnabled) {
-                TextField(text: $model.triggerWord, prompt: Text(AppModel.defaultTriggerWord)) {
+                // LabeledContent, not the field's own label: a grouped form centers a two-line field label.
+                LabeledContent {
+                    TextField("트리거 단어", text: $model.triggerWord, prompt: Text(AppModel.defaultTriggerWord))
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("settings-trigger-word")
+                } label: {
                     Text("트리거 단어")
                     Text("명령 앞에 붙이는 말이에요. 없이 말한 ‘지워’는 그대로 글로 써요.")
                 }
-                .multilineTextAlignment(.trailing)
-                .accessibilityIdentifier("settings-trigger-word")
                 if model.trigger.isEmpty {
                     Text("트리거 단어가 비어 있으면 말로 고치기와 엔터가 먹지 않아요.")
                         .font(.caption)
@@ -392,18 +399,21 @@ struct SettingsView: View {
 
     private var voiceStartSection: some View {
         Section {
-            Toggle(isOn: $model.wakeListeningEnabled) {
+            Toggle(isOn: $model.wakeListeningEnabled.animation(rowMotion)) {
                 Text("호출어로 시작·끝내기")
                 Text("‘\(model.wakePhrase)’라고 말하면 받아쓰기를 시작하고, 받아쓰다 끝에 다시 말하면 마쳐요.")
             }
             .accessibilityIdentifier("settings-wake-word")
             if model.wakeListeningEnabled {
-                TextField(text: $model.wakePhrase, prompt: Text(AppModel.defaultWakePhrase)) {
+                LabeledContent {
+                    TextField("호출어", text: $model.wakePhrase, prompt: Text(AppModel.defaultWakePhrase))
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("settings-wake-phrase")
+                } label: {
                     Text("호출어")
                     Text("영어 글자로 적어요.")
                 }
-                .multilineTextAlignment(.trailing)
-                .accessibilityIdentifier("settings-wake-phrase")
                 Picker(selection: $model.wakeSensitivity) {
                     Text("낮음").tag(WakeSensitivity.low)
                     Text("보통").tag(WakeSensitivity.standard)
@@ -421,7 +431,7 @@ struct SettingsView: View {
                         .accessibilityIdentifier("settings-wake-problem")
                 }
             }
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text("음성 제어")
                 Text("1. 단축어 앱에서 새 단축어를 만들고 Speech2Text의 '받아쓰기 시작' 동작을 넣어요.\n2. 시스템 설정 › 손쉬운 사용 › 음성 제어 › 명령에서 +를 눌러 말할 문구를 적고, 동작은 '단축어 실행'으로 골라 그 단축어를 지정해요.\n3. '받아쓰기 끝내기'도 같은 방법으로 만들어요.")
                     .font(.caption)
@@ -500,10 +510,10 @@ struct SettingsView: View {
     private var vocabularySection: some View {
         Section {
             if !model.dictionary.isEmpty {
-                FlowLayout(spacing: 6) {
+                FlowLayout(spacing: Spacing.s) {
                     ForEach(model.dictionary, id: \.self) { termChip($0) }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, Spacing.xxs)
                 .accessibilityIdentifier("settings-dictionary")
             }
             TextField("단어 추가", text: newTermState.projectedValue, prompt: Text("입력 후 Return"))
@@ -523,7 +533,7 @@ struct SettingsView: View {
     }
 
     private func termChip(_ term: String) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Spacing.xs) {
             Text(term)
                 .lineLimit(1)
             Button("'\(term)' 지우기", systemImage: "xmark") { model.removeDictionaryTerm(term) }
@@ -533,9 +543,10 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
         }
         .font(.callout)
-        .padding(.leading, 10)
-        .padding(.trailing, 7)
-        .padding(.vertical, 4)
+        // The remove button carries its own few points of padding, so the trailing side needs less.
+        .padding(.leading, Spacing.s)
+        .padding(.trailing, Spacing.xs)
+        .padding(.vertical, Spacing.xs)
         .background(.quaternary, in: Capsule())
     }
 
@@ -580,7 +591,7 @@ struct SettingsView: View {
         let recording = model.capturingShortcut == action
         let shortcut = model.shortcuts[action]
         return LabeledContent {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.s) {
                 Button {
                     if recording { recorder.cancel() } else { recorder.begin(action, model: model) }
                 } label: {
@@ -594,14 +605,18 @@ struct SettingsView: View {
                 .accessibilityLabel(recording ? String(localized: "단축키 기록 중") : (shortcut?.spokenLabel ?? String(localized: "단축키 없음")))
                 .accessibilityHint("눌러서 새 단축키를 기록해요.")
                 .accessibilityIdentifier("settings-shortcut-\(action.rawValue)")
-                if shortcut != nil && !recording {
-                    Button("단축키 끄기", systemImage: "xmark.circle.fill") { model.shortcuts[action] = nil }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.secondary)
-                        .help("이 단축키를 꺼요.")
-                        .accessibilityIdentifier("settings-shortcut-clear-\(action.rawValue)")
-                }
+                // The clear button keeps its place when there is nothing to clear, so every row's shortcut
+                // button lines up with the rows above and below it.
+                let clearable = shortcut != nil && !recording
+                Button("단축키 끄기", systemImage: "xmark.circle.fill") { model.shortcuts[action] = nil }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help("이 단축키를 꺼요.")
+                    .opacity(clearable ? 1 : 0)
+                    .disabled(!clearable)
+                    .accessibilityHidden(!clearable)
+                    .accessibilityIdentifier("settings-shortcut-clear-\(action.rawValue)")
             }
         } label: {
             Text(action.title)
@@ -651,7 +666,7 @@ struct SettingsView: View {
         let content = content()
         return ViewThatFits(in: .horizontal) {
             HStack { content }
-            VStack(alignment: .trailing, spacing: 6) { content }
+            VStack(alignment: .trailing, spacing: Spacing.s) { content }
         }
     }
 
