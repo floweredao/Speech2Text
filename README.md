@@ -79,7 +79,7 @@ Speech2Text can start and finish dictation when you ask by voice, without keepin
 
 Click the field you want to type into first, as with the keyboard shortcut.
 
-Voice edits and spoken Return need the **trigger word** (Settings › Input, placeholder "자비스") right before them: "자비스 지워" deletes the last sentence and "자비스 엔터 보내기" presses Return, while "지워" on its own is typed as text.
+Voice edits and spoken Return need the **trigger word** (Settings › Input, placeholder "자비스") right before them: "자비스 지워" deletes the last sentence and "자비스 엔터 보내기" presses Return, while "지워" on its own is typed as text. Settings › Input › Edit by Voice can instead let **Jev** decide: say "지워", "되돌려" or "A를 B로 바꿔" without a trigger word and the TypeSafe Jev model judges from the text before it whether you meant an edit or words to type. Only a phrase that ends in a command and up to 400 characters before it are sent; when Jev is unsure, fails or takes over 1.5 seconds, the words are typed. "되돌려" right after an edit always undoes it. The Jev API key is stored in this app's Keychain.
 
 ## When text wasn't typed
 
