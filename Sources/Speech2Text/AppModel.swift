@@ -336,6 +336,12 @@ final class AppModel {
             speech.start()
         }
     }
+    func handle(_ request: DictationRequest) {
+        switch request.effect(isRecording: isRecording, isBusy: isBusy) {
+        case .start, .finish: toggleRecording()
+        case .none: overlayVisible = true
+        }
+    }
     func cancel() {
         guard isBusy else { return }
         let hadTyped = !(live?.typed.isEmpty ?? true)

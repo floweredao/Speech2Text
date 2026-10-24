@@ -47,6 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         for item in menu.items { item.target = self }
         item.menu = menu
         statusItem = item
+        DictationIntentRoute.register { [weak self] request in
+            self?.model.handle(request)
+            self?.overlay?.present()
+        }
         model.shortcutsChanged = { [weak self] in self?.applyShortcuts() }
         applyShortcuts()
         let arguments = ProcessInfo.processInfo.arguments
