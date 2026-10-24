@@ -22,62 +22,65 @@ private func live(_ text: String) -> SpokenTurn { SpokenTurn(text: text, isFinal
         #expect(VoiceCommand.parse("") == nil)
     }
 
-    /// The safety rule: a command counts only as a turn of its own; inside a sentence it is just text.
-    @Test func aCommandInsideASentenceIsTyped() {
-        let result = VoiceEditor.apply([final("오늘 회의 자료는 지워 주세요.")], commandsEnabled: true)
-        #expect(result.text == "오늘 회의 자료는 지워 주세요.")
-        #expect(result.outcomes.isEmpty)
+    /// The safety rule: a command counts only right after the trigger word; without it the same words are text.
+    @Test func aCommandWithoutTheTriggerWordIsTyped() {
+        let inside = apply([final("오늘 회의 자료는 지워 주세요.")])
+        #expect(inside.text == "오늘 회의 자료는 지워 주세요.")
+        #expect(inside.outcomes.isEmpty)
+        let alone = apply([final("안녕하세요."), final("지워")])
+        #expect(alone.text == "안녕하세요. 지워")
+        #expect(alone.outcomes.isEmpty)
     }
 
     @Test func deleteReplaceAndUndoEditOnlyTheDictatedText() {
-        let turns = [final("첫 문장입니다."), final("둘째 문장이에요."), final("지워"), final("회의는 세 시예요."),
-                     final("세 시를 네 시로 바꿔"), final("되돌려")]
-        let result = VoiceEditor.apply(turns, commandsEnabled: true)
+        let turns = [final("첫 문장입니다."), final("둘째 문장이에요."), final("자비스 지워"), final("회의는 세 시예요."),
+                     final("자비스, 세 시를 네 시로 바꿔"), final("자비스 되돌려")]
+        let result = apply(turns)
         #expect(result.text == "첫 문장입니다. 회의는 세 시예요.")
         #expect(result.outcomes == [.applied(.deleteLastSentence), .applied(.replace("세 시", "네 시")), .applied(.undo)])
     }
 
-    @Test func lastSentenceDeletionKeepsEarlierSentencesInTheSameTurn() {
-        let result = VoiceEditor.apply([final("하나. 둘? 셋"), final("지워")], commandsEnabled: true)
-        #expect(result.text == "하나. 둘?")
-        #expect(VoiceEditor.apply([final("hello big world"), final("delete last word")], commandsEnabled: true).text
-            == "hello big")
+    /// Soniox may keep the trigger word in the sentence's turn or give the command a turn of its own.
+    @Test func theCommandMayFollowInTheSameTurnOrTheNext() {
+        let sameTurn = apply([final("하나. 둘? 셋 자비스 지워")])
+        #expect(sameTurn.text == "하나. 둘?")
+        #expect(sameTurn.outcomes == [.applied(.deleteLastSentence)])
+        let nextTurn = apply([final("hello big world."), final("자비스."), final("delete last word")])
+        #expect(nextTurn.text == "hello big")
+        #expect(nextTurn.outcomes == [.applied(.deleteLastWord)])
     }
 
     @Test func missingTargetsAndEmptyUndoChangeNothingAndSaySo() {
-        let result = VoiceEditor.apply([final("좋아요."), final("사과를 배로 바꿔"), final("되돌려")], commandsEnabled: true)
+        let result = apply([final("좋아요."), final("자비스 사과를 배로 바꿔"), final("자비스 되돌려")])
         #expect(result.text == "좋아요.")
         #expect(result.outcomes == [.notFound("사과"), .nothingToChange(.undo)])
     }
 
-    /// A command still being recognized is never typed, so it never flashes into the field before it acts.
-    @Test func aProvisionalCommandIsHeldBack() {
-        #expect(VoiceEditor.apply([final("안녕하세요."), live("지워")], commandsEnabled: true).text == "안녕하세요.")
-        #expect(VoiceEditor.apply([final("안녕하세요."), live("되돌")], commandsEnabled: true).text == "안녕하세요.")
-        #expect(VoiceEditor.apply([final("안녕하세요."), live("내일 봬요")], commandsEnabled: true).text
-            == "안녕하세요. 내일 봬요")
+    /// Words after the trigger word that are no command are typed as said, trigger word included.
+    @Test func wordsAfterTheTriggerWordThatAreNoCommandAreTyped() {
+        let result = apply([final("자비스 고마워요.")])
+        #expect(result.text == "자비스 고마워요.")
+        #expect(result.outcomes.isEmpty)
     }
 
-    /// Soniox can close a turn at a short hesitation; a command then needs the word times to show a real pause.
-    @Test func aCommandAfterOnlyAShortPauseIsTyped() {
-        let short = VoiceEditor.commandPauseMs - 1
-        let hesitated = VoiceEditor.apply([final("이 파일은"), SpokenTurn(text: "지워", isFinal: true, pauseBeforeMs: short)],
-                                          commandsEnabled: true)
-        #expect(hesitated.text == "이 파일은 지워")
-        #expect(hesitated.outcomes.isEmpty)
-        let provisional = VoiceEditor.apply([final("안녕하세요."), SpokenTurn(text: "되돌", isFinal: false, pauseBeforeMs: short)],
-                                            commandsEnabled: true)
-        #expect(provisional.text == "안녕하세요. 되돌")
-        let paused = VoiceEditor.apply([final("안녕하세요."),
-                                        SpokenTurn(text: "지워", isFinal: true, pauseBeforeMs: VoiceEditor.commandPauseMs)],
-                                       commandsEnabled: true)
-        #expect(paused.text == "")
-        #expect(paused.outcomes == [.applied(.deleteLastSentence)])
+    /// Nothing after the trigger word is typed before Soniox finalizes it, so a command never flashes into the field.
+    @Test func aProvisionalCommandIsHeldBack() {
+        #expect(apply([final("안녕하세요."), live("자비스 지워")]).text == "안녕하세요.")
+        #expect(apply([final("안녕하세요."), live("자비스")]).text == "안녕하세요.")
+        #expect(apply([final("안녕하세요."), final("자비스"), live("되돌")]).text == "안녕하세요.")
+        #expect(apply([final("안녕하세요."), live("내일 봬요 자비")]).text == "안녕하세요. 내일 봬요")
+        #expect(apply([final("안녕하세요."), live("내일 봬요")]).text == "안녕하세요. 내일 봬요")
+        #expect(apply([final("안녕하세요."), final("내일 봬요 자비")]).text == "안녕하세요. 내일 봬요 자비")
     }
 
     @Test func turnedOffEverythingIsTyped() {
-        let result = VoiceEditor.apply([final("안녕하세요."), final("지워")], commandsEnabled: false)
-        #expect(result.text == "안녕하세요. 지워")
+        let result = VoiceEditor.apply([final("안녕하세요."), final("자비스 지워")], commandsEnabled: false, trigger: trigger)
+        #expect(result.text == "안녕하세요. 자비스 지워")
         #expect(result.outcomes.isEmpty)
     }
+}
+
+private let trigger = SpokenPhrase("자비스")
+private func apply(_ turns: [SpokenTurn]) -> VoiceEditor.Result {
+    VoiceEditor.apply(turns, commandsEnabled: true, trigger: trigger)
 }

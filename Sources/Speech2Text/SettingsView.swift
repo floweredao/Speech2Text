@@ -295,7 +295,7 @@ struct SettingsView: View {
             .accessibilityIdentifier("settings-auto-insert")
             Toggle(isOn: $model.spokenEnterEnabled) {
                 Text("말로 엔터 누르기")
-                Text("끝에 명령어를 말하고 잠깐 멈추면 엔터를 눌러요.")
+                Text("끝에 ‘\(model.triggerWord) \(model.spokenEnterPhrase)’라고 말하고 잠깐 멈추면 엔터를 눌러요.")
             }
             .accessibilityIdentifier("settings-spoken-enter")
             if model.spokenEnterEnabled {
@@ -305,9 +305,22 @@ struct SettingsView: View {
             }
             Toggle(isOn: $model.voiceEditingEnabled) {
                 Text("말로 고치기")
-                Text("잠깐 멈춘 뒤 ‘지워’, ‘되돌려’, ‘A를 B로 바꿔’만 따로 말하면 고쳐요.")
+                Text("‘\(model.triggerWord) 지워’, ‘\(model.triggerWord) 되돌려’, ‘\(model.triggerWord) A를 B로 바꿔’처럼 말하면 고쳐요.")
             }
             .accessibilityIdentifier("settings-voice-editing")
+            if model.voiceEditingEnabled || model.spokenEnterEnabled {
+                TextField(text: $model.triggerWord, prompt: Text(AppModel.defaultTriggerWord)) {
+                    Text("트리거 단어")
+                    Text("명령 앞에 붙이는 말이에요. 없이 말한 ‘지워’는 그대로 글로 써요.")
+                }
+                .multilineTextAlignment(.trailing)
+                .accessibilityIdentifier("settings-trigger-word")
+                if model.trigger.isEmpty {
+                    Text("트리거 단어가 비어 있으면 말로 고치기와 엔터가 먹지 않아요.")
+                        .font(.caption)
+                        .foregroundStyle(Color.warningText)
+                }
+            }
             Picker(selection: $model.silenceStopSeconds) {
                 timeoutChoices
             } label: {
@@ -331,6 +344,35 @@ struct SettingsView: View {
 
     private var voiceStartSection: some View {
         Section {
+            Toggle(isOn: $model.wakeListeningEnabled) {
+                Text("호출어로 시작·끝내기")
+                Text("‘\(model.wakePhrase)’라고 말하면 받아쓰기를 시작하고, 받아쓰다 끝에 다시 말하면 마쳐요.")
+            }
+            .accessibilityIdentifier("settings-wake-word")
+            if model.wakeListeningEnabled {
+                TextField(text: $model.wakePhrase, prompt: Text(AppModel.defaultWakePhrase)) {
+                    Text("호출어")
+                    Text("영어 글자로 적어요.")
+                }
+                .multilineTextAlignment(.trailing)
+                .accessibilityIdentifier("settings-wake-phrase")
+                Picker(selection: $model.wakeSensitivity) {
+                    Text("낮음").tag(WakeSensitivity.low)
+                    Text("보통").tag(WakeSensitivity.standard)
+                    Text("높음").tag(WakeSensitivity.high)
+                } label: {
+                    Text("민감도")
+                    Text("높일수록 작게 말해도 알아듣지만, 비슷한 말에도 켜질 수 있어요.")
+                }
+                .accessibilityIdentifier("settings-wake-sensitivity")
+                if let problem = model.wakeProblem {
+                    Text(problem)
+                        .font(.caption)
+                        .foregroundStyle(Color.warningText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("settings-wake-problem")
+                }
+            }
             VStack(alignment: .leading, spacing: 4) {
                 Text("음성 제어")
                 Text("1. 단축어 앱에서 새 단축어를 만들고 Speech2Text의 '받아쓰기 시작' 동작을 넣어요.\n2. 시스템 설정 › 손쉬운 사용 › 음성 제어 › 명령에서 +를 눌러 말할 문구를 적고, 동작은 '단축어 실행'으로 골라 그 단축어를 지정해요.\n3. '받아쓰기 끝내기'도 같은 방법으로 만들어요.")
@@ -353,7 +395,13 @@ struct SettingsView: View {
         } header: {
             Text("음성으로 시작")
         } footer: {
-            Text("이 앱은 받아쓰는 동안에만 마이크를 켜요.")
+            Group {
+                if model.wakeListeningEnabled {
+                    Text("호출어를 듣는 동안 마이크가 켜져 있어요(메뉴 막대에 주황색 점). 들은 소리는 이 맥 안에서만 처리하고 저장하거나 보내지 않아요. 블루투스 이어폰 마이크로 들으면 그동안 이어폰 음질이 낮아질 수 있어요.")
+                } else {
+                    Text("이 앱은 받아쓰는 동안에만 마이크를 켜요.")
+                }
+            }
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

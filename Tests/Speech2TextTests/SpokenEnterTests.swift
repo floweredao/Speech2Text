@@ -33,6 +33,15 @@ import Testing
         #expect(custom.terms == ["전송"])
     }
 
+    /// With a trigger word, Enter is pressed only when the trigger word comes right before the phrase.
+    @Test func withATriggerWordThePhraseNeedsIt() {
+        let command = SpokenEnter(setting: "엔터 보내기", shownDefault: "엔터 보내기", trigger: SpokenPhrase("자비스"))
+        #expect(command.strip("이거 고쳐 줘. 자비스, 엔터 보내기.") == "이거 고쳐 줘.")
+        #expect(command.strip("이거 고쳐 줘 엔터 보내기") == nil)
+        #expect(command.strip("자비스 다음에 엔터 보내기") == nil)
+        #expect(command.terms.contains("자비스"))
+    }
+
     @Test func blankPhraseNeverMatchesAndLatinIgnoresCase() {
         #expect(SpokenEnter(phrase: " ").strip("아무 말") == nil)
         #expect(SpokenEnter(phrase: "send it").strip("fix this. Send It.") == "fix this.")

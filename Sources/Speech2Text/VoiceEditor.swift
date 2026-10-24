@@ -35,12 +35,6 @@ enum VoiceCommand: Equatable {
         return replacement(in: utterance)
     }
 
-    /// True while a provisional utterance could still turn into a fixed command, so it is not typed yet.
-    static func mightBecomeCommand(_ utterance: String) -> Bool {
-        let compact = normalized(utterance)
-        return !compact.isEmpty && phrases.contains { $0.1.contains { $0.hasPrefix(compact) } }
-    }
-
     private static let replacePatterns = [
         #"^\s*(.{1,30}?)\s*(?:을|를)\s+(.{1,30}?)\s*(?:으로|로)\s*바꿔\s*(?:주세요|줘요|줘)?\s*[.!?。]*\s*$"#,
         #"^\s*(?:replace|change)\s+(.{1,30}?)\s+(?:with|to)\s+(.{1,30}?)\s*[.!?]*\s*$"#,
@@ -59,12 +53,10 @@ enum VoiceCommand: Equatable {
     }
 }
 
-/// Turns spoken turns into the text to type. A command only counts when Soniox finalized it as a turn of its own,
-/// that is, said after a pause and followed by one; the same words inside a sentence are ordinary text.
+/// Turns spoken turns into the text to type. A command only counts right after the trigger word ("<trigger> 지워"),
+/// in the same turn or, when the speaker paused after the trigger word, as the next turn; the same words without it
+/// are ordinary text. Words after the trigger word that are no command are typed as said. See DESIGN.md, "말로 고치기".
 struct VoiceEditor {
-    /// The silence Soniox's word times must show before a command. Soniox sometimes closes a turn at a short
-    /// hesitation, so a turn of its own alone is not proof that the speaker stopped. See DESIGN.md, "말로 고치기".
-    static let commandPauseMs = 800
     enum Outcome: Equatable {
         case applied(VoiceCommand)
         case nothingToChange(VoiceCommand)
@@ -76,23 +68,56 @@ struct VoiceEditor {
         var outcomes: [Outcome] = []
     }
 
-    static func apply(_ turns: [SpokenTurn], commandsEnabled: Bool) -> Result {
+    static func apply(_ turns: [SpokenTurn], commandsEnabled: Bool, trigger: SpokenPhrase) -> Result {
         var result = Result()
         var undo: [String] = []
-        for (index, turn) in turns.enumerated() {
+        var index = turns.startIndex
+        while index < turns.endIndex {
+            let turn = turns[index]
+            index += 1
             let spoken = turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !spoken.isEmpty else { continue }
-            if commandsEnabled, (turn.pauseBeforeMs ?? .max) >= commandPauseMs {
-                if let command = VoiceCommand.parse(spoken) {
-                    // Held back until Soniox finalizes it; once final it edits instead of being typed.
-                    if turn.isFinal { result.outcomes.append(perform(command, on: &result.text, undo: &undo)) }
+            guard commandsEnabled, let (before, after) = trigger.split(spoken) else {
+                append(heldBack(spoken, isLast: index == turns.endIndex && !turn.isFinal, trigger: commandsEnabled ? trigger : nil),
+                       to: &result.text)
+                continue
+            }
+            var said = spoken, command = after, isFinal = turn.isFinal
+            if after.isEmpty {
+                // The speaker paused after the trigger word; the command is the next turn, still to come when none.
+                guard index < turns.endIndex else {
+                    append(before, to: &result.text)
                     continue
                 }
-                if !turn.isFinal, index == turns.count - 1, VoiceCommand.mightBecomeCommand(spoken) { continue }
+                command = turns[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
+                said += " " + command
+                isFinal = turns[index].isFinal
+                index += 1
             }
-            result.text = result.text.isEmpty ? spoken : result.text + " " + spoken
+            // Nothing after the trigger word is typed before Soniox finalizes it: it may still become a command.
+            guard isFinal else {
+                append(before, to: &result.text)
+                continue
+            }
+            if let parsed = VoiceCommand.parse(command) {
+                append(before, to: &result.text)
+                result.outcomes.append(perform(parsed, on: &result.text, undo: &undo))
+            } else {
+                append(said, to: &result.text)
+            }
         }
         return result
+    }
+
+    /// A provisional last turn ending in the start of the trigger word waits for the rest before it is typed.
+    private static func heldBack(_ spoken: String, isLast: Bool, trigger: SpokenPhrase?) -> String {
+        guard isLast, let trigger, let start = trigger.partialSuffixStart(spoken) else { return spoken }
+        return String(spoken[..<start]).trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func append(_ words: String, to text: inout String) {
+        guard !words.isEmpty else { return }
+        text = text.isEmpty ? words : text + " " + words
     }
 
     private static func perform(_ command: VoiceCommand, on text: inout String, undo: inout [String]) -> Outcome {

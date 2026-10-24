@@ -10,6 +10,7 @@ ensure_stopped() {
   fi
 }
 ensure_stopped
+bash scripts/fetch-wake-model.sh
 # SwiftPM records the deployment target as the linked SDK version. Record 26.0
 # so macOS 26 and later keep the same runtime behavior as the 26-only releases.
 swift build -c release -Xlinker -platform_version -Xlinker macos -Xlinker 15.0 -Xlinker 26.0
@@ -35,6 +36,10 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$ICONSET" -o "$STAGING/Speech2Text.app/Contents/Resources/AppIcon.icns"
 cp -R Resources/en.lproj Resources/ko.lproj "$STAGING/Speech2Text.app/Contents/Resources/"
+# The on-device wake-phrase model (Apache-2.0); its sample recordings stay out of the app.
+mkdir -p "$STAGING/Speech2Text.app/Contents/Resources/WakeWord"
+cp Vendor/wake-model/encoder.onnx Vendor/wake-model/decoder.onnx Vendor/wake-model/joiner.onnx \
+  Vendor/wake-model/tokens.txt Vendor/wake-model/bpe.model "$STAGING/Speech2Text.app/Contents/Resources/WakeWord/"
 # Shortcuts and Voice Control find the App Intents through Metadata.appintents. Xcode normally writes it;
 # the Command Line Tools lack the processor, so take it from Xcode and feed it the compiler's constant values.
 XCODE_TOOLCHAIN="${SPEECH2TEXT_XCODE_TOOLCHAIN:-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain}"

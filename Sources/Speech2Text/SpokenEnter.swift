@@ -4,26 +4,34 @@ import Foundation
 /// Spacing, case and punctuation are ignored, since recognition writes "엔터 보내기", "엔터보내기." and so on.
 /// The words may also come in another order or be said again ("엔터 보내기. 보내기, 엔터."),
 /// because a speaker repeats the command when nothing seems to happen.
+/// With a trigger word the command counts only right after it ("<trigger> 엔터 보내기"), and both are left out.
 struct SpokenEnter: Equatable {
     /// The default phrase of every UI language. The UI language does not tell which language the speaker uses
     /// (an English macOS shows "send enter" to someone who says "엔터 보내기"), so the default accepts them all.
     static let defaultPhrases = ["엔터 보내기", "send enter"]
 
     let phrases: [String]
+    let trigger: SpokenPhrase?
 
-    init(phrase: String) { phrases = [phrase] }
+    init(phrase: String, trigger: SpokenPhrase? = nil) {
+        phrases = [phrase]
+        self.trigger = trigger
+    }
 
     /// A phrase left at the default shown in Settings counts in every language; a phrase the user typed counts alone.
-    init(setting phrase: String, shownDefault: String) {
+    init(setting phrase: String, shownDefault: String, trigger: SpokenPhrase? = nil) {
         let isDefault = phrase.trimmingCharacters(in: .whitespacesAndNewlines) == shownDefault
         phrases = isDefault ? [phrase] + Self.defaultPhrases.filter { $0 != phrase } : [phrase]
+        self.trigger = trigger
     }
 
     /// Phrases to send to recognition as context, so they are written the way they are matched.
-    var terms: [String] { phrases }
+    var terms: [String] { phrases + (trigger?.terms ?? []) }
 
     func strip(_ text: String) -> String? {
-        phrases.compactMap { Self.strip(text, phrase: $0) }.min { $0.count < $1.count }
+        phrases.compactMap { phrase in
+            Self.strip(text, phrase: phrase).flatMap { before in trigger.map { $0.strippingSuffix(before) } ?? before }
+        }.min { $0.count < $1.count }
     }
 
     private static func strip(_ text: String, phrase: String) -> String? {

@@ -114,9 +114,63 @@ final class AppModel {
     }
     /// The command phrase goes to Soniox as context too; without it "엔터" after a pause is often heard as "센터".
     private var recognitionTerms: [String] {
-        let commands = (spokenEnter?.terms ?? []) + (voiceEditingEnabled ? VoiceCommand.terms : [])
+        let commands = (spokenEnter?.terms ?? []) + (voiceEditingEnabled ? VoiceCommand.terms + trigger.terms : [])
+            + (wakeListeningEnabled ? wakeSpoken.terms : [])
         return commands.reduce(dictionary) { DictionaryTerms.adding($1, to: $0) }
     }
+    /// Placeholders until the owner settles on the app's name and the trigger word; Settings can change both.
+    /// The on-device model hears real English words far better than made-up names (DESIGN.md, "호출어").
+    static let defaultWakePhrase = "Hey Computer"
+    static let defaultWakeSpellings = ["헤이 컴퓨터"]
+    static let defaultTriggerWord = "자비스"
+    /// Starts dictation when heard while idle and finishes it when said at the end of a dictation. Only a phrase
+    /// changed from the default is stored, so a new default (the app's final name) reaches everyone who kept it.
+    var wakePhrase = UserDefaults.standard.string(forKey: "wakePhrase") ?? AppModel.defaultWakePhrase {
+        didSet {
+            Self.storeUnlessDefault(wakePhrase, Self.defaultWakePhrase, key: "wakePhrase")
+            speech.vocabulary = recognitionTerms
+            syncWakeListening()
+        }
+    }
+    /// The wake phrase as dictation may write it.
+    var wakeSpoken: SpokenPhrase {
+        let isDefault = wakePhrase.trimmingCharacters(in: .whitespaces).lowercased() == Self.defaultWakePhrase.lowercased()
+        return SpokenPhrase(wakePhrase, alternates: isDefault ? Self.defaultWakeSpellings : [])
+    }
+    /// Said right before a voice command ("<trigger> 지워") so the command is not taken for dictated words.
+    var triggerWord = UserDefaults.standard.string(forKey: "triggerWord") ?? AppModel.defaultTriggerWord {
+        didSet {
+            Self.storeUnlessDefault(triggerWord, Self.defaultTriggerWord, key: "triggerWord")
+            speech.vocabulary = recognitionTerms
+        }
+    }
+    var trigger: SpokenPhrase { SpokenPhrase(triggerWord) }
+    private static func storeUnlessDefault(_ value: String, _ standard: String, key: String) {
+        let custom = value.trimmingCharacters(in: .whitespacesAndNewlines) != standard
+        UserDefaults.standard.set(custom ? value : nil, forKey: key)
+    }
+    /// Keeps the microphone open while idle and starts dictation on the wake phrase; saying it at the end of a
+    /// dictation finishes it. Off unless the user turns it on.
+    var wakeListeningEnabled = UserDefaults.standard.bool(forKey: "wakeListeningEnabled") {
+        didSet {
+            UserDefaults.standard.set(wakeListeningEnabled, forKey: "wakeListeningEnabled")
+            speech.vocabulary = recognitionTerms
+            syncWakeListening()
+        }
+    }
+    var wakeSensitivity = UserDefaults.standard.string(forKey: "wakeSensitivity").flatMap(WakeSensitivity.init) ?? .standard {
+        didSet {
+            UserDefaults.standard.set(wakeSensitivity.rawValue, forKey: "wakeSensitivity")
+            syncWakeListening()
+        }
+    }
+    /// Why listening for the wake phrase is not running although it is on; nil when it runs or is off.
+    private(set) var wakeProblem: String?
+    private(set) var isListeningForWake = false
+    /// Runs when the wake phrase is heard while idle; starts dictation when unset.
+    @ObservationIgnored var onWake: (() -> Void)?
+    @ObservationIgnored private var wakeListener: WakeWordListener?
+    @ObservationIgnored private var wakeAllowed = false
     /// Hands-free edits: a command said on its own after a pause edits the dictated text instead of being typed.
     var voiceEditingEnabled = UserDefaults.standard.object(forKey: "voiceEditingEnabled") as? Bool ?? true {
         didSet {
@@ -127,7 +181,8 @@ final class AppModel {
     /// Commands already reported for the current field, so each one is announced once.
     @ObservationIgnored private var reportedEdits = 0
     private var spokenEnter: SpokenEnter? {
-        spokenEnterEnabled ? SpokenEnter(setting: spokenEnterPhrase, shownDefault: String(localized: "엔터 보내기")) : nil
+        spokenEnterEnabled
+            ? SpokenEnter(setting: spokenEnterPhrase, shownDefault: String(localized: "엔터 보내기"), trigger: trigger) : nil
     }
     /// Kept current by a CoreAudio listener, so Settings reflects plugged-in or removed microphones at once.
     private(set) var inputDevices = AudioInputDevices.all()
@@ -160,6 +215,86 @@ final class AppModel {
         speech.silenceLimit = Self.limit(silenceStopSeconds)
         speech.translationTarget = translationTarget
         deviceObservation = AudioInputDevices.observe { [weak self] in self?.refreshInputDevices() }
+        observeBusy()
+    }
+
+    /// Wake listening starts only once the app runs normally, never for a file transcription or in tests.
+    func beginWakeListening() {
+        wakeAllowed = true
+        syncWakeListening()
+    }
+
+    /// Whether the idle microphone should listen for the wake phrase. Never while dictating: the dictation itself
+    /// hears the phrase (as a command prefix), and two listeners would start a second dictation over the first.
+    nonisolated static func listensForWake(enabled: Bool, phraseIsUsable: Bool, isBusy: Bool) -> Bool {
+        enabled && phraseIsUsable && !isBusy
+    }
+
+    private func observeBusy() {
+        withObservationTracking { _ = speech.isBusy } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.syncWakeListening()
+                self?.observeBusy()
+            }
+        }
+    }
+
+    /// The model's word pieces for the phrase; nil when the phrase cannot be listened for.
+    var wakePieces: [String]? { listener()?.tokenizer.pieces(for: wakePhrase) }
+
+    private func listener() -> WakeWordListener? {
+        if let wakeListener { return wakeListener }
+        guard let model = Bundle.main.url(forResource: "WakeWord", withExtension: nil),
+              let listener = try? WakeWordListener(model: model) else { return nil }
+        listener.onWake = { [weak self] in self?.wakeHeard() }
+        listener.onFailure = { [weak self] message in
+            self?.isListeningForWake = false
+            self?.wakeProblem = message
+        }
+        wakeListener = listener
+        return listener
+    }
+
+    private func syncWakeListening() {
+        guard wakeAllowed, wakeListeningEnabled else {
+            wakeListener?.stop()
+            isListeningForWake = false
+            wakeProblem = nil
+            return
+        }
+        guard let listener = listener() else {
+            isListeningForWake = false
+            wakeProblem = String(localized: "호출어 모델을 찾지 못했어요. 앱을 다시 설치해 주세요.")
+            return
+        }
+        let pieces = listener.tokenizer.pieces(for: wakePhrase)
+        guard Self.listensForWake(enabled: true, phraseIsUsable: pieces != nil, isBusy: isBusy), let pieces else {
+            listener.stop()
+            isListeningForWake = false
+            wakeProblem = pieces == nil ? String(localized: "호출어는 영어 글자로 적어 주세요.") : nil
+            return
+        }
+        let config = WakeConfig(pieces: pieces, sensitivity: wakeSensitivity, deviceUID: inputDeviceUID)
+        guard !listener.isListening || config != wakeConfig else { return }
+        wakeConfig = config
+        wakeProblem = nil
+        isListeningForWake = true
+        listener.start(pieces: pieces, sensitivity: wakeSensitivity, deviceUID: inputDeviceUID)
+    }
+
+    private struct WakeConfig: Equatable {
+        let pieces: [String]
+        let sensitivity: WakeSensitivity
+        let deviceUID: String?
+    }
+    @ObservationIgnored private var wakeConfig: WakeConfig?
+
+    /// The idle microphone is released before dictation opens its own, so the phrase is not heard twice.
+    private func wakeHeard() {
+        wakeListener?.stop()
+        isListeningForWake = false
+        if let onWake { onWake() } else { handle(.start) }
+        syncWakeListening()
     }
 
     private static func storedDictionary() -> [String] {
@@ -175,11 +310,12 @@ final class AppModel {
     func refreshInputDevices() {
         inputDevices = AudioInputDevices.all()
         defaultInputDevice = AudioInputDevices.defaultDevice()
+        if wakeProblem != nil { syncWakeListening() }
     }
 
     private func mirror(_: String) {
         let field = edited(from: cutMs)
-        if field.outcomes.count > reportedEdits, let last = field.outcomes.last { feedback = Self.describe(last) }
+        if field.outcomes.count > reportedEdits, let last = field.outcomes.last { feedback = Self.describe(last, trigger: triggerWord) }
         reportedEdits = field.outcomes.count
         if live == nil, awaitingTarget {
             guard acquireLiveTarget() else { return }
@@ -217,17 +353,17 @@ final class AppModel {
 
     /// The text for the field in use: words spoken after `cut` (all when nil), with voice edits applied.
     private func edited(from cut: Int?) -> VoiceEditor.Result {
-        VoiceEditor.apply(speech.spokenTurns(from: cut), commandsEnabled: voiceEditingEnabled)
+        VoiceEditor.apply(speech.spokenTurns(from: cut), commandsEnabled: voiceEditingEnabled, trigger: trigger)
     }
 
-    static func describe(_ outcome: VoiceEditor.Outcome) -> String {
+    static func describe(_ outcome: VoiceEditor.Outcome, trigger: String) -> String {
         switch outcome {
-        case .applied(.deleteLastSentence): String(localized: "마지막 문장을 지웠어요. '되돌려'라고 말하면 되돌려요.")
-        case .applied(.deleteLastWord): String(localized: "마지막 단어를 지웠어요. '되돌려'라고 말하면 되돌려요.")
-        case .applied(.clearAll): String(localized: "받아쓴 글을 모두 지웠어요. '되돌려'라고 말하면 되돌려요.")
+        case .applied(.deleteLastSentence): String(localized: "마지막 문장을 지웠어요. '\(trigger) 되돌려'라고 말하면 되돌려요.")
+        case .applied(.deleteLastWord): String(localized: "마지막 단어를 지웠어요. '\(trigger) 되돌려'라고 말하면 되돌려요.")
+        case .applied(.clearAll): String(localized: "받아쓴 글을 모두 지웠어요. '\(trigger) 되돌려'라고 말하면 되돌려요.")
         case .applied(.undo): String(localized: "되돌렸어요.")
         case .applied(.replace(let old, let new)):
-            String(localized: "'\(old)'을(를) '\(new)'(으)로 바꿨어요. '되돌려'라고 말하면 되돌려요.")
+            String(localized: "'\(old)'을(를) '\(new)'(으)로 바꿨어요. '\(trigger) 되돌려'라고 말하면 되돌려요.")
         case .nothingToChange(.undo): String(localized: "되돌릴 것이 없어요.")
         case .nothingToChange: String(localized: "고칠 글이 없어요.")
         case .notFound(let old): String(localized: "'\(old)'을(를) 찾지 못해 바꾸지 않았어요.")
@@ -235,12 +371,24 @@ final class AppModel {
     }
 
     private func withoutEnterCommand(_ text: String) -> String {
-        spokenEnter?.strip(text) ?? text
+        withoutWakeStop(spokenEnter?.strip(text) ?? text)
     }
 
-    /// The command only counts once Soniox has finalized it after a pause, so a phrase mid-sentence never stops dictation.
+    /// The wake phrase said at the end of a dictation finishes it and is not typed. While it is still being said
+    /// ("… 헤이") live typing waits for the rest.
+    private func withoutWakeStop(_ text: String) -> String {
+        guard wakeListeningEnabled else { return text }
+        let wake = wakeSpoken
+        if let rest = wake.strippingSuffix(text) { return rest }
+        guard speech.isRecording, let start = wake.partialSuffixStart(text) else { return text }
+        return String(text[..<start]).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// A command only counts once Soniox has finalized it, so a phrase still being said never stops dictation.
     private func turnFinalized(_: String) {
-        if spokenEnter?.strip(edited(from: nil).text) != nil { speech.finish() }
+        let text = edited(from: nil).text
+        let wakeStop = wakeListeningEnabled && wakeSpoken.strippingSuffix(text) != nil
+        if spokenEnter?.strip(text) != nil || wakeStop { speech.finish() }
     }
 
     private func complete(_: String) {
@@ -256,7 +404,7 @@ final class AppModel {
             return
         }
         let command = spokenEnter?.strip(spoken)
-        let text = command ?? spoken
+        let text = withoutWakeStop(command ?? spoken)
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if !empty {
             history.insert(DictationRecord(text: text), at: 0)
@@ -266,7 +414,7 @@ final class AppModel {
         if let live, let acted = live.userActedAt { moveOn(at: acted) }
         let movedOn = cutMs != nil
         let field = edited(from: cutMs).text
-        let rest = spokenEnter?.strip(field) ?? field
+        let rest = withoutEnterCommand(field)
         if live == nil, awaitingTarget, !rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             _ = acquireLiveTarget()
         }

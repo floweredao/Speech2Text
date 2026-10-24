@@ -1,4 +1,5 @@
 import AppKit
+import DictationSpeech
 import SwiftUI
 
 @main
@@ -19,9 +20,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var pasteItem: NSMenuItem?
     private var cancelItem: NSMenuItem?
     private var copyItem: NSMenuItem?
+    private var wakeCheck: WakeWordListener?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        let launchArguments = ProcessInfo.processInfo.arguments
+        if let index = launchArguments.firstIndex(of: "--wake-file"), launchArguments.indices.contains(index + 1) {
+            checkWakePhrase(in: URL(fileURLWithPath: launchArguments[index + 1]), arguments: launchArguments)
+            return
+        }
         let updater = AppUpdater()
         self.updater = updater
         model.settingsAction = { [weak self] in self?.presentSettings() }
@@ -51,6 +58,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             self?.model.handle(request)
             self?.overlay?.present()
         }
+        model.onWake = { [weak self] in
+            self?.model.handle(.start)
+            self?.overlay?.present()
+        }
         model.shortcutsChanged = { [weak self] in self?.applyShortcuts() }
         applyShortcuts()
         let arguments = ProcessInfo.processInfo.arguments
@@ -64,8 +75,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
         } else {
             model.loadKey()
+            model.beginWakeListening()
             showSettings()
         }
+    }
+    /// Diagnostic: runs the bundled wake-phrase model over an audio file, with no window, microphone or network.
+    /// Prints `WAKE <n>` per detection and `WAKE_TOTAL <n>` at the end, then quits.
+    private func checkWakePhrase(in file: URL, arguments: [String]) {
+        let phrase = arguments.firstIndex(of: "--wake-phrase").flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
+            ?? model.wakePhrase
+        let sensitivity = arguments.firstIndex(of: "--wake-sensitivity")
+            .flatMap { arguments.indices.contains($0 + 1) ? WakeSensitivity(rawValue: arguments[$0 + 1]) : nil }
+            ?? model.wakeSensitivity
+        guard let modelURL = Bundle.main.url(forResource: "WakeWord", withExtension: nil),
+              let listener = try? WakeWordListener(model: modelURL, audioFile: file),
+              let pieces = listener.tokenizer.pieces(for: phrase) else {
+            print("WAKE_UNAVAILABLE")
+            exit(2)
+        }
+        var heard = 0
+        listener.onWake = {
+            heard += 1
+            print("WAKE \(heard)")
+        }
+        listener.onFailure = { _ in
+            print("WAKE_TOTAL \(heard)")
+            fflush(stdout)
+            NSApp.terminate(nil)
+        }
+        wakeCheck = listener
+        listener.start(pieces: pieces, sensitivity: sensitivity, deviceUID: nil)
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showSettings()
