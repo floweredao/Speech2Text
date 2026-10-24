@@ -72,7 +72,7 @@ struct SettingsView: View {
     @Bindable var model: AppModel
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
     private let microphoneState = State(initialValue: MicrophoneAccess(AVCaptureDevice.authorizationStatus(for: .audio)))
-    private var microphone: MicrophoneAccess { microphoneState.wrappedValue }
+    private var microphone: MicrophoneAccess { model.microphoneAccessOverride ?? microphoneState.wrappedValue }
     private let confirmDeleteState = State(initialValue: false)
     private let recorderState = State(initialValue: ShortcutRecorder())
     private var recorder: ShortcutRecorder { recorderState.wrappedValue }
@@ -717,6 +717,7 @@ struct SettingsView: View {
     }
 
     private func refreshPermissions() {
+        guard model.microphoneAccessOverride == nil else { return }
         model.accessibilityGranted = AXIsProcessTrusted()
         microphoneState.wrappedValue = MicrophoneAccess(AVCaptureDevice.authorizationStatus(for: .audio))
         model.refreshInputDevices()

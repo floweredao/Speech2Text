@@ -26,6 +26,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         let launchArguments = ProcessInfo.processInfo.arguments
+        if let dir = Self.value(after: "--demo-capture", in: launchArguments) {
+            let locale = Self.value(after: "--demo", in: launchArguments).flatMap(AppModel.DemoLocale.init) ?? .en
+            DemoCapturer.captureAll(to: URL(fileURLWithPath: dir), locale: locale, model: model)
+            exit(0)
+        }
         if let index = launchArguments.firstIndex(of: "--wake-file"), launchArguments.indices.contains(index + 1) {
             checkWakePhrase(in: URL(fileURLWithPath: launchArguments[index + 1]), arguments: launchArguments)
             return
@@ -43,7 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             transcribeFile(launchArguments[index + 1], arguments: launchArguments)
             return
         }
-        let updater = AppUpdater()
+        let demoLocale = Self.value(after: "--demo", in: launchArguments).flatMap(AppModel.DemoLocale.init)
+        // A demo run never reaches the network, so it gets no update check.
+        let updater = demoLocale == nil ? AppUpdater() : nil
         self.updater = updater
         model.settingsAction = { [weak self] in self?.presentSettings() }
         let overlay = NotchOverlayController(model: model)
@@ -61,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         menu.addItem(withTitle: String(localized: "받아쓰기 표시"), action: #selector(showOverlay), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: String(localized: "설정…"), action: #selector(showSettings), keyEquivalent: ",")
-        if updater.isAvailable {
+        if updater?.isAvailable == true {
             menu.addItem(withTitle: String(localized: "업데이트 확인…"), action: #selector(checkForUpdates), keyEquivalent: "")
         }
         menu.addItem(withTitle: String(localized: "말글 종료"), action: #selector(quit), keyEquivalent: "q")
@@ -78,8 +85,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         model.shortcutsChanged = { [weak self] in self?.applyShortcuts() }
         applyShortcuts()
-        let arguments = ProcessInfo.processInfo.arguments
-        if let index = arguments.firstIndex(of: "--audio-file"), arguments.indices.contains(index + 1) {
+        let arguments = launchArguments
+        if let demoLocale {
+            runDemo(demoLocale, arguments: arguments)
+        } else if let index = arguments.firstIndex(of: "--audio-file"), arguments.indices.contains(index + 1) {
             transcribeFile(arguments[index + 1], arguments: arguments)
         } else {
             model.loadJevKey()
@@ -93,6 +102,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     controlGranted: AXIsProcessTrusted())
                 if readiness.missingCount > 0 { showSettings() }
             }
+        }
+    }
+
+    private func runDemo(_ locale: AppModel.DemoLocale, arguments: [String]) {
+        model.autoInsert = false
+        model.apiKey = "demo-synthetic-key"
+        model.seedDemoHistory(locale.history)
+        if arguments.contains("--demo-settings") {
+            model.accessibilityGranted = true
+            model.microphoneAccessOverride = .granted
+            showSettings()
+            return
+        }
+        guard !arguments.contains("--demo-idle") else { return }
+        let delay = Self.value(after: "--demo-delay-ms", in: arguments).flatMap(Int.init) ?? 600
+        let step = Self.value(after: "--demo-step-ms", in: arguments).flatMap(Int.init) ?? 220
+        let hold = Self.value(after: "--demo-hold-ms", in: arguments).flatMap(Int.init) ?? 700
+        Task {
+            if delay > 0 { try? await Task.sleep(for: .milliseconds(delay)) }
+            model.runDemo(locale, stepInterval: .milliseconds(step), holdBeforeFinish: .milliseconds(hold))
         }
     }
 

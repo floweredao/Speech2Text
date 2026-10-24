@@ -28,7 +28,8 @@ public enum KeyActivity: Sendable {
     /// A language code to type a live translation instead of the spoken words (experimental); nil for none.
     public var translationTarget: String?
     /// Microphone loudness now, 0-1, for the recording indicator. Poll it; it is not observable.
-    public var inputLevel: Float { audio?.inputLevel ?? 0 }
+    public var inputLevel: Float { simulatedLevel ?? audio?.inputLevel ?? 0 }
+    @ObservationIgnored public var simulatedLevel: Float?
     /// The last recording was finished by `silenceLimit`, not by the user.
     public private(set) var finishedForSilence = false
     public private(set) var transcript = ""
@@ -375,6 +376,7 @@ public enum KeyActivity: Sendable {
 
     private func stop(with message: String) {
         generation = UUID()
+        simulatedLevel = nil
         runTask?.cancel()
         senderTask?.cancel()
         timerTask?.cancel()
@@ -420,6 +422,79 @@ public enum KeyActivity: Sendable {
             if let value { apiKey = value }
             reportKey(value == nil ? String(localized: "저장된 API 키가 없어요.") : String(localized: "API 키를 불러왔어요."))
         } catch { reportKey(error.localizedDescription, failed: true) }
+    }
+
+    /// Drives the engine with a scripted sequence of partial transcripts, with no microphone or network.
+    /// Returns the task that finishes the demo, so a caller can wait for the result.
+    @discardableResult
+    public func runDemo(steps: [String], stepInterval: Duration = .milliseconds(90),
+                        holdBeforeFinish: Duration = .milliseconds(450)) -> Task<Void, Never>? {
+        guard !isBusy, let final = steps.last else { return nil }
+        let epoch = UUID()
+        generation = epoch
+        hasError = false
+        outcome = .none
+        hasCurrentTranscript = false
+        turns = []
+        audioOrigin = ProcessInfo.processInfo.systemUptime
+        finishedForSilence = false
+        phase = .recording
+        status = String(localized: "듣고 있어요.")
+        simulatedLevel = 0.45
+        let demo = Task { [weak self] in
+            guard let self else { return }
+            for (index, step) in steps.enumerated() {
+                if index > 0 {
+                    do { try await Task.sleep(for: stepInterval) } catch { return }
+                }
+                guard generation == epoch, !Task.isCancelled else { return }
+                simulatedLevel = Float(0.32 + 0.28 * abs(sin(Double(index) * 1.3)))
+                let isLast = index == steps.count - 1
+                let update = TranscriptUpdate(turnID: "demo-0", revision: index + 1, text: step, isFinal: isLast,
+                                              spans: [TimedText(text: step, startMs: index * 80)])
+                if receive(update) { onLiveText?(transcript) }
+            }
+            if holdBeforeFinish > .zero {
+                do { try await Task.sleep(for: holdBeforeFinish) } catch { return }
+            }
+            guard generation == epoch, !Task.isCancelled else { return }
+            finishDemo(final)
+        }
+        runTask = demo
+        return demo
+    }
+
+    /// Sets the engine synchronously to a synthetic state for offscreen `--demo-capture` renders.
+    public func setDemoState(phase: SpeechPhase, transcript: String, status: String,
+                             outcome: SpeechOutcome = .none, level: Float? = nil) {
+        generation = UUID()
+        runTask?.cancel()
+        hasError = false
+        self.phase = phase
+        self.status = status
+        self.transcript = transcript
+        lastFinalTranscript = outcome == .completed ? transcript : lastFinalTranscript
+        hasCurrentTranscript = !transcript.isEmpty && (phase != .idle || outcome == .completed)
+        self.outcome = outcome
+        simulatedLevel = level
+        turns = transcript.isEmpty ? [] : [
+            TranscriptUpdate(turnID: "demo-0", revision: 1, text: transcript,
+                             isFinal: phase == .idle && outcome == .completed,
+                             spans: [TimedText(text: transcript, startMs: 0)])
+        ]
+    }
+
+    private func finishDemo(_ final: String) {
+        simulatedLevel = nil
+        lastFinalTranscript = final
+        transcript = final
+        hasCurrentTranscript = !final.isEmpty
+        outcome = final.isEmpty ? .empty : .completed
+        generation = UUID()
+        phase = .idle
+        hasError = false
+        status = final.isEmpty ? String(localized: "인식된 음성이 없어요.") : String(localized: "받아쓰기를 마쳤어요.")
+        onFinal?(final)
     }
 
     public func deleteKey() async {
