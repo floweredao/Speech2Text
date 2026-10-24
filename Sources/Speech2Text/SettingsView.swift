@@ -380,7 +380,7 @@ struct SettingsView: View {
                 timeoutChoices
             } label: {
                 Text("말이 없으면 받아쓰기 마치기")
-                Text("새로 인식된 말이 없으면 들은 데까지 마쳤요.")
+                Text("새로 인식된 말이 없으면 들은 데까지 마쳐요.")
             }
             .accessibilityIdentifier("settings-silence-stop")
             Picker(selection: $model.overlayAutoCloseSeconds) {
