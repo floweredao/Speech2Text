@@ -220,3 +220,10 @@
 "명령을 듣지 않고 모두 글로 써요." = "Commands aren’t listened for; everything is typed.";
 "Jev API 키" = "Jev API Key";
 "Jev 키가 없으면 명령처럼 들린 말도 모두 글로 써요." = "Without a Jev key, anything that sounds like a command is typed as text.";
+"그대로" = "As Is";
+"쉼표 빼기" = "Drop Commas";
+"모두 빼기" = "Drop All";
+"문장부호" = "Punctuation";
+"인식된 문장부호를 그대로 써요." = "Punctuation is typed as recognized.";
+"쉼표만 빼고 마침표·물음표·느낌표는 남겨요. 1,000 같은 숫자 속 쉼표는 남겨요." = "Commas are dropped; periods, question marks and exclamation marks stay. Commas inside numbers like 1,000 stay.";
+"쉼표와 마침표·물음표·느낌표를 모두 빼요. 3.14 같은 숫자는 그대로예요." = "Commas, periods, question marks and exclamation marks are all dropped. Numbers like 3.14 stay as they are.";

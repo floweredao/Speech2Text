@@ -356,6 +356,19 @@ struct SettingsView: View {
                         .foregroundStyle(Color.warningText)
                 }
             }
+            Picker(selection: $model.punctuationStyle) {
+                Text("그대로").tag(PunctuationStyle.asIs)
+                Text("쉼표 빼기").tag(PunctuationStyle.noCommas)
+                Text("모두 빼기").tag(PunctuationStyle.none)
+            } label: {
+                Text("문장부호")
+                switch model.punctuationStyle {
+                case .asIs: Text("인식된 문장부호를 그대로 써요.")
+                case .noCommas: Text("쉼표만 빼고 마침표·물음표·느낌표는 남겨요. 1,000 같은 숫자 속 쉼표는 남겨요.")
+                case .none: Text("쉼표와 마침표·물음표·느낌표를 모두 빼요. 3.14 같은 숫자는 그대로예요.")
+                }
+            }
+            .accessibilityIdentifier("settings-punctuation")
             Picker(selection: $model.silenceStopSeconds) {
                 timeoutChoices
             } label: {

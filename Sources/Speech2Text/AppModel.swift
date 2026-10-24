@@ -186,6 +186,9 @@ final class AppModel {
         didSet { speech.vocabulary = recognitionTerms }
     }
     private var judgeMode: CommandJudgeMode { commandJudgeOverride ?? commandJudge }
+    var punctuationStyle = UserDefaults.standard.string(forKey: "punctuationStyle").flatMap(PunctuationStyle.init) ?? .asIs {
+        didSet { UserDefaults.standard.set(punctuationStyle.rawValue, forKey: "punctuationStyle") }
+    }
     var voiceEditingEnabled: Bool { judgeMode != .off }
     /// The Jev API key from this app's Keychain.
     var jevKey = ""
@@ -485,7 +488,12 @@ final class AppModel {
 
     /// The wake phrase said at the end of a dictation finishes it and is not typed. While it is still being said
     /// ("… 헤이") live typing waits for the rest.
+    /// Also the last step before text is typed or kept, so punctuation is dropped here, after every command match.
     private func withoutWakeStop(_ text: String) -> String {
+        punctuationStyle.apply(withWakeStop(text))
+    }
+
+    private func withWakeStop(_ text: String) -> String {
         guard wakeListeningEnabled else { return text }
         let wake = wakeSpoken
         if let rest = wake.strippingSuffix(text) { return rest }
@@ -515,7 +523,7 @@ final class AppModel {
                 let probability = answer.commandProbability.map { String(format: "%.2f", $0) } ?? "-"
                 print("jev\t\(answer.verdict)\t\(probability)\t\(answer.milliseconds)ms\t\(answer.inputTokens)tok\t\(question.utterance)\t\(answer.failure ?? "")")
             }
-            print("=>\t\(spoken)")
+            print("=>\t\(punctuationStyle.apply(spoken))")
             fflush(stdout)
             NSApp.terminate(nil)
             return
