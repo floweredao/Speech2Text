@@ -11,6 +11,25 @@ import Testing
         #expect(AppModel.listensForWake(enabled: enabled, phraseIsUsable: usable, isBusy: busy) == listens)
     }
 
+    /// What macOS's on-device Korean recognizer wrote for "헤이 컴퓨터" and "Hey Computer" in the system's voices wakes the
+    /// app; ordinary sentences about a computer do not.
+    @Test(arguments: [
+        ("에이 컴퓨터 오늘 메일 내용 정리해서 열어 줘.", true), ("제이컴퓨터 오늘 메일", true), ("회의 컴퓨터 오늘", true),
+        ("제이 컴부터 오늘", true), ("Hey, computer. Please write", true), ("헤이 컴퓨터", true),
+        ("컴퓨터를 새로 사야 할 것 같아.", false), ("이 컴퓨터 좀 봐.", false), ("The computer is on the desk.", false),
+        ("Okay computer.", false), ("헤이, 잠깐만 기다려 봐.", false),
+    ])
+    func theRecognizerWakesOnTheDefaultPhraseAndItsSoundAlikes(text: String, wakes: Bool) {
+        #expect(AppModel.wakeMatcher(for: "Hey Computer")(text) == wakes)
+    }
+
+    /// A phrase the user chose is matched as written: the default's sound-alikes do not carry over to it.
+    @Test func aChosenPhraseIgnoresTheDefaultsSoundAlikes() {
+        let matches = AppModel.wakeMatcher(for: "Hey Jarvis")
+        #expect(matches("hey jarvis, start"))
+        #expect(!matches("에이 컴퓨터"))
+    }
+
     /// The wake phrase starts dictation the way a spoken start request does: never toggling a running one off.
     @Test(arguments: [(false, false, DictationRequest.Effect.start), (true, true, .none), (false, true, .none)])
     func theWakePhraseOnlyStarts(recording: Bool, busy: Bool, effect: DictationRequest.Effect) {

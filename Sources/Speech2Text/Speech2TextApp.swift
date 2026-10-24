@@ -145,7 +145,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             NSApp.terminate(nil)
         }
         wakeCheck = listener
-        listener.start(pieces: pieces, sensitivity: sensitivity, deviceUID: nil)
+        listener.start(pieces: pieces, sensitivity: sensitivity, deviceUID: nil,
+                       spoken: arguments.contains("--wake-keyword-only") ? nil : AppModel.wakeMatcher(for: phrase))
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showSettings()

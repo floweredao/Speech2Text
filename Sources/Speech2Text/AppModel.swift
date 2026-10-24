@@ -124,8 +124,23 @@ final class AppModel {
     }
     /// Placeholders until the owner settles on the app's name and the trigger word; Settings can change both.
     /// The on-device model hears real English words far better than made-up names (DESIGN.md, "호출어").
-    static let defaultWakePhrase = "Hey Computer"
-    static let defaultWakeSpellings = ["헤이 컴퓨터"]
+    nonisolated static let defaultWakePhrase = "Hey Computer"
+    nonisolated static let defaultWakeSpellings = ["헤이 컴퓨터"]
+    /// How macOS's on-device Korean recognizer writes "Hey Computer" said the Korean way: the "hey" comes out as any of
+    /// these words (measured on the system's Korean voices). Only the idle wake check uses them; the dictation keeps
+    /// `defaultWakeSpellings`, because "회의 컴퓨터" in the middle of a dictation is ordinary speech.
+    nonisolated static let defaultWakeSoundAlikes: [String] = {
+        let hey = ["헤이", "해이", "에이", "애이", "제이", "게이", "케이", "회의", "hey", "hay", "kay", "hake"]
+        let computer = ["컴퓨터", "컴퓨타", "컴부터", "computer"]
+        return hey.flatMap { first in computer.map { "\(first) \($0)" } }
+    }()
+
+    /// Whether words the system recognizer wrote while idle hold `phrase` (with its sound-alikes for the default).
+    nonisolated static func wakeMatcher(for phrase: String) -> @Sendable (String) -> Bool {
+        let isDefault = phrase.trimmingCharacters(in: .whitespaces).lowercased() == defaultWakePhrase.lowercased()
+        let spoken = SpokenPhrase(phrase, alternates: isDefault ? defaultWakeSpellings + defaultWakeSoundAlikes : [])
+        return { spoken.split($0) != nil }
+    }
     static let defaultTriggerWord = "자비스"
     /// Starts dictation when heard while idle and finishes it when said at the end of a dictation. Only a phrase
     /// changed from the default is stored, so a new default (the app's final name) reaches everyone who kept it.
@@ -312,7 +327,8 @@ final class AppModel {
         wakeConfig = config
         wakeProblem = nil
         isListeningForWake = true
-        listener.start(pieces: pieces, sensitivity: wakeSensitivity, deviceUID: inputDeviceUID)
+        listener.start(pieces: pieces, sensitivity: wakeSensitivity, deviceUID: inputDeviceUID,
+                       spoken: Self.wakeMatcher(for: wakePhrase))
     }
 
     private struct WakeConfig: Equatable {
