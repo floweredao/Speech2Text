@@ -61,6 +61,7 @@ Requires macOS 15 or later on Apple Silicon.
 5. Text is typed into the field you picked as you speak. When recognition revises earlier words, only the changed tail is erased and retyped. Press the same shortcut or the finish button to settle on the final text. Recordings are limited to 30 minutes.
    - Standard Mac text fields (Notes, TextEdit, most apps) are edited through accessibility text replacement. Where that isn't supported, such as terminals, the app sends key events to that app only. This works with a Korean input method active.
    - If you switch to another field or app mid-way, live typing stops and the result is kept in the overlay. In terminals, typing or clicking in the field while dictating also stops it, because terminals don't report where the cursor is. Cancelling erases only the text typed in this session. The app never sends newlines or Return, so it can't run a command in a terminal.
+   - Settings › Input › **Punctuation** chooses what is typed: **As Is** (the default), **Drop Commas** (periods, question marks and exclamation marks stay; commas inside numbers such as 1,000 stay), or **Drop All** (numbers such as 3.14 stay). Voice commands are still recognized from the words as heard.
 
 ## Changing shortcuts
 
