@@ -10,8 +10,8 @@
 <key>LSHasLocalizedDisplayName</key><true/>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
-<key>CFBundleVersion</key><string>12</string>
-<key>CFBundleShortVersionString</key><string>1.4.1</string>
+<key>CFBundleVersion</key><string>13</string>
+<key>CFBundleShortVersionString</key><string>1.5.0</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 <key>LSUIElement</key><true/>
 <key>SUFeedURL</key><string>https://github.com/floweredao/malgeul/releases/latest/download/appcast.xml</string>
