@@ -27,6 +27,8 @@ final class AppModel {
     /// The feedback only confirms that things went as expected (typing live, typed in), so the overlay keeps it out
     /// of sight; problems and voice edits stay visible.
     private(set) var feedbackIsRoutine = false
+    /// Overrides the microphone authorization state in Settings for synthetic demo/capture runs.
+    var microphoneAccessOverride: MicrophoneAccess?
     /// The app live typing writes into, shown beside the title.
     private(set) var liveTargetName: String?
     /// The icon of that app, shown beside its name so the destination reads at a glance.
@@ -692,6 +694,109 @@ final class AppModel {
         stopJudging()
         startLiveTypingIfAdmitted()
         speech.start(audioFile: url)
+    }
+
+    /// Scripted synthetic transcript for `--demo <en|ko>`: drives the overlay and its history with made-up
+    /// sentences. No microphone, network, Keychain, or other app's text field is touched.
+    enum DemoLocale: String, Sendable {
+        case en, ko
+
+        var history: [String] {
+            switch self {
+            case .en: ["Checked the build logs and verified all unit tests pass on Apple Silicon."]
+            case .ko: ["애플 실리콘에서 빌드 로그와 단위 테스트 통과를 모두 확인했습니다."]
+            }
+        }
+
+        var targetName: String {
+            switch self {
+            case .en: "Notes"
+            case .ko: "메모"
+            }
+        }
+
+        var animationSteps: [String] {
+            switch self {
+            case .en:
+                [
+                    "Please",
+                    "Please tidy up",
+                    "Please tidy up the meeting",
+                    "Please tidy up the meeting notes",
+                    "Please tidy up the meeting notes and share",
+                    "Please tidy up the meeting notes and share the draft",
+                    "Please tidy up the meeting notes and share the draft with the team",
+                    "Please tidy up the meeting notes and share the draft with the team by this afternoon.",
+                ]
+            case .ko:
+                [
+                    "회의록",
+                    "회의록 초안을",
+                    "회의록 초안을 오늘",
+                    "회의록 초안을 오늘 오후까지",
+                    "회의록 초안을 오늘 오후까지 정리해서",
+                    "회의록 초안을 오늘 오후까지 정리해서 팀에",
+                    "회의록 초안을 오늘 오후까지 정리해서 팀에 공유해",
+                    "회의록 초안을 오늘 오후까지 정리해서 팀에 공유해 주세요.",
+                ]
+            }
+        }
+
+        var steps: [String] {
+            switch self {
+            case .en:
+                [
+                    "Please tidy up",
+                    "Please tidy up the meeting notes",
+                    "Please tidy up the meeting notes and share the draft",
+                    "Please tidy up the meeting notes and share the draft with the team by this afternoon.",
+                ]
+            case .ko:
+                [
+                    "회의록 초안을",
+                    "회의록 초안을 오늘 오후까지",
+                    "회의록 초안을 오늘 오후까지 정리해서",
+                    "회의록 초안을 오늘 오후까지 정리해서 팀에 공유해 주세요.",
+                ]
+            }
+        }
+    }
+
+    func seedDemoHistory(_ lines: [String]) {
+        history = lines.map { DictationRecord(text: $0) }
+    }
+
+    func configureDemoTarget(name: String?, icon: NSImage?) {
+        liveTargetName = name
+        liveTargetIcon = icon
+    }
+
+    func setRoutineFeedback(_ text: String) {
+        routine(text)
+    }
+
+    /// Synthetic state for `--demo-capture`. Only in-memory values change: every setting that persists to
+    /// UserDefaults is left alone, because the capture process shares the installed app's defaults domain.
+    func configureForDemoCapture() {
+        let microphone = AudioInputDevice(uid: "demo-mic", name: "MacBook Pro Microphone")
+        apiKey = "soniox-demo-synthetic-api-key-0123456789"
+        accessibilityGranted = true
+        microphoneAccessOverride = .granted
+        defaultInputDevice = microphone
+        inputDevices = [microphone]
+        autoInsert = true
+        feedback = ""
+        seedDemoHistory([])
+        configureDemoTarget(name: nil, icon: nil)
+    }
+
+    @discardableResult
+    func runDemo(_ locale: DemoLocale, stepInterval: Duration = .milliseconds(220),
+                 holdBeforeFinish: Duration = .milliseconds(700)) -> Task<Void, Never>? {
+        guard !isBusy else { return nil }
+        overlayVisible = true
+        stopJudging()
+        return speech.runDemo(steps: locale.steps, stepInterval: stepInterval, holdBeforeFinish: holdBeforeFinish)
     }
     func copyTranscript() {
         feedback = insertion.copy(transcript) ? String(localized: "복사했어요. 원하는 곳에서 ⌘V를 누르세요.") : String(localized: "복사할 텍스트가 없어요.")

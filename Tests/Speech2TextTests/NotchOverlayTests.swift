@@ -368,6 +368,19 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(!model.overlayVisible)
     }
 
+    /// `--demo` drives the overlay with scripted text: no microphone, network, or other app's field is involved.
+    @MainActor @Test func syntheticDemoStreamsStepsIntoResultAndHistoryWithoutNetwork() async throws {
+        let model = AppModel()
+        model.autoInsert = false
+        model.seedDemoHistory(AppModel.DemoLocale.en.history)
+        let demo = try #require(model.runDemo(.en, stepInterval: .zero, holdBeforeFinish: .zero))
+        await demo.value
+        let state = DictationDisplayState(model: model)
+        #expect(state.phase == .result)
+        #expect(state.transcript == AppModel.DemoLocale.en.steps.last)
+        #expect(state.history.map(\.text) == AppModel.DemoLocale.en.history)
+    }
+
     @Test(arguments: [(26, ControlPermissionPane.accessibility), (27, .deviceControl), (28, .deviceControl)])
     func controlPaneFollowsOSVersion(version: Int, expected: ControlPermissionPane) {
         #expect(ControlPermissionPane(osMajorVersion: version) == expected)

@@ -5,6 +5,11 @@ public struct AudioInputDevice: Identifiable, Hashable, Sendable {
     public let uid: String
     public let name: String
     public var id: String { uid }
+
+    public init(uid: String, name: String) {
+        self.uid = uid
+        self.name = name
+    }
 }
 
 public enum AudioInputDevices {
