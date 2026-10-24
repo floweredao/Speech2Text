@@ -8,7 +8,8 @@ private func live(_ text: String) -> SpokenTurn { SpokenTurn(text: text, isFinal
 @Suite struct VoiceEditorTests {
     @Test(arguments: [
         ("지워", VoiceCommand.deleteLastSentence), ("지워 줘.", .deleteLastSentence), ("마지막 문장 지워주세요", .deleteLastSentence),
-        ("Delete that.", .deleteLastSentence), ("한 단어 지워", .deleteLastWord), ("다 지워!", .clearAll),
+        ("Delete that.", .deleteLastSentence), ("방금 말한 거 지워.", .deleteLastSentence), ("방금 한 말 지워 줘", .deleteLastSentence),
+        ("한 단어 지워", .deleteLastWord), ("다 지워!", .clearAll),
         ("되돌려 줘", .undo), ("Undo", .undo), ("회의를 미팅으로 바꿔 줘", .replace("회의", "미팅")),
         ("세 시를 네 시로 바꿔", .replace("세 시", "네 시")), ("replace Monday with Tuesday", .replace("Monday", "Tuesday")),
     ])

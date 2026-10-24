@@ -153,6 +153,7 @@ struct JevJudge: Sendable {
             let elapsed = started.duration(to: .now)
             let ms = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
             if let failure { Self.log.notice("Jev not used: \(failure, privacy: .public)") }
+            else { Self.log.notice("Jev \(verdict == .command ? "COMMAND" : "TEXT", privacy: .public) p=\(probability ?? -1, privacy: .public) \(question.joint.rawValue, privacy: .public)") }
             return JudgeAnswer(verdict: verdict, commandProbability: probability, milliseconds: ms, inputTokens: tokens, failure: failure)
         }
         guard let key = key?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty else {
