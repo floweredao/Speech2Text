@@ -281,16 +281,29 @@ public enum KeyActivity: Sendable {
     }
 
     public func spokenTurns(from ms: Int?) -> [SpokenTurn] {
-        turns.compactMap { turn in
-            guard let ms else { return SpokenTurn(text: turn.text, isFinal: turn.isFinal) }
+        turns.indices.compactMap { index in
+            let turn = turns[index]
+            let pause = index > turns.startIndex ? Self.silence(after: turns[index - 1], before: turn) : nil
+            guard let ms else { return SpokenTurn(text: turn.text, isFinal: turn.isFinal, pauseBeforeMs: pause) }
             guard let first = turn.spans.firstIndex(where: { ($0.startMs ?? Int.min) >= ms }) else { return nil }
             var kept = turn.spans[first...]
             if first > turn.spans.startIndex {
                 kept = kept.drop { $0.text.first?.isWhitespace != true }
             }
             let text = kept.map(\.text).joined()
-            return text.isEmpty ? nil : SpokenTurn(text: text, isFinal: turn.isFinal)
+            return text.isEmpty ? nil : SpokenTurn(text: text, isFinal: turn.isFinal, pauseBeforeMs: pause)
         }
+    }
+
+    /// Milliseconds between the last sound of `previous` and the first sound of `turn`; nil when a time is missing.
+    private static func silence(after previous: TranscriptUpdate, before turn: TranscriptUpdate) -> Int? {
+        let words = { (spans: [TimedText]) in
+            spans.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        }
+        guard let end = words(previous.spans).last?.endMs, let start = words(turn.spans).first?.startMs else {
+            return nil
+        }
+        return max(0, start - end)
     }
 
     private func joined(_ turns: [TranscriptUpdate]) -> String {
@@ -427,9 +440,13 @@ public enum KeyActivity: Sendable {
 public struct SpokenTurn: Equatable, Sendable {
     public let text: String
     public let isFinal: Bool
-    public init(text: String, isFinal: Bool) {
+    /// Silence Soniox's word times show between the previous turn's last word and this turn's first word; nil for
+    /// the first turn or when a time is missing.
+    public let pauseBeforeMs: Int?
+    public init(text: String, isFinal: Bool, pauseBeforeMs: Int? = nil) {
         self.text = text
         self.isFinal = isFinal
+        self.pauseBeforeMs = pauseBeforeMs
     }
 }
 

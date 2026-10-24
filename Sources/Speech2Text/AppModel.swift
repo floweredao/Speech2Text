@@ -47,6 +47,8 @@ final class AppModel {
     }
     var inputLevel: Float { speech.inputLevel }
     var autoInsert = true
+    /// Diagnostic for `--audio-file`: print each recognized turn with the pause before it, then quit.
+    var printsTurnsAndQuits = false
     private(set) var overlayRequested = true
     var settingsFocused = false
     var overlayVisible: Bool {
@@ -244,6 +246,15 @@ final class AppModel {
     private func complete(_: String) {
         overlayVisible = true
         let spoken = edited(from: nil).text
+        if printsTurnsAndQuits {
+            for turn in speech.spokenTurns(from: nil) {
+                print("\(turn.pauseBeforeMs.map(String.init) ?? "-")\t\(turn.text.trimmingCharacters(in: .whitespaces))")
+            }
+            print("=>\t\(spoken)")
+            fflush(stdout)
+            NSApp.terminate(nil)
+            return
+        }
         let command = spokenEnter?.strip(spoken)
         let text = command ?? spoken
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

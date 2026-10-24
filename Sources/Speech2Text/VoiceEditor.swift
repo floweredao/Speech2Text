@@ -62,6 +62,9 @@ enum VoiceCommand: Equatable {
 /// Turns spoken turns into the text to type. A command only counts when Soniox finalized it as a turn of its own,
 /// that is, said after a pause and followed by one; the same words inside a sentence are ordinary text.
 struct VoiceEditor {
+    /// The silence Soniox's word times must show before a command. Soniox sometimes closes a turn at a short
+    /// hesitation, so a turn of its own alone is not proof that the speaker stopped. See DESIGN.md, "말로 고치기".
+    static let commandPauseMs = 800
     enum Outcome: Equatable {
         case applied(VoiceCommand)
         case nothingToChange(VoiceCommand)
@@ -79,7 +82,7 @@ struct VoiceEditor {
         for (index, turn) in turns.enumerated() {
             let spoken = turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !spoken.isEmpty else { continue }
-            if commandsEnabled {
+            if commandsEnabled, (turn.pauseBeforeMs ?? .max) >= commandPauseMs {
                 if let command = VoiceCommand.parse(spoken) {
                     // Held back until Soniox finalizes it; once final it edits instead of being typed.
                     if turn.isFinal { result.outcomes.append(perform(command, on: &result.text, undo: &undo)) }

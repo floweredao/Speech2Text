@@ -8,6 +8,8 @@ struct TimedText: Sendable, Equatable {
     let startMs: Int?
     /// Soniox's 0-1 certainty for this token.
     var confidence: Double? = nil
+    /// When the token's sound ended, on the same scale as `startMs`.
+    var endMs: Int? = nil
 }
 struct TranscriptUpdate: Sendable, Equatable {
     let turnID: String

@@ -58,6 +58,23 @@ private func live(_ text: String) -> SpokenTurn { SpokenTurn(text: text, isFinal
             == "안녕하세요. 내일 봬요")
     }
 
+    /// Soniox can close a turn at a short hesitation; a command then needs the word times to show a real pause.
+    @Test func aCommandAfterOnlyAShortPauseIsTyped() {
+        let short = VoiceEditor.commandPauseMs - 1
+        let hesitated = VoiceEditor.apply([final("이 파일은"), SpokenTurn(text: "지워", isFinal: true, pauseBeforeMs: short)],
+                                          commandsEnabled: true)
+        #expect(hesitated.text == "이 파일은 지워")
+        #expect(hesitated.outcomes.isEmpty)
+        let provisional = VoiceEditor.apply([final("안녕하세요."), SpokenTurn(text: "되돌", isFinal: false, pauseBeforeMs: short)],
+                                            commandsEnabled: true)
+        #expect(provisional.text == "안녕하세요. 되돌")
+        let paused = VoiceEditor.apply([final("안녕하세요."),
+                                        SpokenTurn(text: "지워", isFinal: true, pauseBeforeMs: VoiceEditor.commandPauseMs)],
+                                       commandsEnabled: true)
+        #expect(paused.text == "")
+        #expect(paused.outcomes == [.applied(.deleteLastSentence)])
+    }
+
     @Test func turnedOffEverythingIsTyped() {
         let result = VoiceEditor.apply([final("안녕하세요."), final("지워")], commandsEnabled: false)
         #expect(result.text == "안녕하세요. 지워")

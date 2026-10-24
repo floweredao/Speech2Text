@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let arguments = ProcessInfo.processInfo.arguments
         if let index = arguments.firstIndex(of: "--audio-file"), arguments.indices.contains(index + 1) {
             model.autoInsert = !arguments.contains("--no-auto-insert")
+            model.printsTurnsAndQuits = arguments.contains("--print-turns")
             let url = URL(fileURLWithPath: arguments[index + 1])
             Task {
                 await model.speech.loadKey()
