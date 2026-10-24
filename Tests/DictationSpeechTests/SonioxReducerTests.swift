@@ -71,3 +71,46 @@ extension SonioxReducerTests {
   #expect(try r.reduce(Data(#"{"tokens":[{"text":" 말씀","is_final":false,"start_ms":900}]}"#.utf8)) == [.update(.init(turnID: "soniox-0", revision: 2, text: "첫 말씀", isFinal: false, spans: [.init(text: "첫", startMs: 100), .init(text: " 말씀", startMs: 900)]))])
  }
 }
+
+extension SonioxReducerTests {
+ /// Regression: a provisional word Soniox dropped at an endpoint, with nothing finalized, stayed on screen and typed.
+ @Test func endpointWithoutFinalTextClearsTheProvisionalText() throws {
+  var r = SonioxTranscriptReducer()
+  _ = try r.reduce(Data(#"{"tokens":[{"text":"음","is_final":false}]}"#.utf8))
+  #expect(try r.reduce(Data(#"{"tokens":[{"text":"<end>","is_final":true}]}"#.utf8)) == [.update(.init(turnID: "soniox-0", revision: 2, text: "", isFinal: false))])
+  #expect(try r.reduce(Data(#"{"tokens":[{"text":"다음","is_final":false}]}"#.utf8)) == [.update(.init(turnID: "soniox-0", revision: 3, text: "다음", isFinal: false, spans: [.init(text: "다음", startMs: nil)]))])
+ }
+
+ /// Soniox sends each final token once while its provisional tail keeps changing; nothing is repeated or lost.
+ @Test func syllablesFinalizedAcrossFramesAreNeitherRepeatedNorLost() throws {
+  var r = SonioxTranscriptReducer()
+  let frames = [
+   #"{"tokens":[{"text":"안","is_final":true},{"text":"녕","is_final":false}]}"#,
+   #"{"tokens":[{"text":"녕하","is_final":true},{"text":"세요","is_final":false}]}"#,
+   #"{"tokens":[{"text":"세요","is_final":true},{"text":"<end>","is_final":true}]}"#,
+  ]
+  let events = try frames.flatMap { try r.reduce(Data($0.utf8)) }
+  #expect(events == [
+   .update(.init(turnID: "soniox-0", revision: 1, text: "안녕", isFinal: false, spans: [.init(text: "안", startMs: nil), .init(text: "녕", startMs: nil)])),
+   .update(.init(turnID: "soniox-0", revision: 2, text: "안녕하세요", isFinal: false, spans: [.init(text: "안", startMs: nil), .init(text: "녕하", startMs: nil), .init(text: "세요", startMs: nil)])),
+   .update(.init(turnID: "soniox-0", revision: 3, text: "안녕하세요", isFinal: true, spans: [.init(text: "안", startMs: nil), .init(text: "녕하", startMs: nil), .init(text: "세요", startMs: nil)])),
+  ])
+ }
+
+ /// Only a final endpoint ends a turn; a provisional one is never shown as text.
+ @Test func provisionalEndpointNeitherEndsTheTurnNorShows() throws {
+  var r = SonioxTranscriptReducer()
+  #expect(try r.reduce(Data(#"{"tokens":[{"text":"하나","is_final":true},{"text":"<end>","is_final":false}]}"#.utf8)) == [.update(.init(turnID: "soniox-0", revision: 1, text: "하나", isFinal: false, spans: [.init(text: "하나", startMs: nil)]))])
+ }
+
+ @Test func aLongDictationKeepsEveryFinalTokenInOrder() throws {
+  var r = SonioxTranscriptReducer()
+  for index in 0..<500 { _ = try r.reduce(Data(#"{"tokens":[{"text":"\#(index % 10)","is_final":true}]}"#.utf8)) }
+  let events = try r.reduce(Data(#"{"tokens":[{"text":"<fin>","is_final":true}]}"#.utf8))
+  guard case .update(let update) = events.first else { Issue.record("no final"); return }
+  #expect(events.count == 1)
+  #expect(update.isFinal && update.turnID == "soniox-0" && update.revision == 501)
+  #expect(update.text == String(repeating: "0123456789", count: 50))
+  #expect(update.spans.count == 500)
+ }
+}
