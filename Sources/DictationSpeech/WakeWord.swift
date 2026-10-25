@@ -220,6 +220,8 @@ final class WakeSpotter: @unchecked Sendable {
     /// Called when listening stops by itself, with a message for the user.
     public var onFailure: (@MainActor (String) -> Void)?
     public private(set) var isListening = false
+    /// When the microphone (or diagnostic file) started feeding audio, for measuring how late the phrase is heard.
+    public private(set) var feedingSince: ContinuousClock.Instant?
     public let tokenizer: WakePhraseTokenizer
 
     /// `model` holds encoder.onnx, decoder.onnx, joiner.onnx, tokens.txt and bpe.model.
@@ -228,9 +230,10 @@ final class WakeSpotter: @unchecked Sendable {
     }
 
     /// Diagnostic: listens to an audio file instead of the microphone, as fast as the model decodes it.
-    public convenience init(model: URL, audioFile: URL) throws {
+    /// With `realTime` the file is fed at microphone pace, so the time until the phrase is heard can be measured.
+    public convenience init(model: URL, audioFile: URL, realTime: Bool = false) throws {
         try self.init(model: model, captureFactory: { _ in
-            FileAudioCapture(url: audioFile, maximumSeconds: 3_600, realTime: false)
+            FileAudioCapture(url: audioFile, maximumSeconds: 3_600, realTime: realTime)
         })
     }
 
@@ -265,6 +268,7 @@ final class WakeSpotter: @unchecked Sendable {
                 try await withTaskCancellationHandler {
                     try Task.checkCancellation()
                     let chunks = try await capture.start(format: .pcm16Mono16k)
+                    self?.feedingSince = .now
                     Self.log.notice("listening (recognizer: \(transcriber?.localeName ?? "none", privacy: .public))")
                     let feed = transcriber
                     try await Task.detached(priority: .utility) {

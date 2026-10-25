@@ -46,7 +46,10 @@ final class WakeTranscriber: WakeTranscribing, @unchecked Sendable {
             log.notice("no installed on-device recognizer for \(Locale.preferredLanguages, privacy: .public)")
             return nil
         }
-        let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [.volatileResults],
+        // Without .fastResults the recognizer held its guesses back for 1.6-3 s after the phrase ended, so a wake
+        // heard only by it came seconds late; with it the guess arrives about 0.3-0.75 s after.
+        let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [],
+                                            reportingOptions: [.volatileResults, .fastResults],
                                             attributeOptions: [])
         guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else { return nil }
         return try? await WakeTranscriber(transcriber: transcriber, locale: locale, format: format, matches: matches,
