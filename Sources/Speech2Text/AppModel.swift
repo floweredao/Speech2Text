@@ -511,6 +511,8 @@ final class AppModel {
         case .applied(.deleteLastWord): String(localized: "마지막 단어를 지웠어요. '\(undo)'라고 말하면 되돌려요.")
         case .applied(.clearAll): String(localized: "받아쓴 글을 모두 지웠어요. '\(undo)'라고 말하면 되돌려요.")
         case .applied(.undo): String(localized: "되돌렸어요.")
+        // The mark shows up in the text itself.
+        case .applied(.mark): ""
         case .applied(.replace(let old, let new)):
             String(localized: "'\(old)'을(를) '\(new)'(으)로 바꿨어요. '\(undo)'라고 말하면 되돌려요.")
         case .nothingToChange(.undo): String(localized: "되돌릴 것이 없어요.")
