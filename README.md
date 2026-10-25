@@ -16,9 +16,7 @@
   macOS 15+ · Apple silicon
 </p>
 
-<p align="center">
-  <img src="docs/images/demo-en.gif" width="720" alt="The overlay under the notch shows the sentence as it is spoken, then keeps the result">
-</p>
+https://github.com/user-attachments/assets/e18e596f-4abe-4ebf-aea1-8db2036ab06e
 
 ## Why Malgeul
 

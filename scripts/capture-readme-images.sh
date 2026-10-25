@@ -18,9 +18,13 @@ for lang in en ko; do
     -wakePhrase "Hey Computer" -wakeSensitivity standard -commandJudge jev \
     -punctuationStyle asIs -spokenEnterEnabled YES -spokenEnterPhrase "$enter" -marksUncertainWords NO \
     -silenceStopSeconds 30 -overlayAutoCloseSeconds 30 -dictionaryTerms "$terms"
-  ffmpeg -y -loglevel error -framerate 12 -i "$WORK/$lang/frames-$lang/frame-%03d.png" \
-    -vf "fps=12,scale=1280:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=256:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
-    -loop 0 "$WORK/$lang/demo-$lang.gif"
-  cp "$WORK/$lang"/*.png "$WORK/$lang/demo-$lang.gif" docs/images/
+  # H.264 in yuv420p with the index up front plays inline on GitHub, in Safari and in QuickTime. The README links
+  # the uploaded copy (github.com/user-attachments), because GitHub strips <video> tags pointing into the repository.
+  ffmpeg -y -loglevel error -framerate 9 -i "$WORK/$lang/frames-$lang/frame-%03d.png" \
+    -vf "scale=1280:-2:flags=lanczos,tpad=stop_mode=clone:stop_duration=1.5,fps=30,format=yuv420p" -c:v libx264 -preset slow -crf 18 \
+    -movflags +faststart -an "$WORK/$lang/demo-$lang.mp4"
+  cp "$WORK/$lang"/*.png docs/images/
+  mkdir -p docs/videos
+  cp "$WORK/$lang/demo-$lang.mp4" docs/videos/
 done
-ls -l docs/images
+ls -l docs/images docs/videos

@@ -16,9 +16,7 @@
   macOS 15+ · Apple silicon
 </p>
 
-<p align="center">
-  <img src="docs/images/demo-ko.gif" width="720" alt="노치 아래 오버레이에 말한 문장이 실시간으로 나타나고, 끝나면 결과가 남는 모습">
-</p>
+https://github.com/user-attachments/assets/c2b36d86-4e6e-42dd-822b-9a3c29ceaac2
 
 ## 왜 말글인가요
 
