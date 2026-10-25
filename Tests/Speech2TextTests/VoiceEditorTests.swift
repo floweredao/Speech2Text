@@ -51,6 +51,21 @@ private func live(_ text: String) -> SpokenTurn { SpokenTurn(text: text, isFinal
         #expect(nextTurn.outcomes == [.applied(.deleteLastWord)])
     }
 
+    @Test(arguments: [("세 시 지워", "세 시"), ("'급히'를 지워 주세요.", "급히"), ("회의 자료 빼 줘", "회의 자료"),
+                      ("delete Monday", "Monday")])
+    func aNamedPartCanBeDeleted(utterance: String, target: String) {
+        #expect(VoiceCommand.parse(utterance) == .delete(target))
+    }
+
+    /// Only the last place the words were said goes, found whatever the recognizer did with the spaces, and the
+    /// sentence around it closes up.
+    @Test func deletingANamedPartRemovesOnlyItsLastOccurrence() {
+        let result = apply([final("세 시에 봐요. 회의는 급히 세시예요."), final("자비스 급히 지워"), final("자비스 세 시를 지워"),
+                            final("자비스 사과 지워")])
+        #expect(result.text == "세 시에 봐요. 회의는 예요.")
+        #expect(result.outcomes == [.applied(.delete("급히")), .applied(.delete("세 시")), .notFound("사과")])
+    }
+
     @Test func missingTargetsAndEmptyUndoChangeNothingAndSaySo() {
         let result = apply([final("좋아요."), final("자비스 사과를 배로 바꿔"), final("자비스 되돌려")])
         #expect(result.text == "좋아요.")

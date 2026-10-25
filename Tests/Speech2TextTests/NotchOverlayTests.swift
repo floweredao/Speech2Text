@@ -368,6 +368,30 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(!model.overlayVisible)
     }
 
+    /// Regression: Jev's late answer typed the held-back last words into the field, but the overlay kept showing the
+    /// text without them, because the answer changed nothing the overlay observes.
+    @MainActor @Test func jevsAnswerRedrawsTheOverlayWithTheHeldBackWords() async throws {
+        let model = AppModel()
+        model.commandJudgeOverride = .jev
+        model.jevKeyOverride = "test-key"
+        model.jevJudge.send = { _ in throw URLError(.notConnectedToInternet) }
+        model.speech.setDemoState(phase: .idle, transcript: "회의는 세 시예요. 다 지워", status: "", outcome: .completed)
+        let (redrawn, signal) = AsyncStream<Void>.makeStream()
+        let shown = withObservationTracking { model.transcript } onChange: { signal.yield() }
+        #expect(shown == "회의는 세 시예요.")
+        let observed = await withTaskGroup(of: Bool.self) { group in
+            group.addTask { for await _ in redrawn { return true }; return false }
+            group.addTask { try? await Task.sleep(for: .seconds(3)); return false }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            signal.finish()
+            return first
+        }
+        #expect(observed)
+        #expect(model.transcript == "회의는 세 시예요. 다 지워")
+        model.commandJudgeOverride = nil
+    }
+
     /// `--demo` drives the overlay with scripted text: no microphone, network, or other app's field is involved.
     @MainActor @Test func syntheticDemoStreamsStepsIntoResultAndHistoryWithoutNetwork() async throws {
         let model = AppModel()
