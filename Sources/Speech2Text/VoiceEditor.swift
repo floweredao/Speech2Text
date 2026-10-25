@@ -345,8 +345,12 @@ struct VoiceEditor {
     private static func settled(_ command: VoiceCommand, before: String, joint: CommandCandidate.Joint, canUndo: Bool,
                                 afterEdit: Bool) -> CommandVerdict? {
         switch command {
-        case .mark:
-            if before.trimmingCharacters(in: .whitespaces).isEmpty { return .text }
+        case .mark(let mark):
+            let body = before.trimmingCharacters(in: .whitespaces)
+            if body.isEmpty { return .text }
+            // "내일 와요? 물음표": the text already ends in the mark, so the name only confirms it. Asking Jev could
+            // type the word "물음표" after the "?"; nothing changes either way, so it is never typed.
+            if let last = body.last, sameMark(mark).contains(last) { return .command }
             return joint == .ownChunk ? .command : nil
         case .undo: return canUndo ? (afterEdit ? .command : nil) : .text
         case .replace(let old, _) where VoiceEditor.lastRange(of: old, in: before) == nil: return .text
@@ -519,7 +523,7 @@ struct VoiceEditor {
 
     private static let sentenceEnds: Set<Character> = [".", "?", "!", "。", "…"]
     /// A spoken mark takes the place of the one Soniox put there ("내일 와요. 물음표" -> "내일 와요?").
-    private static func sameMark(_ mark: Character) -> String {
+    static func sameMark(_ mark: Character) -> String {
         switch mark {
         case "?", "？": "?？"
         case "!", "！": "!！"

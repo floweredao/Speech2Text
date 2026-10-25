@@ -111,13 +111,10 @@ private func session(_ outcome: SpeechOutcome = .none, current: Bool = false) ->
 }
 
 private func display(_ phase: SpeechPhase, error: Bool = false, transcript: String, feedback: String = "",
-                     session: DictationSession, history: [DictationRecord] = []) -> DictationDisplayState {
+                     session: DictationSession) -> DictationDisplayState {
     DictationDisplayState(speechPhase: phase, hasError: error, status: "엔진 상태", transcript: transcript,
-                          feedback: feedback, session: session, history: history)
+                          feedback: feedback, session: session)
 }
-
-/// Newest first; the newest is the dictation that just finished.
-private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map { DictationRecord(text: $0) }
 
 @Suite struct DictationDisplayStateTests {
     @Test func launchIdleIsCompactAndCanStartRecording() {
@@ -199,20 +196,6 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(state.transcript.isEmpty)
     }
 
-    /// Owner request: a new dictation pushes the finished one down into the history list instead of replacing it.
-    @Test func startingANewDictationMovesTheResultIntoHistory() {
-        let result = display(.idle, transcript: previous, session: session(.completed, current: true), history: records)
-        #expect(result.transcript == previous)
-        #expect(result.history == Array(records[1...]))
-        let connecting = display(.preparing, transcript: previous, session: session(), history: records)
-        #expect(connecting.transcript.isEmpty)
-        #expect(connecting.history == records)
-        #expect(connecting.isExpanded)
-        let recording = display(.recording, transcript: live, session: session(current: true), history: records)
-        #expect(recording.transcript == live)
-        #expect(recording.history == records)
-    }
-
     /// Owner request: the overlay stays calm. Routine confirmations are not shown, and a result already typed into the
     /// field offers copy as one header button instead of a row of buttons; problems still show.
     @Test func routineConfirmationsStayOutOfTheWay() {
@@ -234,41 +217,19 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(listening.targetName == "Notes")
     }
 
-    /// Owner request (2026-10-25, replacing 2026-10-23's one row): the history shows no row until its expand button is
-    /// pressed, and the button shows every row, while dictating too.
-    @Test func historyShowsNoRowUntilExpanded() {
-        let result = display(.idle, transcript: previous, session: session(.completed, current: true), history: records)
-        #expect(result.historyRows(expanded: false).isEmpty)
-        #expect(result.historyRows(expanded: true) == Array(records[1...]))
-        #expect(result.historyCanExpand)
-        let recording = display(.recording, transcript: live, session: session(current: true), history: records)
-        #expect(recording.historyRows(expanded: false).isEmpty)
-        #expect(recording.historyRows(expanded: true) == records)
-        let single = display(.idle, transcript: previous, session: session(.completed, current: true),
-                             history: Array(records[0...1]))
-        #expect(single.historyCanExpand)
-    }
-
-    /// Owner request (2026-10-24): no separate "Previous dictation" line beside "Dictation History"; the previous
-    /// result is the history's newest row, with paste kept on it.
-    @Test func previousResultJoinsTheOneHistory() {
-        for state in [display(.idle, transcript: previous, feedback: "인식 없음", session: session(.empty), history: records),
-                      display(.idle, transcript: previous, feedback: "취소했어요", session: session(.cancelled), history: records),
-                      display(.idle, error: true, transcript: previous, session: session(.failed), history: records)] {
+    /// Owner request (2026-10-25): no dictation history. The previous result keeps its own labelled line with copy and
+    /// paste; unconfirmed text heard before an error keeps its own label.
+    @Test func previousResultKeepsItsOwnLine() {
+        for state in [display(.idle, transcript: previous, feedback: "인식 없음", session: session(.empty)),
+                      display(.idle, transcript: previous, feedback: "취소했어요", session: session(.cancelled)),
+                      display(.idle, error: true, transcript: previous, session: session(.failed))] {
             #expect(state.retainedKind == .previous)
-            #expect(!state.showsRetainedLine)
-            #expect(state.history == records)
-            #expect(state.historyRows(expanded: false).isEmpty)
-            #expect(state.historyPastesNewest)
+            #expect(state.showsRetainedLine)
         }
-        let unfinished = display(.idle, error: true, transcript: live, session: session(.failed, current: true), history: records)
+        let unfinished = display(.idle, error: true, transcript: live, session: session(.failed, current: true))
+        #expect(unfinished.retainedKind == .unfinished)
         #expect(unfinished.showsRetainedLine)
-        #expect(unfinished.history == records)
-        #expect(!unfinished.historyPastesNewest)
-        let noRecord = display(.idle, transcript: previous, feedback: "인식 없음", session: session(.empty))
-        #expect(noRecord.showsRetainedLine)
-        let idle = display(.idle, transcript: "", session: session(), history: records)
-        #expect(idle.history.isEmpty)
+        let idle = display(.idle, transcript: "", session: session())
         #expect(!idle.isExpanded)
     }
 
@@ -393,16 +354,14 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
     }
 
     /// `--demo` drives the overlay with scripted text: no microphone, network, or other app's field is involved.
-    @MainActor @Test func syntheticDemoStreamsStepsIntoResultAndHistoryWithoutNetwork() async throws {
+    @MainActor @Test func syntheticDemoStreamsStepsIntoResultWithoutNetwork() async throws {
         let model = AppModel()
         model.autoInsert = false
-        model.seedDemoHistory(AppModel.DemoLocale.en.history)
         let demo = try #require(model.runDemo(.en, stepInterval: .zero, holdBeforeFinish: .zero))
         await demo.value
         let state = DictationDisplayState(model: model)
         #expect(state.phase == .result)
         #expect(state.transcript == AppModel.DemoLocale.en.steps.last)
-        #expect(state.history.map(\.text) == AppModel.DemoLocale.en.history)
     }
 
     @Test(arguments: [(26, ControlPermissionPane.accessibility), (27, .deviceControl), (28, .deviceControl)])
