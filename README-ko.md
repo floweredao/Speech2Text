@@ -16,13 +16,7 @@
   macOS 15+ · Apple silicon
 </p>
 
-<p align="center">
-  <img src="docs/images/demo-ko.webp" width="720" alt="노치 아래에서 듣는 동안 문장이 입력되고 받아쓰기를 마치는 모습">
-</p>
-
-같은 장면을 영상으로도 볼 수 있어요.
-
-https://github.com/user-attachments/assets/0097db70-a883-4484-bc17-0b359e49d932
+https://github.com/user-attachments/assets/fb68b1a6-9bd5-4914-9324-e3e74c0a9a5f
 
 ## 왜 말글인가요
 
@@ -170,7 +164,8 @@ bash scripts/build-app.sh   # build/Speech2Text.app 만들기
 
 - 빌드 전에 호출어 모델을 `Vendor/`에 자동으로 받아요.
 - 애드혹 서명은 `SPEECH2TEXT_SIGNING_IDENTITY=-`로 해요.
-- `bash scripts/capture-readme-images.sh`가 이 문서의 사진과 GIF를 다시 만들어요.
+- `bash scripts/capture-readme-images.sh`가 이 문서의 사진을 다시 만들어요.
+- `bash scripts/record-demo-video.sh`가 데모 영상을 찍어요. 앱을 가상 디스플레이에 띄워 60fps로 녹화하기 때문에 쓰던 화면에는 아무것도 뜨지 않아요. 화면 기록 권한이 필요해요.
 
 </details>
 

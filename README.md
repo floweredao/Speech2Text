@@ -16,13 +16,7 @@
   macOS 15+ · Apple silicon
 </p>
 
-<p align="center">
-  <img src="docs/images/demo-en.webp" width="720" alt="Malgeul listening under the notch while a sentence is typed, then finishing">
-</p>
-
-The same demo as a video:
-
-https://github.com/user-attachments/assets/5f1df6f2-6a37-4e5f-a5b2-e27e7f1a33fe
+https://github.com/user-attachments/assets/5fa20082-573e-489c-92de-b7b39ca3aa9f
 
 ## Why Malgeul
 
@@ -170,7 +164,8 @@ bash scripts/build-app.sh   # builds build/Speech2Text.app
 
 - The wake phrase model is downloaded into `Vendor/` before building.
 - Ad-hoc signing: `SPEECH2TEXT_SIGNING_IDENTITY=-`.
-- `bash scripts/capture-readme-images.sh` redraws the pictures and GIFs in this README.
+- `bash scripts/capture-readme-images.sh` redraws the pictures in this README.
+- `bash scripts/record-demo-video.sh` films the demo video: it runs the app on a virtual display of its own and records it at 60 fps, so nothing appears on the screens you are working on. It needs Screen Recording permission.
 
 </details>
 
