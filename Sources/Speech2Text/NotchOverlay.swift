@@ -272,10 +272,6 @@ enum OverlayMotion {
     /// The entrance grows out of the notch: slightly smaller and higher, anchored at the top edge.
     static let hiddenScale: CGFloat = 0.94
     static let hiddenOffset: CGFloat = -6
-    /// Each step down the history list is dimmer and a little smaller.
-    static func historyOpacity(depth: Int) -> Double { max(0.38, 0.72 - Double(depth) * 0.14) }
-    /// Smaller by one system text style per step, so the sizes still follow the user's text size.
-    static func historyFont(depth: Int) -> Font { [Font.callout, .subheadline, .footnote][min(max(depth, 0), 2)] }
 }
 
 /// Runs an action once a time limit passes without another `restart`.
@@ -743,14 +739,19 @@ struct NotchOverlayView: View {
 
 
     private var transcriptActions: some View {
-        HStack(spacing: Spacing.s) {
-            OverlayTextButton(title: String(localized: "복사"), symbol: "doc.on.doc", id: "notch-copy") { model.copyTranscript() }
-            OverlayTextButton(title: String(localized: "붙여넣기") + shortcutSuffix(.pasteTranscript), symbol: "arrow.down.doc",
-                              id: "notch-paste") {
+        // Small round buttons, the same as the history rows' copy button (owner request 2026-10-25), so every copy
+        // and paste in the overlay is one control; the circle edge lines up with the text above.
+        HStack(spacing: Spacing.xs) {
+            OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "복사"), id: "notch-copy", prominent: false) {
+                model.copyTranscript()
+            }
+            OverlayIconButton(symbol: "arrow.down.doc", label: String(localized: "붙여넣기") + shortcutHint(.pasteTranscript),
+                              id: "notch-paste", prominent: false) {
                 model.pasteTranscript()
             }
             Spacer(minLength: 0)
         }
+        .padding(.leading, -Spacing.xxs)
     }
 
     /// Older or unconfirmed text: labelled, dimmed, one line, with compact copy and paste.
@@ -859,8 +860,13 @@ private struct LevelMeter: View {
 }
 
 /// Every earlier dictation in one labelled inset group, so none reads as the current text. Collapsed it shows only the
-/// newest; the expand/collapse button (owner request 2026-10-23, 2026-10-24) shows the rest in a scrolling list, each
-/// older row dimmer and one text style smaller. A new dictation folds it back.
+/// newest; the round expand button (owner request 2026-10-23, 2026-10-24, 2026-10-25) shows the rest. Every row has the
+/// same text style and color and grows to fit its whole text (owner request 2026-10-25: no dimmer, smaller rows, no
+/// lines squeezed into one row). A new dictation folds it back.
+///
+/// Expanding animates one thing, the clip height, between two measured heights; the rows are always laid out, so nothing
+/// is inserted or re-measured mid-animation, and the extra rows only fade (beui.dev Collapsible, StyleGallery
+/// motion/interaction-recipes Disclosure).
 struct HistoryList: View {
     let state: DictationDisplayState
     let entering: AnyTransition
@@ -871,6 +877,7 @@ struct HistoryList: View {
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
     private let showsAll: State<Bool>
     private let listHeight = State(initialValue: CGFloat(0))
+    private let newestHeight = State(initialValue: CGFloat(0))
     static let expandedMaxHeight: CGFloat = 220
 
     init(state: DictationDisplayState, entering: AnyTransition, expanded: Bool = false, paste: @escaping () -> Void,
@@ -886,6 +893,8 @@ struct HistoryList: View {
     var body: some View {
         let expanded = showsAll.wrappedValue && state.historyCanExpand
         let motion = reduceMotion ? OverlayMotion.reduced : OverlayMotion.layout
+        let shownHeight = expanded ? listHeight.wrappedValue : newestHeight.wrappedValue
+        let height = min(max(shownHeight, 1), Self.expandedMaxHeight)
         VStack(alignment: .leading, spacing: Spacing.xs) {
             HStack(alignment: .center) {
                 Text(String(localized: "받아쓰기 기록"))
@@ -899,37 +908,44 @@ struct HistoryList: View {
                         // panel frame is still growing.
                         withAnimation(motion) { showsAll.wrappedValue.toggle() }
                     } label: {
-                        HStack(spacing: Spacing.xs) {
-                            Text(expanded ? String(localized: "접기") : String(localized: "펼치기"))
-                                .contentTransition(.opacity)
-                            // One chevron that turns over, so the button reads as the same control in both states;
-                            // Reduce Motion swaps the symbol instead of turning it.
+                        // One chevron that turns over, so the button reads as the same control in both states;
+                        // Reduce Motion swaps the symbol instead of turning it.
+                        Group {
                             if reduceMotion {
                                 Image(systemName: expanded ? "chevron.up" : "chevron.down")
                             } else {
                                 Image(systemName: "chevron.down").rotationEffect(.degrees(expanded ? -180 : 0))
                             }
                         }
-                        .font(.caption.weight(.semibold))
+                        .font(.system(size: 10, weight: .semibold))
                     }
-                    .buttonStyle(OverlayControlStyle(shape: .capsule, prominent: false))
+                    .buttonStyle(OverlayControlStyle(shape: .circle, prominent: false))
                     .help(expanded ? String(localized: "접기") : String(localized: "받아쓰기 기록 \(state.history.count)개 모두 보기"))
+                    .accessibilityLabel(expanded ? String(localized: "접기") : String(localized: "펼치기"))
                     .accessibilityValue(expanded ? String(localized: "펼침") : String(localized: "접힘"))
                     .accessibilityIdentifier("notch-history-toggle")
                 }
             }
-            ScrollView(.vertical) {
-                rows(state.historyRows(expanded: expanded))
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight.wrappedValue = $0 }
+            // The round button lines up with the rows' copy buttons below it: list gutter plus the rows' own inset.
+            .padding(.trailing, Spacing.m + Spacing.xxs)
+            .frame(minHeight: NotchOverlayGeometry.minimumHitSize)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    rows(state.history, expanded: expanded)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight.wrappedValue = $0 }
+                }
+                // The overlay scroller draws over content; a trailing gutter keeps it off the text. It stays when
+                // collapsed, so the newest row's buttons don't shift sideways as the list opens.
+                .contentMargins(.trailing, Spacing.m, for: .scrollContent)
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollDisabled(shownHeight <= Self.expandedMaxHeight)
+                .frame(height: height, alignment: .top)
+                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .onChange(of: expanded) { _, open in
+                    if !open, let first = state.history.first { withAnimation(motion) { proxy.scrollTo(first.id, anchor: .top) } }
+                }
             }
-            // The overlay scroller draws over content; a trailing gutter keeps it off the text. It stays when collapsed,
-            // so the newest row's buttons don't shift sideways as the list opens.
-            .contentMargins(.trailing, Spacing.m, for: .scrollContent)
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollDisabled(!expanded)
-            .frame(height: min(max(listHeight.wrappedValue, 1), Self.expandedMaxHeight))
-            .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         // The history group sits a step further from the current dictation than its parts sit from each other.
         .padding(.top, Spacing.xs)
@@ -942,21 +958,25 @@ struct HistoryList: View {
         .accessibilityIdentifier("notch-history")
     }
 
-    private func rows(_ shown: [DictationRecord]) -> some View {
+    private func rows(_ records: [DictationRecord], expanded: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(shown.enumerated()), id: \.element.id) { depth, record in
+            ForEach(Array(records.enumerated()), id: \.element.id) { depth, record in
+                let hidden = depth > 0 && !expanded
                 VStack(spacing: 0) {
                     if depth > 0 {
                         Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.leading, Spacing.s)
                     }
-                    HStack(alignment: .center, spacing: Spacing.s) {
+                    // Buttons sit at the top so they stay beside the first line however tall the row grows.
+                    HStack(alignment: .top, spacing: Spacing.s) {
                         Text(record.text)
-                            .font(OverlayMotion.historyFont(depth: depth))
-                            .foregroundStyle(.white.opacity(OverlayMotion.historyOpacity(depth: depth)))
-                            .lineLimit(2)
-                            .truncationMode(.tail)
+                            .font(.callout)
+                            .foregroundStyle(.white.opacity(0.72))
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .help(record.text)
+                            // Centers a one-line row on its 28 pt buttons and gives longer rows the same margin
+                            // above the first line as below the last.
+                            .padding(.vertical, Self.textInset)
                             .accessibilityLabel(String(localized: "이전 받아쓰기") + ": " + record.text)
                             .accessibilityIdentifier("notch-history-row")
                         OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "이 받아쓰기 복사"),
@@ -973,10 +993,20 @@ struct HistoryList: View {
                     .padding(.trailing, Spacing.xxs)
                     .padding(.vertical, Spacing.xxs)
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    if depth == 0 { newestHeight.wrappedValue = height }
+                }
+                .id(record.id)
+                .opacity(hidden ? 0 : 1)
+                .accessibilityHidden(hidden)
+                .allowsHitTesting(!hidden)
                 .transition(entering)
             }
         }
     }
+
+    /// (28 pt button - one callout line) / 2, so a single line sits on the buttons' center line.
+    static let textInset: CGFloat = 6
 }
 
 /// Scrolls only when the measured text exceeds the viewport, so short text leaves no gutter.

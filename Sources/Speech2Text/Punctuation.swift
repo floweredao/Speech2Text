@@ -10,11 +10,16 @@ enum PunctuationStyle: String, CaseIterable, Sendable {
     /// Commas and sentence-ending marks all go.
     case none
 
+    /// A comma said by name ("쉼표"). It stands apart from Soniox's commas until the text is typed, so even
+    /// "no commas" keeps it: the speaker asked for it.
+    static let spokenComma: Character = "\u{E000}"
+
     private static let commas: Set<Character> = [",", "，", "、"]
     private static let endMarks: Set<Character> = [".", "?", "!", "。", "？", "！"]
 
     func apply(_ text: String) -> String {
-        guard self != .asIs else { return text }
+        let spoken = String(Self.spokenComma)
+        guard self != .asIs else { return text.replacingOccurrences(of: spoken, with: ",") }
         let chars = Array(text)
         var out = ""
         for (i, char) in chars.enumerated() {
@@ -27,7 +32,7 @@ enum PunctuationStyle: String, CaseIterable, Sendable {
             }
             out.append(char)
         }
-        return out
+        return out.replacingOccurrences(of: spoken, with: ",")
     }
 
     /// A comma between digits (1,000) and a period inside a word or number (3.14, example.com) are not punctuation.
