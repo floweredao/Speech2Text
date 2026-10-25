@@ -20,6 +20,17 @@ private let model = URL(fileURLWithPath: #filePath).deletingLastPathComponent().
         #expect(tokenizer.pieces(for: phrase)?.joined(separator: " ") == pieces)
     }
 
+    /// A distant microphone's quiet voice is brought up for the wake engines; loud audio and silence are left alone.
+    @Test func quietAudioIsBroughtUpAndLoudAudioIsLeftAlone() {
+        func pcm(_ value: Int16) -> Data { [Int16](repeating: value, count: 320).withUnsafeBytes { Data($0) } }
+        func peak(_ data: Data) -> Int16 { data.withUnsafeBytes { $0.bindMemory(to: Int16.self).max() ?? 0 } }
+        var level = WakeLevel()
+        #expect(peak(level.amplify(pcm(80))) == 8_000)
+        #expect(peak(level.amplify(pcm(0))) == 0)
+        var loud = WakeLevel()
+        #expect(loud.amplify(pcm(20_000)) == pcm(20_000))
+    }
+
     @Test func phrasesTheEnglishModelCannotSpellAreRefused() throws {
         let tokenizer = try WakePhraseTokenizer(sentencepieceModel: model.appendingPathComponent("bpe.model"))
         #expect(tokenizer.pieces(for: "헤이 키다모") == nil)

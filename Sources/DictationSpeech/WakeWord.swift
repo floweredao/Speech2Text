@@ -206,6 +206,31 @@ final class WakeSpotter: @unchecked Sendable {
     }
 }
 
+/// Brings quiet microphone audio up before the wake engines hear it. A speaker's or headset's call-profile
+/// microphone across the desk delivered the phrase at about -50 dB, where neither the keyword model nor the
+/// recognizer heard it, while the dictation service still understood the same voice. The gain follows the loudest
+/// recent sound (rising at once, fading over a few seconds), never lowers audio and stops at 40 dB.
+struct WakeLevel {
+    private var envelope: Float = 0
+    private static let target: Float = 0.5
+    private static let maximumGain: Float = 100
+    /// Per 20 ms chunk; halves a remembered peak in about four seconds.
+    private static let decay: Float = 0.9965
+
+    /// 16 kHz mono 16-bit little-endian in and out.
+    mutating func amplify(_ pcm: Data) -> Data {
+        var samples = pcm.withUnsafeBytes { Array($0.bindMemory(to: Int16.self)).map { Int16(littleEndian: $0) } }
+        let peak = Float(samples.map { abs(Int32($0)) }.max() ?? 0) / 32_768
+        envelope = max(peak, envelope * Self.decay)
+        let gain = min(Self.maximumGain, max(1, Self.target / max(envelope, 1e-6)))
+        guard gain > 1 else { return pcm }
+        for index in samples.indices {
+            samples[index] = Int16(max(-32_768, min(32_767, (Float(samples[index]) * gain).rounded()))).littleEndian
+        }
+        return samples.withUnsafeBytes { Data($0) }
+    }
+}
+
 /// Listens on the microphone for the wake phrase, entirely on this Mac: audio goes to the local keyword model only
 /// and is never stored or sent. The microphone stays open (and macOS shows its indicator) while listening.
 @MainActor public final class WakeWordListener {
@@ -272,7 +297,9 @@ final class WakeSpotter: @unchecked Sendable {
                     Self.log.notice("listening (recognizer: \(transcriber?.localeName ?? "none", privacy: .public))")
                     let feed = transcriber
                     try await Task.detached(priority: .utility) {
-                        for try await chunk in chunks {
+                        var level = WakeLevel()
+                        for try await received in chunks {
+                            let chunk = level.amplify(received)
                             feed?.accept(pcm: chunk)
                             if spotter.accept(pcm: chunk) { await MainActor.run { self?.heard(epoch, by: "keyword model") } }
                         }
