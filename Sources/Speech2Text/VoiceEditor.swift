@@ -5,6 +5,8 @@ import Foundation
 enum VoiceCommand: Equatable {
     case deleteLastSentence, deleteLastWord, clearAll, undo
     case replace(String, String)
+    /// "A 지워" / "delete A": removes the last A in the dictated text.
+    case delete(String)
 
     /// Fixed phrases compared without spaces, punctuation, or a polite ending, because recognition spaces Korean
     /// freely ("지워 줘", "지워줘").
@@ -33,7 +35,23 @@ enum VoiceCommand: Equatable {
         let compact = normalized(utterance)
         guard !compact.isEmpty else { return nil }
         if let match = phrases.first(where: { $0.1.contains(compact) }) { return match.0 }
-        return replacement(in: utterance)
+        return replacement(in: utterance) ?? deletion(in: utterance)
+    }
+
+    private static let deletePatterns = [
+        #"^\s*(.{1,30}?)\s*(?:을|를|은|는|이|가)?\s*(?:지워|빼|삭제해)\s*(?:주세요|줘요|줘)?\s*[.!?。]*\s*$"#,
+        #"^\s*(?:delete|remove|erase)\s+(.{1,30}?)\s*[.!?]*\s*$"#,
+    ].compactMap { try? NSRegularExpression(pattern: $0, options: [.caseInsensitive]) }
+
+    private static func deletion(in utterance: String) -> VoiceCommand? {
+        let range = NSRange(utterance.startIndex..., in: utterance)
+        for pattern in deletePatterns {
+            guard let match = pattern.firstMatch(in: utterance, range: range),
+                  let target = Range(match.range(at: 1), in: utterance) else { continue }
+            let word = utterance[target].trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’ "))
+            return word.isEmpty ? nil : .delete(word)
+        }
+        return nil
     }
 
     private static let replacePatterns = [
@@ -140,7 +158,8 @@ struct VoiceEditor {
     private static func settled(_ command: VoiceCommand, before: String, canUndo: Bool, afterEdit: Bool) -> CommandVerdict? {
         switch command {
         case .undo: return canUndo ? (afterEdit ? .command : nil) : .text
-        case .replace(let old, _) where before.range(of: old, options: .caseInsensitive) == nil: return .text
+        case .replace(let old, _) where VoiceEditor.lastRange(of: old, in: before) == nil: return .text
+        case .delete(let old) where VoiceEditor.lastRange(of: old, in: before) == nil: return .text
         default: return before.trimmingCharacters(in: .whitespaces).isEmpty ? .text : nil
         }
     }
@@ -207,12 +226,29 @@ struct VoiceEditor {
         case .deleteLastWord: text = removingLastWord(text)
         case .clearAll: text = ""
         case .replace(let old, let new):
-            guard let range = text.range(of: old, options: [.caseInsensitive, .backwards]) else { return .notFound(old) }
+            guard let range = lastRange(of: old, in: text) else { return .notFound(old) }
             text.replaceSubrange(range, with: new)
+        case .delete(let old):
+            guard let range = lastRange(of: old, in: text) else { return .notFound(old) }
+            text.removeSubrange(range)
+            text = text.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+                .replacingOccurrences(of: #"\s+([.,!?。])"#, with: "$1", options: .regularExpression)
+                .trimmingCharacters(in: .whitespaces)
         }
         guard text != before else { return .nothingToChange(command) }
         undo.append(before)
         return .applied(command)
+    }
+
+    /// The last place `words` were said, ignoring case and spacing: recognition spaces Korean freely, so "회의 자료"
+    /// spoken in a command must still find "회의자료" in the text.
+    static func lastRange(of words: String, in text: String) -> Range<String.Index>? {
+        let letters = words.filter { !$0.isWhitespace }
+        guard !letters.isEmpty else { return nil }
+        let pattern = letters.map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"\s*"#)
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
+        let match = regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).last
+        return match.flatMap { Range($0.range, in: text) }
     }
 
     private static let sentenceEnds: Set<Character> = [".", "?", "!", "。", "…"]

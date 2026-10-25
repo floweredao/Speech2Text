@@ -224,13 +224,14 @@ final class AppModel {
     /// Diagnostics (`--jev-key-file`) use another key for one run without storing it.
     @ObservationIgnored var jevKeyOverride: String?
     @ObservationIgnored var jevJudge = JevJudge()
-    @ObservationIgnored private var verdicts: [String: CommandVerdict] = [:]
+    /// Observed: `transcript` reads Jev's verdicts, so a late answer must redraw the overlay as it retypes the field.
+    private var verdicts: [String: CommandVerdict] = [:]
     @ObservationIgnored private var judgeTasks: [String: Task<Void, Never>] = [:]
     /// Jev's answers in this dictation, printed by `--print-turns`.
     @ObservationIgnored private var judgeLog: [(CommandQuestion, JudgeAnswer)] = []
     /// The dictation ended while Jev was still deciding; it completes when the last answer arrives.
     @ObservationIgnored private var completionPending = false
-    @ObservationIgnored private var unansweredAsText = false
+    private var unansweredAsText = false
     /// Commands already reported for the current field, so each one is announced once.
     @ObservationIgnored private var reportedEdits = 0
     private var spokenEnter: SpokenEnter? {
@@ -513,6 +514,7 @@ final class AppModel {
         case .applied(.undo): String(localized: "되돌렸어요.")
         case .applied(.replace(let old, let new)):
             String(localized: "'\(old)'을(를) '\(new)'(으)로 바꿨어요. '\(undo)'라고 말하면 되돌려요.")
+        case .applied(.delete(let old)): String(localized: "'\(old)'을(를) 지웠어요. '\(undo)'라고 말하면 되돌려요.")
         case .nothingToChange(.undo): String(localized: "되돌릴 것이 없어요.")
         case .nothingToChange: String(localized: "고칠 글이 없어요.")
         case .notFound(let old): String(localized: "'\(old)'을(를) 찾지 못해 바꾸지 않았어요.")
