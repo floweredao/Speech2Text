@@ -918,8 +918,6 @@ struct HistoryList: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.5))
                     .accessibilityAddTraits(.isHeader)
-                    // Starts where the rows' text starts inside the group, so the label heads its own column.
-                    .padding(.leading, Spacing.s)
                 Spacer(minLength: 0)
                 if state.historyCanExpand {
                     Button {
@@ -953,15 +951,21 @@ struct HistoryList: View {
                     rows(state.history, expanded: expanded)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight.wrappedValue = $0 }
                 }
-                // No scroller: a legacy scroller would take its width from the rows and push the copy buttons off the
-                // expand button's column, and a gutter for an overlay scroller made the right margin twice the left.
-                // The list is cut at its bottom edge when it scrolls, which shows there is more.
+                // No scroller: a legacy scroller would take a column of its own and push the copy buttons off the
+                // header buttons' column. Instead the edge that has more behind it fades out (owner report
+                // 2026-10-25: with no scroller nothing showed there was more below).
                 .scrollIndicators(.never)
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollDisabled(shownHeight <= Self.expandedMaxHeight)
+                .scrollEdgeFade()
                 .frame(height: height, alignment: .top)
                 .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                // The group reaches out of the content column so its text starts on the transcript's edge and its
+                // copy circles end on the header buttons' column, each 6 pt inside the group (owner request
+                // 2026-10-25: one column for every round button).
+                .padding(.leading, -Self.groupInset)
+                .padding(.trailing, -(Self.groupInset + Spacing.xxs))
                 .onChange(of: expanded) { _, open in
                     if !open, let first = state.history.first { withAnimation(motion) { proxy.scrollTo(first.id, anchor: .top) } }
                 }
@@ -984,8 +988,8 @@ struct HistoryList: View {
                 let hidden = depth > 0 && !expanded
                 VStack(spacing: 0) {
                     if depth > 0 {
-                        // Across the whole row, buttons included, on the same 8 pt insets as the text and the buttons.
-                        Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.horizontal, Spacing.s)
+                        // Across the whole row, from the text's edge to the copy circle's edge.
+                        Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.horizontal, Self.groupInset)
                     }
                     // Buttons sit at the top so they stay beside the first line however tall the row grows.
                     HStack(alignment: .top, spacing: Spacing.s) {
@@ -1009,10 +1013,9 @@ struct HistoryList: View {
                                               prominent: false, action: paste)
                         }
                     }
-                    // Text starts 8 pt from the group's left edge and the copy circle ends 8 pt from its right edge
-                    // (6 pt padding + the circle's 2 pt hit margin), so both sides have the same margin.
-                    .padding(.leading, Spacing.s)
-                    .padding(.trailing, Self.trailingInset)
+                    // 6 pt from the group's left edge to the text and from the copy circle to its right edge.
+                    .padding(.leading, Self.groupInset)
+                    .padding(.trailing, Self.groupInset - Spacing.xxs)
                     .padding(.vertical, Spacing.xxs)
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
@@ -1029,8 +1032,42 @@ struct HistoryList: View {
 
     /// (28 pt button - one callout line) / 2, so a single line sits on the buttons' center line.
     static let textInset: CGFloat = 6
-    /// 8 pt visible margin minus the circle buttons' 2 pt transparent hit margin.
-    static let trailingInset: CGFloat = Spacing.s - Spacing.xxs
+    /// The header buttons reach 4 pt into the panel's side inset; the expand button does the same, so all the circles
+    /// end 10 pt from the panel edge.
+    static let trailingInset: CGFloat = -Spacing.xs
+    /// Inner margin of the history group: 12 pt panel inset - 6 = 6 pt outer margin on the left, 4 on the right.
+    static let groupInset: CGFloat = 6
+}
+
+/// Fades the top or bottom edge of a scroll view while there is more content past it, so a list with no scroller still
+/// shows that it continues (HIG Scroll views: show that more content exists; StyleGallery scroll-shadow pattern).
+private struct ScrollEdgeFade: ViewModifier {
+    private let edges = State(initialValue: (top: false, bottom: false))
+    static let length: CGFloat = 24
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: [Bool].self) { geo in
+                let offset = geo.contentOffset.y + geo.contentInsets.top
+                let hidden = geo.contentSize.height - geo.containerSize.height
+                return [offset > 1, hidden - offset > 1]
+            } action: { _, now in
+                withAnimation(.easeOut(duration: 0.15)) { edges.wrappedValue = (now[0], now[1]) }
+            }
+            .mask {
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [.black.opacity(edges.wrappedValue.top ? 0 : 1), .black],
+                                   startPoint: .top, endPoint: .bottom).frame(height: Self.length)
+                    Color.black
+                    LinearGradient(colors: [.black, .black.opacity(edges.wrappedValue.bottom ? 0 : 1)],
+                                   startPoint: .top, endPoint: .bottom).frame(height: Self.length)
+                }
+            }
+    }
+}
+
+extension View {
+    func scrollEdgeFade() -> some View { modifier(ScrollEdgeFade()) }
 }
 
 /// Scrolls only when the measured text exceeds the viewport, so short text leaves no gutter.
@@ -1078,6 +1115,7 @@ private struct TranscriptViewport: View {
         // header buttons; a line cut at the bottom edge shows there is more, and the view follows the newest words.
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.never)
+        .scrollEdgeFade()
         .defaultScrollAnchor(followsTail ? .bottom : .top)
         .defaultScrollAnchor(followsTail ? .bottom : .top, for: .sizeChanges)
         .frame(height: NotchOverlayGeometry.transcriptViewportHeight(textHeight: textHeight.wrappedValue,
