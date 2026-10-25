@@ -555,6 +555,11 @@ struct SettingsView: View {
             ForEach(ShortcutAction.allCases, id: \.self) { action in
                 shortcutRow(action)
             }
+            Text("기록할 때 키 대신 마우스 옆 버튼이나 가운데 버튼을 눌러도 돼요.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("settings-shortcut-mouse-hint")
             if !model.shortcutNote.isEmpty {
                 Text(model.shortcutNote)
                     .font(.caption)

@@ -14,7 +14,7 @@ for lang in en ko; do
   else terms='("Speech2Text", "Soniox", "스위프트")'; enter="엔터 보내기"; fi
   # Launch-argument defaults keep this Mac's stored settings out of the pictures; the capture writes none back.
   "$WORK/Speech2Text.app/Contents/MacOS/Speech2Text" --demo-capture "$WORK/$lang" --demo "$lang" \
-    -AppleLanguages "($lang)" -inputDeviceUID demo-mic -shortcuts x -wakeListeningEnabled NO \
+    -AppleLanguages "($lang)" -inputDeviceUID demo-mic -shortcuts x -wakeListeningEnabled NO -wakeOptInApplied YES \
     -wakePhrase "Hey Computer" -wakeSensitivity standard -commandJudge jev \
     -punctuationStyle asIs -spokenEnterEnabled YES -spokenEnterPhrase "$enter" -marksUncertainWords NO \
     -silenceStopSeconds 30 -overlayAutoCloseSeconds 30 -dictionaryTerms "$terms"

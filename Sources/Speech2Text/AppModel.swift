@@ -171,13 +171,22 @@ final class AppModel {
         UserDefaults.standard.set(custom ? value : nil, forKey: key)
     }
     /// Keeps the microphone open while idle and starts dictation on the wake phrase; saying it at the end of a
-    /// dictation finishes it. Off unless the user turns it on.
-    var wakeListeningEnabled = UserDefaults.standard.bool(forKey: "wakeListeningEnabled") {
+    /// dictation finishes it. Off unless the user turns it on; dictation starts from a shortcut or mouse button.
+    var wakeListeningEnabled = AppModel.loadWakeListeningEnabled() {
         didSet {
             UserDefaults.standard.set(wakeListeningEnabled, forKey: "wakeListeningEnabled")
             speech.vocabulary = recognitionTerms
             syncWakeListening()
         }
+    }
+    /// Settings written before the wake phrase became opt-in are turned off once, so it starts off for everyone;
+    /// the user can turn it back on and that choice is kept.
+    nonisolated static func loadWakeListeningEnabled(_ defaults: UserDefaults = .standard) -> Bool {
+        if !defaults.bool(forKey: "wakeOptInApplied") {
+            defaults.set(true, forKey: "wakeOptInApplied")
+            defaults.set(false, forKey: "wakeListeningEnabled")
+        }
+        return defaults.bool(forKey: "wakeListeningEnabled")
     }
     var wakeSensitivity = UserDefaults.standard.string(forKey: "wakeSensitivity").flatMap(WakeSensitivity.init) ?? .standard {
         didSet {
