@@ -75,7 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if updater?.isAvailable == true {
             menu.addItem(withTitle: String(localized: "업데이트 확인…"), action: #selector(checkForUpdates), keyEquivalent: "")
         }
-        menu.addItem(withTitle: String(localized: "말글 종료"), action: #selector(quit), keyEquivalent: "q")
+        menu.addItem(withTitle: String(localized: "Speech2Text 종료"), action: #selector(quit), keyEquivalent: "q")
         for item in menu.items { item.target = self }
         item.menu = menu
         statusItem = item
@@ -244,7 +244,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 540),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable],
                                   backing: .buffered, defer: false)
-            window.title = String(localized: "말글")
+            window.title = "Speech2Text"
             window.contentView = NSHostingView(rootView: SettingsView(model: model))
             window.minSize = NSSize(width: 440, height: 420)
             window.isReleasedWhenClosed = false

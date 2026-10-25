@@ -28,8 +28,7 @@
 "받아쓰기 표시" = "Show Dictation";
 "설정…" = "Settings…";
 "업데이트 확인…" = "Check for Updates…";
-"말글 종료" = "Quit Malgeul";
-"말글" = "Malgeul";
+"Speech2Text 종료" = "Quit Speech2Text";
 "마지막 받아쓰기 붙여넣기" = "Paste Last Dictation";
 "%@ 단축키를 등록하지 못했어요. 다른 앱이 쓰고 있을 수 있어요. 다른 키를 골라 주세요." = "Couldn't register the %@ shortcut. Another app may be using it. Choose a different key.";
 "선택한 칸에 실시간으로 입력해요." = "Typing live into the selected field.";
@@ -49,8 +48,8 @@
 "받아쓰기를 마무리한 다음 붙여넣어 주세요." = "Finish dictating before pasting.";
 "기기 제어 및 데이터 관리" = "Device Control and Data Management";
 "손쉬운 사용" = "Accessibility";
-"시스템 설정 › 개인정보 보호 및 보안 › Device Control and Data Management에서 말글을 켜세요. macOS 26 이하의 '손쉬운 사용'과 같은 권한이에요." = "Turn on Malgeul in System Settings › Privacy & Security › Device Control and Data Management. It's the same permission as Accessibility on macOS 26 and earlier.";
-"시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 말글을 켜세요. macOS 27부터는 'Device Control and Data Management'라는 이름이에요." = "Turn on Malgeul in System Settings › Privacy & Security › Accessibility. From macOS 27 it's called Device Control and Data Management.";
+"시스템 설정 › 개인정보 보호 및 보안 › Device Control and Data Management에서 Speech2Text를 켜세요. macOS 26 이하의 '손쉬운 사용'과 같은 권한이에요." = "Turn on Speech2Text in System Settings › Privacy & Security › Device Control and Data Management. It's the same permission as Accessibility on macOS 26 and earlier.";
+"시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 Speech2Text를 켜세요. macOS 27부터는 'Device Control and Data Management'라는 이름이에요." = "Turn on Speech2Text in System Settings › Privacy & Security › Accessibility. From macOS 27 it's called Device Control and Data Management.";
 "취소" = "Cancel";
 "아래 준비 항목 %lld개를 확인해 주세요." = "Check the setup items below (%lld).";
 "준비" = "Setup";
@@ -186,7 +185,7 @@
 "받아쓰던 내용을 마무리해요. 받아쓰는 중이 아니면 아무것도 하지 않아요." = "Finishes the dictation in progress. Does nothing if nothing is being dictated.";
 "음성으로 시작" = "Start by Voice";
 "음성 제어" = "Voice Control";
-"1. 단축어 앱에서 새 단축어를 만들고 말글의 '받아쓰기 시작' 동작을 넣어요.\n2. 시스템 설정 › 손쉬운 사용 › 음성 제어 › 명령에서 +를 눌러 말할 문구를 적고, 동작은 '단축어 실행'으로 골라 그 단축어를 지정해요.\n3. '받아쓰기 끝내기'도 같은 방법으로 만들어요." = "1. In the Shortcuts app, make a new shortcut with the Malgeul action 'Start Dictation'.\n2. In System Settings › Accessibility › Voice Control › Commands, click +, type the phrase you will say, set the action to 'Run Shortcut', and pick that shortcut.\n3. Do the same for 'Finish Dictation'.";
+"1. 단축어 앱에서 새 단축어를 만들고 Speech2Text의 '받아쓰기 시작' 동작을 넣어요.\n2. 시스템 설정 › 손쉬운 사용 › 음성 제어 › 명령에서 +를 눌러 말할 문구를 적고, 동작은 '단축어 실행'으로 골라 그 단축어를 지정해요.\n3. '받아쓰기 끝내기'도 같은 방법으로 만들어요." = "1. In the Shortcuts app, make a new shortcut with the Speech2Text action 'Start Dictation'.\n2. In System Settings › Accessibility › Voice Control › Commands, click +, type the phrase you will say, set the action to 'Run Shortcut', and pick that shortcut.\n3. Do the same for 'Finish Dictation'.";
 "음성 제어는 켜져 있는 동안 계속 듣고, 말한 내용을 직접 입력하기도 해요. 글이 두 번 들어가면 음성 제어를 명령 모드로 바꿔 주세요." = "Voice Control keeps listening while it is on and can type what you say itself. If text comes in twice, switch Voice Control to Command Mode.";
 "단축어 앱 열기" = "Open Shortcuts";
 "이 앱은 받아쓰는 동안에만 마이크를 켜요." = "This app turns the microphone on only while dictating.";

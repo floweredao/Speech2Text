@@ -9,7 +9,7 @@
 - Actual notch Copy button: clipboard matched the recognized text exactly; frontmost app remained Ghostty. Evidence: `.omo/evidence/copy-result.png`.
 - Actual notch Paste without current-binary permission: permission explanation appeared, transcript remained available, no text was sent. Evidence: `.omo/evidence/paste-no-permission.png`.
 - Native settings and notch rendered on the real desktop. Settings expose permission request, privacy settings links, automatic-input toggle, recording and paste shortcuts. Evidence: `.omo/evidence/app-initial.png`.
-- Public GitHub repository: `floweredao/malgeul` (renamed from `floweredao/Speech2Text` on 2026-10-25; GitHub redirects the old URLs, including the update feed); no Actions workflows.
+- Public GitHub repository: `floweredao/Speech2Text` (briefly named `floweredao/malgeul` on 2026-10-25; GitHub redirects the old URLs, including the update feed); no Actions workflows.
 
 The generated audio tests transcription and conversion, not physical microphone pickup.
 

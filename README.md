@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="Resources/AppIcon.png" width="112" height="112" alt="Malgeul app icon">
+  <img src="Resources/AppIcon.png" width="112" height="112" alt="Speech2Text app icon">
 </p>
 
-<h1 align="center">Malgeul</h1>
+<h1 align="center">Speech2Text</h1>
 
 <p align="center">
   Speak, and your words appear in the field you're typing in.
 </p>
 
 <p align="center">
-  <a href="https://github.com/floweredao/malgeul/releases/latest"><b>Download</b></a>
+  <a href="https://github.com/floweredao/Speech2Text/releases/latest"><b>Download</b></a>
   ·
   <a href="README-ko.md">한국어</a>
   ·
@@ -18,7 +18,7 @@
 
 https://github.com/user-attachments/assets/5fa20082-573e-489c-92de-b7b39ca3aa9f
 
-## Why Malgeul
+## Why Speech2Text
 
 - **Works everywhere.** Notes, a browser, a terminal: it types into the field you clicked.
 - **Start and edit by voice.** Say "Hey Computer" to start. Say "delete that" or "undo" to fix.
@@ -26,11 +26,9 @@ https://github.com/user-attachments/assets/5fa20082-573e-489c-92de-b7b39ca3aa9f
 
 ## Install
 
-1. Download the `.zip` from the [latest release](https://github.com/floweredao/malgeul/releases/latest) and move the app to Applications.
+1. Download the `.zip` from the [latest release](https://github.com/floweredao/Speech2Text/releases/latest) and move the app to Applications.
 2. Open the app and save your [Soniox](https://soniox.com) API key in Settings.
 3. Allow Microphone and Accessibility.
-
-> The downloaded file is named `Speech2Text.app`. On screen it shows as **Malgeul**. The file name is kept so permissions and updates carry over.
 
 ## How to use it
 

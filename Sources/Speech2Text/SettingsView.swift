@@ -23,9 +23,9 @@ enum ControlPermissionPane: Equatable {
     var guidance: String {
         switch self {
         case .deviceControl:
-            String(localized: "시스템 설정 › 개인정보 보호 및 보안 › Device Control and Data Management에서 말글을 켜세요. macOS 26 이하의 '손쉬운 사용'과 같은 권한이에요.")
+            String(localized: "시스템 설정 › 개인정보 보호 및 보안 › Device Control and Data Management에서 Speech2Text를 켜세요. macOS 26 이하의 '손쉬운 사용'과 같은 권한이에요.")
         case .accessibility:
-            String(localized: "시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 말글을 켜세요. macOS 27부터는 'Device Control and Data Management'라는 이름이에요.")
+            String(localized: "시스템 설정 › 개인정보 보호 및 보안 › 손쉬운 사용에서 Speech2Text를 켜세요. macOS 27부터는 'Device Control and Data Management'라는 이름이에요.")
         }
     }
 }
@@ -433,7 +433,7 @@ struct SettingsView: View {
             }
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text("음성 제어")
-                Text("1. 단축어 앱에서 새 단축어를 만들고 말글의 '받아쓰기 시작' 동작을 넣어요.\n2. 시스템 설정 › 손쉬운 사용 › 음성 제어 › 명령에서 +를 눌러 말할 문구를 적고, 동작은 '단축어 실행'으로 골라 그 단축어를 지정해요.\n3. '받아쓰기 끝내기'도 같은 방법으로 만들어요.")
+                Text("1. 단축어 앱에서 새 단축어를 만들고 Speech2Text의 '받아쓰기 시작' 동작을 넣어요.\n2. 시스템 설정 › 손쉬운 사용 › 음성 제어 › 명령에서 +를 눌러 말할 문구를 적고, 동작은 '단축어 실행'으로 골라 그 단축어를 지정해요.\n3. '받아쓰기 끝내기'도 같은 방법으로 만들어요.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

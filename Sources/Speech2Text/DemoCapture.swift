@@ -134,7 +134,7 @@ enum DemoCapturer {
         let window = NSWindow(contentRect: NSRect(origin: offscreenOrigin, size: size),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable],
                               backing: .buffered, defer: false)
-        window.title = String(localized: "말글")
+        window.title = "Speech2Text"
         window.appearance = appearance
         window.isReleasedWhenClosed = false
         let hosting = NSHostingView(rootView: SettingsView(model: model).frame(width: size.width, height: size.height))

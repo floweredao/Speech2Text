@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="Resources/AppIcon.png" width="112" height="112" alt="말글 앱 아이콘">
+  <img src="Resources/AppIcon.png" width="112" height="112" alt="Speech2Text 앱 아이콘">
 </p>
 
-<h1 align="center">말글</h1>
+<h1 align="center">Speech2Text</h1>
 
 <p align="center">
   말하면, 지금 쓰고 있는 칸에 글이 돼요.
 </p>
 
 <p align="center">
-  <a href="https://github.com/floweredao/malgeul/releases/latest"><b>내려받기</b></a>
+  <a href="https://github.com/floweredao/Speech2Text/releases/latest"><b>내려받기</b></a>
   ·
   <a href="README.md">English</a>
   ·
@@ -18,7 +18,7 @@
 
 https://github.com/user-attachments/assets/fb68b1a6-9bd5-4914-9324-e3e74c0a9a5f
 
-## 왜 말글인가요
+## 왜 Speech2Text인가요
 
 - **어디서나 바로 써요.** 메모, 브라우저, 터미널 어디든 클릭해 둔 칸에 써져요.
 - **말로 시작하고 고쳐요.** "Hey Computer"로 시작하고, "지워"·"되돌려"로 고쳐요.
@@ -26,11 +26,9 @@ https://github.com/user-attachments/assets/fb68b1a6-9bd5-4914-9324-e3e74c0a9a5f
 
 ## 설치
 
-1. [최신 릴리스](https://github.com/floweredao/malgeul/releases/latest)에서 `.zip`을 받아 앱을 응용 프로그램 폴더로 옮겨요.
+1. [최신 릴리스](https://github.com/floweredao/Speech2Text/releases/latest)에서 `.zip`을 받아 앱을 응용 프로그램 폴더로 옮겨요.
 2. 앱을 열고 설정에 [Soniox](https://soniox.com) API 키를 저장해요.
 3. 마이크와 손쉬운 사용을 허용해요.
-
-> 받은 파일 이름은 `Speech2Text.app`이에요. 화면에는 **말글**로 보여요. 권한과 업데이트가 끊기지 않게 파일 이름은 그대로 두었어요.
 
 ## 쓰는 법
 

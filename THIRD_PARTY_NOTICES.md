@@ -1,6 +1,6 @@
 # Third-party notices
 
-Malgeul's own code is under the MIT License (see `LICENSE`). The app bundle also ships the software and model
+Speech2Text's own code is under the MIT License (see `LICENSE`). The app bundle also ships the software and model
 files below. Each keeps its own license; the full texts are at the links given.
 
 ## Sparkle 2.9.6 (software updates)
@@ -52,4 +52,4 @@ Its own third-party notices: https://github.com/microsoft/onnxruntime/blob/v1.28
 Published by the k2-fsa project under the Apache License 2.0 (model archive README;
 https://github.com/k2-fsa/sherpa-onnx/releases/tag/kws-models). It was trained on GigaSpeech XL, whose dataset
 terms cover non-commercial research and education and leave the license of trained models to their publishers
-(https://huggingface.co/datasets/speechcolab/gigaspeech). Malgeul is distributed free of charge.
+(https://huggingface.co/datasets/speechcolab/gigaspeech). Speech2Text is distributed free of charge.

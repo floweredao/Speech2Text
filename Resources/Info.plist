@@ -5,21 +5,20 @@
 <key>CFBundleLocalizations</key><array><string>en</string><string>ko</string></array>
 <key>CFBundleExecutable</key><string>Speech2Text</string>
 <key>CFBundleIdentifier</key><string>local.speech2text.app</string>
-<key>CFBundleName</key><string>Malgeul</string>
-<key>CFBundleDisplayName</key><string>Malgeul</string>
-<key>LSHasLocalizedDisplayName</key><true/>
+<key>CFBundleName</key><string>Speech2Text</string>
+<key>CFBundleDisplayName</key><string>Speech2Text</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundleVersion</key><string>13</string>
 <key>CFBundleShortVersionString</key><string>1.5.0</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 <key>LSUIElement</key><true/>
-<key>SUFeedURL</key><string>https://github.com/floweredao/malgeul/releases/latest/download/appcast.xml</string>
+<key>SUFeedURL</key><string>https://github.com/floweredao/Speech2Text/releases/latest/download/appcast.xml</string>
 <key>SUPublicEDKey</key><string>kL2fnAXLkg0G4UFqTgkASvZemWBh3qlGX/ZPhHF9+PI=</string>
 <key>SUEnableAutomaticChecks</key><true/>
 <key>SUScheduledCheckInterval</key><integer>86400</integer>
 <key>SUAutomaticallyUpdate</key><false/>
 <key>SUEnableSystemProfiling</key><false/>
 <key>SUVerifyUpdateBeforeExtraction</key><true/>
-<key>NSMicrophoneUsageDescription</key><string>Malgeul needs the microphone to transcribe what you say. Audio is sent to Soniox only while dictation is running.</string>
+<key>NSMicrophoneUsageDescription</key><string>Speech2Text needs the microphone to transcribe what you say. Audio is sent to Soniox only while dictation is running.</string>
 </dict></plist>

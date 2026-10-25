@@ -16,7 +16,7 @@ let pointWidth: UInt32 = 1280, pointHeight: UInt32 = 800
 
 let descriptor = CGVirtualDisplayDescriptor()
 descriptor.queue = DispatchQueue.main
-descriptor.name = "Malgeul Demo"
+descriptor.name = "Speech2Text Demo"
 descriptor.maxPixelsWide = pointWidth * 2
 descriptor.maxPixelsHigh = pointHeight * 2
 descriptor.sizeInMillimeters = CGSize(width: 340, height: 212)

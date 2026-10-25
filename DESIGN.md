@@ -1,4 +1,4 @@
-# 말글(Malgeul) 화면 설계
+# Speech2Text 화면 설계
 
 기준: 2026-09-24. Swift 6, macOS 26 이상, SwiftUI + AppKit. 이 문서는 노치 오버레이(NotchOverlay.swift)와 설정 창(SettingsView.swift)을 다룬다. 음성 인식 엔진(DictationSpeech)과 텍스트 입력(TextInsertion)은 범위 밖이다.
 
@@ -90,7 +90,7 @@
 
 ## 호출어 (설정 "음성으로 시작" › "호출어로 시작·끝내기")
 
-형 결정 2026-10-24: 마우스 대신 호출어로. "Hey ○○"을 말하면 받아쓰기를 시작하고, 받아쓰다 끝에 다시 말하면 마친다. 기본은 끔이고, 끄면 마이크를 열지 않는다. 기본 호출어는 "Hey Computer"(형 확정 2026-10-24), 앱 이름은 말글(Malgeul, 형 확정 2026-10-25)이다. 번들 ID(`local.speech2text.app`)·실행 파일·저장소 경로는 권한과 업데이트가 끊기지 않게 그대로 둔다.
+형 결정 2026-10-24: 마우스 대신 호출어로. "Hey ○○"을 말하면 받아쓰기를 시작하고, 받아쓰다 끝에 다시 말하면 마친다. 기본은 끔이고, 끄면 마이크를 열지 않는다. 기본 호출어는 "Hey Computer"(형 확정 2026-10-24), 앱 이름은 Speech2Text다(2026-10-25 말글로 바꿨다가 같은 날 되돌림).
 
 - 듣기(받아쓰기 밖): sherpa-onnx v2.0.0 키워드 감지(Apache-2.0, 정적 라이브러리)와 영어 KWS 모델 `sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01`(약 5MB)을 앱에 넣어 이 맥 안에서만 듣는다. 소리는 저장하거나 보내지 않는다. `scripts/fetch-wake-model.sh`가 고정한 SHA-256으로 받아 `Vendor/`(커밋 안 함)에 두고, `build-app.sh`가 모델을 `Contents/Resources/WakeWord`에 넣는다. 받아쓰기와 같은 마이크(설정의 마이크 선택)를 쓴다. CPU: 한 코어 기준 실시간의 약 2%(RTF 0.02, 683초 음성을 13.7초에 처리, 1스레드).
 - 받아쓰기 시작은 단축어 동작과 같은 `DictationRequest.start`다(이미 받아쓰는 중이면 아무것도 안 함). 호출어를 들으면 듣기용 마이크를 먼저 닫고 받아쓰기가 자기 마이크를 연다. 받아쓰는 동안에는 듣지 않고(`AppModel.listensForWake`), 끝나면 다시 듣는다. 같은 말로 두 번 시작되거나 글에 섞이지 않게 하려는 것이다.
