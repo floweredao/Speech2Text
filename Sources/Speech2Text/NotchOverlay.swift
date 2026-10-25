@@ -350,10 +350,15 @@ final class NotchOverlayController: NSObject {
         observe()
     }
 
+    /// The display a demo recording puts the overlay on instead of the one under the pointer (`--demo-screen`).
+    static var demoScreenID: CGDirectDisplayID?
+
     /// Shows the overlay on the display under the pointer. Never activates the app.
     func present() {
         guard running else { return }
-        selectedScreen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
+        selectedScreen = Self.demoScreenID.flatMap { id in
+            NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id }
+        } ?? NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
             ?? NSScreen.main ?? NSScreen.screens.first
         model.overlayVisible = true
         synchronize()

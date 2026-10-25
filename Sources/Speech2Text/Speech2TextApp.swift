@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var cancelItem: NSMenuItem?
     private var copyItem: NSMenuItem?
     private var wakeCheck: WakeWordListener?
+    private var demoRecording: DemoRecording?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -53,6 +54,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let updater = demoLocale == nil ? AppUpdater() : nil
         self.updater = updater
         model.settingsAction = { [weak self] in self?.presentSettings() }
+        if demoLocale != nil {
+            NotchOverlayController.demoScreenID = Self.value(after: "--demo-screen", in: launchArguments).flatMap(UInt32.init)
+        }
         let overlay = NotchOverlayController(model: model)
         self.overlay = overlay
         overlay.start()
@@ -116,6 +120,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return
         }
         guard !arguments.contains("--demo-idle") else { return }
+        if let id = Self.value(after: "--demo-screen", in: arguments).flatMap(UInt32.init) {
+            let step = Self.value(after: "--demo-step-ms", in: arguments).flatMap(Int.init) ?? 450
+            guard let recording = DemoRecording(model: model, locale: locale, screenID: id) else {
+                print("DEMO_SCREEN_NOT_FOUND")
+                exit(3)
+            }
+            demoRecording = recording
+            recording.run(stepInterval: .milliseconds(step)) {
+                print("DEMO_DONE")
+                fflush(stdout)
+                exit(0)
+            }
+            return
+        }
         let delay = Self.value(after: "--demo-delay-ms", in: arguments).flatMap(Int.init) ?? 600
         let step = Self.value(after: "--demo-step-ms", in: arguments).flatMap(Int.init) ?? 220
         let hold = Self.value(after: "--demo-hold-ms", in: arguments).flatMap(Int.init) ?? 700
