@@ -21,8 +21,10 @@ for lang in en ko; do
   # H.264 in yuv420p with the index up front plays inline on GitHub, in Safari and in QuickTime. The README links
   # the uploaded copy (github.com/user-attachments), because GitHub strips <video> tags pointing into the repository.
   ffmpeg -y -loglevel error -framerate 9 -i "$WORK/$lang/frames-$lang/frame-%03d.png" \
-    -vf "scale=1280:-2:flags=lanczos,tpad=stop_mode=clone:stop_duration=1.5,fps=30,format=yuv420p" -c:v libx264 -preset slow -crf 18 \
+    -vf "scale=1280:-2:flags=lanczos,tpad=stop_mode=clone:stop_duration=1.5,fps=30,crop=1280:320:0:16,format=yuv420p" -c:v libx264 -preset slow -crf 18 \
     -movflags +faststart -an "$WORK/$lang/demo-$lang.mp4"
+  # The last frame is the README poster: an image renders everywhere, including the GitHub app and logged-out views.
+  ffmpeg -y -loglevel error -sseof -0.3 -i "$WORK/$lang/demo-$lang.mp4" -frames:v 1 "$WORK/$lang/demo-poster-$lang.png"
   cp "$WORK/$lang"/*.png docs/images/
   mkdir -p docs/videos
   cp "$WORK/$lang/demo-$lang.mp4" docs/videos/

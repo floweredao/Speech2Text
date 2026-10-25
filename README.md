@@ -16,7 +16,16 @@
   macOS 15+ · Apple silicon
 </p>
 
-https://github.com/user-attachments/assets/e18e596f-4abe-4ebf-aea1-8db2036ab06e
+<p align="center">
+  <img src="docs/images/demo-poster-en.png" width="720" alt="The overlay after dictation: the spoken sentence was typed into Notes and the result stays on screen">
+</p>
+
+<details>
+<summary><b>▶ Watch the 7-second demo</b></summary>
+
+https://github.com/user-attachments/assets/2625a6bf-4648-42e0-9715-f4987b3af37a
+
+</details>
 
 ## Why Malgeul
 
@@ -34,12 +43,10 @@ https://github.com/user-attachments/assets/e18e596f-4abe-4ebf-aea1-8db2036ab06e
 
 ## How to use it
 
-| To do this | Do this |
-| --- | --- |
-| Start or finish dictation | <kbd>⌃</kbd><kbd>⌥</kbd><kbd>D</kbd> or "Hey Computer" |
-| Paste the last result | <kbd>⌃</kbd><kbd>⌥</kbd><kbd>V</kbd> |
-| Cancel dictation | **Cancel Dictation** in the menu bar menu |
-| Stop without a key | It finishes by itself after 30 seconds of silence |
+- **Start or finish**: <kbd>⌃</kbd><kbd>⌥</kbd><kbd>D</kbd> or "Hey Computer"
+- **Paste the last result**: <kbd>⌃</kbd><kbd>⌥</kbd><kbd>V</kbd>
+- **Cancel**: **Cancel Dictation** in the menu bar menu
+- **Stops by itself**: after 30 seconds of silence
 
 ## Edit by voice
 
@@ -56,11 +63,9 @@ Say these while dictating.
 
 Settings › Input › **Edit by Voice** decides what counts as a command.
 
-| Mode | How it works |
-| --- | --- |
-| **Jev Decides** (recommended) | Say just the command. TypeSafe Jev reads the words before it and decides. When unsure, it types the words. Needs a Jev API key. |
-| **Trigger Word** | Only words right after your trigger word are commands. You set the word in Settings. |
-| **Off** | Everything is typed. |
+- **Jev Decides** (recommended): say just the command. TypeSafe Jev reads the words before it and decides. When unsure, it types the words. Needs a Jev API key.
+- **Trigger Word**: only words right after your trigger word are commands. You set the word in Settings.
+- **Off**: everything is typed.
 
 ## Start by voice
 
@@ -89,18 +94,15 @@ When you finish, the result stays with Copy and Paste buttons.
   <img src="docs/images/notch-result-en.png" width="560" alt="Finished overlay with the result, Copy and Paste buttons and history">
 </p>
 
-Settings (light · dark)
+The Settings window, light and then dark.
 
-<table>
-  <tr>
-    <th>Light</th>
-    <th>Dark</th>
-  </tr>
-  <tr>
-    <td><img src="docs/images/settings-light-en.png" width="380" alt="Settings window in light mode"></td>
-    <td><img src="docs/images/settings-dark-en.png" width="380" alt="Settings window in dark mode"></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/images/settings-light-en.png" width="420" alt="Settings window in light mode">
+</p>
+
+<p align="center">
+  <img src="docs/images/settings-dark-en.png" width="420" alt="Settings window in dark mode">
+</p>
 
 ## Details
 

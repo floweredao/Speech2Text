@@ -16,7 +16,16 @@
   macOS 15+ · Apple silicon
 </p>
 
-https://github.com/user-attachments/assets/c2b36d86-4e6e-42dd-822b-9a3c29ceaac2
+<p align="center">
+  <img src="docs/images/demo-poster-ko.png" width="720" alt="받아쓰기를 마친 오버레이: 말한 문장이 메모에 입력되고 결과가 남은 모습">
+</p>
+
+<details>
+<summary><b>▶ 7초 데모 영상 보기</b></summary>
+
+https://github.com/user-attachments/assets/06da1df2-3689-483b-b5ae-cb34d0913a19
+
+</details>
 
 ## 왜 말글인가요
 
@@ -34,12 +43,10 @@ https://github.com/user-attachments/assets/c2b36d86-4e6e-42dd-822b-9a3c29ceaac2
 
 ## 쓰는 법
 
-| 하고 싶은 것 | 이렇게 해요 |
-| --- | --- |
-| 받아쓰기 시작·끝 | <kbd>⌃</kbd><kbd>⌥</kbd><kbd>D</kbd> 또는 "Hey Computer" |
-| 마지막 결과 붙여넣기 | <kbd>⌃</kbd><kbd>⌥</kbd><kbd>V</kbd> |
-| 받아쓰기 취소 | 메뉴 막대 메뉴의 **받아쓰기 취소** |
-| 말 없이 끝내기 | 30초 동안 말이 없으면 스스로 끝나요 |
+- **시작·끝**: <kbd>⌃</kbd><kbd>⌥</kbd><kbd>D</kbd> 또는 "Hey Computer"
+- **마지막 결과 붙여넣기**: <kbd>⌃</kbd><kbd>⌥</kbd><kbd>V</kbd>
+- **취소**: 메뉴 막대 메뉴의 **받아쓰기 취소**
+- **저절로 끝남**: 30초 동안 말이 없으면 끝나요
 
 ## 말로 고치기
 
@@ -56,11 +63,9 @@ https://github.com/user-attachments/assets/c2b36d86-4e6e-42dd-822b-9a3c29ceaac2
 
 명령인지 글인지는 설정 › 입력 › **말로 고치기**에서 고른 방식이 정해요.
 
-| 방식 | 동작 |
-| --- | --- |
-| **Jev가 판단** (추천) | 명령만 말하면 TypeSafe Jev가 앞 글을 보고 판단해요. 애매하면 글로 써요. Jev API 키가 필요해요. |
-| **트리거 단어** | 정해 둔 단어 바로 뒤에 말할 때만 명령이에요. 단어는 설정에서 바꿔요. |
-| **끄기** | 모두 글로 써요. |
+- **Jev가 판단** (추천): 명령만 말하면 TypeSafe Jev가 앞 글을 보고 판단해요. 애매하면 글로 써요. Jev API 키가 필요해요.
+- **트리거 단어**: 정해 둔 단어 바로 뒤에 말할 때만 명령이에요. 단어는 설정에서 바꿔요.
+- **끄기**: 모두 글로 써요.
 
 ## 말로 시작하기
 
@@ -89,18 +94,15 @@ https://github.com/user-attachments/assets/c2b36d86-4e6e-42dd-822b-9a3c29ceaac2
   <img src="docs/images/notch-result-ko.png" width="560" alt="끝난 오버레이: 결과, 복사·붙여넣기 버튼, 받아쓰기 기록">
 </p>
 
-설정 창 (라이트 · 다크)
+설정 창이에요. 라이트, 그다음 다크예요.
 
-<table>
-  <tr>
-    <th>라이트</th>
-    <th>다크</th>
-  </tr>
-  <tr>
-    <td><img src="docs/images/settings-light-ko.png" width="380" alt="라이트 모드 설정 창"></td>
-    <td><img src="docs/images/settings-dark-ko.png" width="380" alt="다크 모드 설정 창"></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/images/settings-light-ko.png" width="420" alt="라이트 모드 설정 창">
+</p>
+
+<p align="center">
+  <img src="docs/images/settings-dark-ko.png" width="420" alt="다크 모드 설정 창">
+</p>
 
 ## 자세히
 
