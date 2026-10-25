@@ -250,10 +250,9 @@ enum Spacing {
 
 /// Motion values for the overlay and Settings. See DESIGN.md, "모션".
 enum OverlayMotion {
-    /// The panel frame (AppKit) and the content inside it (SwiftUI) share one curve and duration, so the surface
-    /// and what it holds move together: a strong ease-out, quick while the user watches and soft as it settles.
+    /// One curve and duration for every layout change, animated by SwiftUI alone; the panel window waits this long
+    /// before it gives up height. A strong ease-out, quick while the user watches and soft as it settles.
     static let duration = 0.24
-    static var resizeCurve: CAMediaTimingFunction { CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1) }
     static let layout = Animation.timingCurve(0.23, 1, 0.32, 1, duration: duration)
     /// Critically damped: nothing the user threw is moving, so it settles without overshoot. A spring starts
     /// from where the panel is, so showing it again during its exit turns around without a jump.
@@ -323,6 +322,8 @@ final class NotchOverlayController: NSObject {
     private var selectedScreen: NSScreen?
     private var expanded = false
     private var contentHeight = NotchOverlayGeometry.compactHeight
+    /// Each placement replaces any resize still waiting for the content's animation to end.
+    private var resizeGeneration = 0
     private var announcedPhase: DictationDisplayState.Phase?
     /// Top-left corner the user dragged the panel to. Kept in memory only and forgotten when the user
     /// closes the overlay, so reopening or relaunching starts at the default position below the notch.
@@ -564,15 +565,31 @@ final class NotchOverlayController: NSObject {
                                                auxiliaryTop: auxiliaryTop, expanded: expanded,
                                                contentHeight: contentHeight)
         }
+        resizeGeneration += 1
         guard panel.frame != frame else { return }
-        if animated {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = OverlayMotion.duration
-                context.timingFunction = OverlayMotion.resizeCurve
-                panel.animator().setFrame(frame, display: true)
-            }
-        } else {
+        // SwiftUI alone animates the visible height; the clear window only has to hold it. Animating the window frame
+        // as well made a second, unsynchronized owner: AppKit applied the new height a frame before the new origin, so
+        // the whole panel jumped up and back as the history opened (recorded 2026-10-25). The window takes a taller
+        // frame at once and gives up a shorter one only after the content has finished shrinking into it.
+        guard animated else {
             panel.setFrame(frame, display: true)
+            return
+        }
+        let generation = resizeGeneration
+        let shrinking = frame.height < panel.frame.height
+        if !shrinking { panel.setFrame(frame, display: true) }
+        // A clear window's shadow is drawn from its content once; redraw it while the content changes shape.
+        let start = ContinuousClock.now
+        Task { @MainActor [weak self, weak panel] in
+            while let self, let panel, self.resizeGeneration == generation {
+                panel.invalidateShadow()
+                guard ContinuousClock.now - start < .seconds(OverlayMotion.duration) else {
+                    if shrinking { panel.setFrame(frame, display: true) }
+                    panel.invalidateShadow()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(16))
+            }
         }
     }
 }
@@ -926,17 +943,18 @@ struct HistoryList: View {
                     .accessibilityIdentifier("notch-history-toggle")
                 }
             }
-            // The round button lines up with the rows' copy buttons below it: list gutter plus the rows' own inset.
-            .padding(.trailing, Spacing.m + Spacing.xxs)
+            // The round button lines up with the rows' copy buttons below it: same inset from the group's edge.
+            .padding(.trailing, Self.trailingInset)
             .frame(minHeight: NotchOverlayGeometry.minimumHitSize)
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     rows(state.history, expanded: expanded)
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight.wrappedValue = $0 }
                 }
-                // The overlay scroller draws over content; a trailing gutter keeps it off the text. It stays when
-                // collapsed, so the newest row's buttons don't shift sideways as the list opens.
-                .contentMargins(.trailing, Spacing.m, for: .scrollContent)
+                // No scroller: a legacy scroller would take its width from the rows and push the copy buttons off the
+                // expand button's column, and a gutter for an overlay scroller made the right margin twice the left.
+                // The list is cut at its bottom edge when it scrolls, which shows there is more.
+                .scrollIndicators(.never)
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollDisabled(shownHeight <= Self.expandedMaxHeight)
                 .frame(height: height, alignment: .top)
@@ -964,7 +982,8 @@ struct HistoryList: View {
                 let hidden = depth > 0 && !expanded
                 VStack(spacing: 0) {
                     if depth > 0 {
-                        Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.leading, Spacing.s)
+                        // Across the whole row, buttons included, on the same 8 pt insets as the text and the buttons.
+                        Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.horizontal, Spacing.s)
                     }
                     // Buttons sit at the top so they stay beside the first line however tall the row grows.
                     HStack(alignment: .top, spacing: Spacing.s) {
@@ -988,9 +1007,10 @@ struct HistoryList: View {
                                               prominent: false, action: paste)
                         }
                     }
-                    // The copy circle sits 4 pt from the group's edges (2 pt padding + its 2 pt hit margin).
+                    // Text starts 8 pt from the group's left edge and the copy circle ends 8 pt from its right edge
+                    // (6 pt padding + the circle's 2 pt hit margin), so both sides have the same margin.
                     .padding(.leading, Spacing.s)
-                    .padding(.trailing, Spacing.xxs)
+                    .padding(.trailing, Self.trailingInset)
                     .padding(.vertical, Spacing.xxs)
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
@@ -1007,6 +1027,8 @@ struct HistoryList: View {
 
     /// (28 pt button - one callout line) / 2, so a single line sits on the buttons' center line.
     static let textInset: CGFloat = 6
+    /// 8 pt visible margin minus the circle buttons' 2 pt transparent hit margin.
+    static let trailingInset: CGFloat = Spacing.s - Spacing.xxs
 }
 
 /// Scrolls only when the measured text exceeds the viewport, so short text leaves no gutter.
