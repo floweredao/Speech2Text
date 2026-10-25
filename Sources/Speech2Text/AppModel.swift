@@ -519,6 +519,7 @@ final class AppModel {
         switch outcome {
         case .applied(.deleteLastSentence): String(localized: "마지막 문장을 지웠어요. '\(undo)'라고 말하면 되돌려요.")
         case .applied(.deleteLastWord): String(localized: "마지막 단어를 지웠어요. '\(undo)'라고 말하면 되돌려요.")
+        case .applied(.deleteLastCharacter): String(localized: "마지막 글자를 지웠어요. '\(undo)'라고 말하면 되돌려요.")
         case .applied(.clearAll): String(localized: "받아쓴 글을 모두 지웠어요. '\(undo)'라고 말하면 되돌려요.")
         case .applied(.undo): String(localized: "되돌렸어요.")
         // The mark shows up in the text itself.
