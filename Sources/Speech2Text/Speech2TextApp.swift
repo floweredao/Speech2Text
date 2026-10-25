@@ -42,6 +42,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             print(key.map(JevKeychain.save) == true ? "JEV_KEY_STORED" : "JEV_KEY_NOT_STORED")
             exit(0)
         }
+        if let file = Self.value(after: "--edit-corpus", in: launchArguments) {
+            let key = Self.value(after: "--jev-key-file", in: launchArguments)
+                .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) } ?? JevKeychain.load()
+            Task {
+                await EditCorpus.run(file: file, key: key)
+                exit(0)
+            }
+            return
+        }
         // A --print-turns file run is a diagnostic that quits when done: no overlay, menu bar item, shortcuts or
         // update check, so it never shows up next to the running app.
         if let index = launchArguments.firstIndex(of: "--audio-file"), launchArguments.indices.contains(index + 1),

@@ -73,6 +73,7 @@ struct CommandCandidate: Equatable {
         switch command {
         case .deleteLastSentence: "delete the last sentence of the dictated text"
         case .deleteLastWord: "delete the last word of the dictated text"
+        case .deleteLastCharacter: "delete the last letter of the dictated text"
         case .clearAll: "delete all of the dictated text"
         case .undo: "undo the previous voice edit"
         case .replace(let old, let new): "replace the last \"\(old)\" in the dictated text with \"\(new)\""
@@ -111,7 +112,7 @@ struct JevJudge: Sendable {
 
     static let guide = [
         "A person dictates by voice into another app: chat messages, documents, and often instructions to an AI coding agent or a colleague. Speech is mostly Korean, sometimes English.",
-        "The dictation app also takes a few editing commands spoken on their own: 지워 / scratch that (delete the last sentence), 한 단어 지워 (delete the last word), 다 지워 (delete everything), 되돌려 / undo (undo the last edit), 'A를 B로 바꿔' / 'replace A with B' (fix a word in the dictated text), 'A 아니고 B' / 'A 말고 B' / 'A가 아니라 B' (the speaker fixes a word just dictated by saying the right one), 'A 지워' / 'delete A' (remove that word from the dictated text), 엔터 보내기 (press Return to send), and punctuation marks said by name: 물음표 / 느낌표 / 마침표 / 쉼표 / question mark / comma (put that mark at the end of the dictated text).",
+        "The dictation app also takes editing commands, said in many ways (any object word, verb form, polite ending or spacing): deleting the last sentence (지워, 방금 거 삭제해 줘, 앞 문장 날려, scratch that), the last word (한 단어 지워) or letter (한 글자 지워), everything (다 지워, 전부 날려, clear all), undoing the last edit (되돌려, 방금 거 취소, 원래대로, undo), fixing a word ('A를 B로 바꿔/고쳐/수정해', 'A 대신 B로', 'replace A with B', 'A 대문자로 바꿔', 'A B 띄어 써', 'A B 붙여 써'), the speaker saying the right word again ('A 아니고 B', 'A 말고 B', 'A가 아니라 B', 'A, I mean B'), removing a word ('A 지워/빼', 'A라는 단어 삭제해', 'delete A'), 엔터 보내기 (press Return to send), and punctuation marks said by name: 물음표 / 느낌표 / 마침표 / 쉼표 / 콜론 / 물결표 / 말줄임표 / question mark / comma (put that mark at the end of the dictated text).",
         "A mark name is TEXT when the sentence talks about the mark or uses the word for its meaning: '물음표가 뜨어요' is not asked, but '드디어 마침표' (finally an end), '인생의 물음표' (a question in life), '저 줄에 마침표' (a mark on that line, said to the reader) are TEXT. '내일 오나요 물음표' or '좋아요 느낌표' dictating the mark for the speaker's own sentence is COMMAND.",
         "The same words are very common inside the dictated message itself, above all in requests to someone else: '그 파일 지워', '버튼 색을 파란색으로 바꿔', '테스트 다 지워', '그 커밋 되돌려'. Those are TEXT.",
         "Key test: does the utterance act on the speaker's own dictated words, or on something in the world that the message talks about? When `text_before` points the reader at a thing (a file, branch, cache, script, calendar entry, screen, message; '~ 있잖아', '~ 말이야', 'X is broken', 'X가 보였어', 'X 때문에') and the utterance says what to do with that thing, it is an instruction to the reader: TEXT, even when said as a separate chunk and even when the word to replace appears in `text_before`.",
