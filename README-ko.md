@@ -74,13 +74,13 @@ https://github.com/user-attachments/assets/fb68b1a6-9bd5-4914-9324-e3e74c0a9a5f
 말하는 동안 실시간 글과 입력 중인 앱이 보여요.
 
 <p align="center">
-  <img src="docs/images/notch-recording-ko.png" width="560" alt="듣는 중인 오버레이: 실시간 글, 입력 중인 앱, 받아쓰기 기록">
+  <img src="docs/images/notch-recording-ko.png" width="560" alt="듣는 중인 오버레이: 실시간 글, 입력 중인 앱">
 </p>
 
 끝나면 결과와 복사·붙여넣기 버튼이 남아요.
 
 <p align="center">
-  <img src="docs/images/notch-result-ko.png" width="560" alt="끝난 오버레이: 결과, 복사·붙여넣기 버튼, 받아쓰기 기록">
+  <img src="docs/images/notch-result-ko.png" width="560" alt="끝난 오버레이: 결과, 복사·붙여넣기 버튼">
 </p>
 
 설정 창이에요. 라이트, 그다음 다크예요.
@@ -145,7 +145,6 @@ https://github.com/user-attachments/assets/fb68b1a6-9bd5-4914-9324-e3e74c0a9a5f
 
 - 소리는 받아쓰는 동안에만 Soniox로 보내요.
 - 녹음 파일을 남기지 않아요.
-- 받아쓰기 기록은 메모리에만 있다가 앱을 끄면 사라져요.
 - 호출어 소리는 맥 밖으로 나가지 않아요.
 
 </details>

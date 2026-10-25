@@ -74,13 +74,13 @@ When idle, it is one capsule under the notch.
 While you speak, it shows the live text and the app it types into.
 
 <p align="center">
-  <img src="docs/images/notch-recording-en.png" width="560" alt="Listening overlay with live text, target app and dictation history">
+  <img src="docs/images/notch-recording-en.png" width="560" alt="Listening overlay with live text and target app">
 </p>
 
 When you finish, the result stays with Copy and Paste buttons.
 
 <p align="center">
-  <img src="docs/images/notch-result-en.png" width="560" alt="Finished overlay with the result, Copy and Paste buttons and history">
+  <img src="docs/images/notch-result-en.png" width="560" alt="Finished overlay with the result and Copy and Paste buttons">
 </p>
 
 The Settings window, light and then dark.
@@ -145,7 +145,6 @@ The Settings window, light and then dark.
 
 - Audio goes to Soniox only while you dictate.
 - No recordings are saved.
-- Dictation history lives in memory and is gone when the app quits.
 - Wake phrase audio never leaves your Mac.
 
 </details>

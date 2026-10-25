@@ -33,12 +33,6 @@ struct DictationDisplayState: Equatable {
     let noteText: String
     /// The error comes from setup (key, microphone, permission), so retrying without a change repeats it.
     let needsSettings: Bool
-    /// Every earlier dictation, newest first, in the one "Dictation History" group: collapsed it shows only the
-    /// newest, and its expand button shows the rest. The previous result is the group's newest row, not a line of its
-    /// own; only the finished result shown as the body stays out of it.
-    let history: [DictationRecord]
-    /// The newest history row is the previous result `model.transcript` still holds, so it offers paste as well.
-    let historyPastesNewest: Bool
     /// The app live typing writes into, shown quietly beside the title while it matters.
     let targetName: String?
     /// The result already went into the field, so copy and paste step back to one header button.
@@ -52,14 +46,14 @@ struct DictationDisplayState: Equatable {
                   transcript: model.transcript, feedback: model.feedback,
                   session: DictationSession(outcome: model.speechOutcome,
                                             hasCurrentTranscript: model.hasCurrentTranscript),
-                  toggleShortcut: model.shortcuts[.toggleDictation]?.label, history: model.history,
+                  toggleShortcut: model.shortcuts[.toggleDictation]?.label,
                   feedbackIsRoutine: model.feedbackIsRoutine, targetName: model.liveTargetName,
                   uncertainWords: model.uncertainWords)
     }
 
     init(speechPhase: SpeechPhase, hasError: Bool, needsSettings: Bool = false, status: String, transcript: String,
          feedback: String, session: DictationSession = DictationSession(), toggleShortcut: String? = "⌃⌥D",
-         history: [DictationRecord] = [], feedbackIsRoutine: Bool = false, targetName: String? = nil,
+         feedbackIsRoutine: Bool = false, targetName: String? = nil,
          uncertainWords: [String] = []) {
         self.needsSettings = needsSettings
         let fresh = session.freshTranscript(transcript)
@@ -110,36 +104,20 @@ struct DictationDisplayState: Equatable {
         inserted = phase == .result && feedbackIsRoutine
         self.targetName = phase == .recording || phase == .finalizing || inserted ? targetName : nil
         self.uncertainWords = uncertainWords
-        // The newest record is the finished result itself until a new dictation starts; the previous result joins the
-        // history group instead of a separate "previous" line.
-        switch phase {
-        case .idle: self.history = []
-        case .result: self.history = Array(history.dropFirst())
-        default: self.history = history
-        }
-        historyPastesNewest = retainedKind == .previous && !self.history.isEmpty
     }
 
-    /// The previous result has no history row (it was only a spoken command), so it keeps its own labelled line;
-    /// unconfirmed text heard before an error is never history.
-    var showsRetainedLine: Bool { retainedKind == .unfinished || (retainedKind == .previous && !historyPastesNewest) }
-
-    /// Rows the history group shows: none until the user expands it.
-    func historyRows(expanded: Bool) -> [DictationRecord] {
-        expanded ? history : Array(history.prefix(NotchOverlayGeometry.collapsedHistoryRows))
-    }
-    var historyCanExpand: Bool { history.count > NotchOverlayGeometry.collapsedHistoryRows }
+    /// The previous result and unconfirmed text heard before an error each keep their own labelled line.
+    var showsRetainedLine: Bool { retainedKind != nil }
 
     /// What changes the overlay's layout, so motion follows these changes but not every revision of live text.
     struct LayoutKey: Hashable {
         let phase: Phase
-        let history: [UUID]
         let hasTranscript: Bool
         let hasNote: Bool
         let hasTarget: Bool
     }
     var layoutKey: LayoutKey {
-        LayoutKey(phase: phase, history: history.map(\.id), hasTranscript: !transcript.isEmpty, hasNote: !noteText.isEmpty,
+        LayoutKey(phase: phase, hasTranscript: !transcript.isEmpty, hasNote: !noteText.isEmpty,
                   hasTarget: targetName != nil)
     }
 
@@ -147,7 +125,7 @@ struct DictationDisplayState: Equatable {
     var isDictating: Bool { phase == .connecting || phase == .recording || phase == .finalizing }
     var followsTail: Bool { phase == .recording || phase == .finalizing }
     var isExpanded: Bool {
-        !message.isEmpty || !transcript.isEmpty || !retained.isEmpty || !noteText.isEmpty || !history.isEmpty
+        !message.isEmpty || !transcript.isEmpty || !retained.isEmpty || !noteText.isEmpty
     }
     /// Copy and paste act on `model.transcript`, which is the shown body or retained line in these states.
     var offersTranscriptActions: Bool { phase == .result || !retained.isEmpty }
@@ -191,9 +169,6 @@ enum NotchOverlayGeometry {
     /// The transcript grows to this many lines of its text style, then scrolls. The view measures the lines,
     /// so the cap follows the system text size.
     static let maxTranscriptLines = 5
-    /// History rows shown until the user expands the group (owner request 2026-10-25: none, only the label and the
-    /// expand button, replacing the 2026-10-23 one-row decision).
-    static let collapsedHistoryRows = 0
     /// Used only until the five-line sample has been measured.
     static let fallbackMaxTranscriptHeight: CGFloat = 96
     /// Smallest hit area of an overlay button, whatever its visible size.
@@ -570,7 +545,7 @@ final class NotchOverlayController: NSObject {
         guard panel.frame != frame else { return }
         // SwiftUI alone animates the visible height; the clear window only has to hold it. Animating the window frame
         // as well made a second, unsynchronized owner: AppKit applied the new height a frame before the new origin, so
-        // the whole panel jumped up and back as the history opened (recorded 2026-10-25). The window takes a taller
+        // the whole panel jumped up and back as the panel grew (recorded 2026-10-25). The window takes a taller
         // frame at once and gives up a shorter one only after the content has finished shrinking into it.
         guard animated else {
             panel.setFrame(frame, display: true)
@@ -743,11 +718,6 @@ struct NotchOverlayView: View {
         } else if state.phase == .result, !state.inserted {
             transcriptActions
         }
-        if !state.history.isEmpty {
-            HistoryList(state: state, entering: entering,
-                        paste: { model.pasteTranscript() },
-                        pasteLabel: String(localized: "붙여넣기") + shortcutHint(.pasteTranscript)) { model.copyHistory($0) }
-        }
     }
 
     /// New content arrives from above and pushes older content down.
@@ -757,7 +727,7 @@ struct NotchOverlayView: View {
 
 
     private var transcriptActions: some View {
-        // Small round buttons, the same as the history rows' copy button (owner request 2026-10-25), so every copy
+        // Small round buttons (owner request 2026-10-25), so every copy
         // and paste in the overlay is one control; the circle edge lines up with the text above.
         HStack(spacing: Spacing.xs) {
             OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "복사"), id: "notch-copy", prominent: false) {
@@ -877,171 +847,6 @@ private struct LevelMeter: View {
     }
 }
 
-/// Every earlier dictation in one labelled inset group, so none reads as the current text. Collapsed it shows only its
-/// label (owner request 2026-10-25); the round expand button (owner request 2026-10-23, 2026-10-24, 2026-10-25) shows the rest. Every row has the
-/// same text style and color and grows to fit its whole text (owner request 2026-10-25: no dimmer, smaller rows, no
-/// lines squeezed into one row). A new dictation folds it back.
-///
-/// Expanding animates one thing, the clip height, between two measured heights; the rows are always laid out, so nothing
-/// is inserted or re-measured mid-animation, and the extra rows only fade (beui.dev Collapsible, StyleGallery
-/// motion/interaction-recipes Disclosure).
-struct HistoryList: View {
-    let state: DictationDisplayState
-    let entering: AnyTransition
-    let paste: () -> Void
-    let pasteLabel: String
-    let copy: (DictationRecord) -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
-    private let showsAll: State<Bool>
-    private let listHeight = State(initialValue: CGFloat(0))
-    static let expandedMaxHeight: CGFloat = 220
-
-    init(state: DictationDisplayState, entering: AnyTransition, expanded: Bool = false, paste: @escaping () -> Void,
-         pasteLabel: String, copy: @escaping (DictationRecord) -> Void) {
-        self.state = state
-        self.entering = entering
-        self.paste = paste
-        self.pasteLabel = pasteLabel
-        self.copy = copy
-        showsAll = State(initialValue: expanded)
-    }
-
-    var body: some View {
-        let expanded = showsAll.wrappedValue && state.historyCanExpand
-        let motion = reduceMotion ? OverlayMotion.reduced : OverlayMotion.layout
-        let shownHeight = expanded ? listHeight.wrappedValue : 0
-        let height = min(shownHeight, Self.expandedMaxHeight)
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center) {
-                Text(String(localized: "받아쓰기 기록"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 0)
-                if state.historyCanExpand {
-                    Button {
-                        // On the panel's own curve, so the list opens with the panel instead of being cut while the
-                        // panel frame is still growing.
-                        withAnimation(motion) { showsAll.wrappedValue.toggle() }
-                    } label: {
-                        // One chevron that turns over, so the button reads as the same control in both states;
-                        // Reduce Motion swaps the symbol instead of turning it.
-                        Group {
-                            if reduceMotion {
-                                Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                            } else {
-                                Image(systemName: "chevron.down").rotationEffect(.degrees(expanded ? -180 : 0))
-                            }
-                        }
-                        .font(.system(size: 10, weight: .semibold))
-                    }
-                    .buttonStyle(OverlayControlStyle(shape: .circle, prominent: false))
-                    .help(expanded ? String(localized: "접기") : String(localized: "받아쓰기 기록 \(state.history.count)개 모두 보기"))
-                    .accessibilityLabel(expanded ? String(localized: "접기") : String(localized: "펼치기"))
-                    .accessibilityValue(expanded ? String(localized: "펼침") : String(localized: "접힘"))
-                    .accessibilityIdentifier("notch-history-toggle")
-                }
-            }
-            // The round button lines up with the rows' copy buttons below it: same inset from the group's edge.
-            .padding(.trailing, Self.trailingInset)
-            .frame(minHeight: NotchOverlayGeometry.minimumHitSize)
-            ScrollViewReader { proxy in
-                ScrollView(.vertical) {
-                    rows(state.history, expanded: expanded)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight.wrappedValue = $0 }
-                }
-                // No scroller: a legacy scroller would take a column of its own and push the copy buttons off the
-                // header buttons' column. Instead the edge that has more behind it fades out (owner report
-                // 2026-10-25: with no scroller nothing showed there was more below).
-                .scrollIndicators(.never)
-                .scrollBounceBehavior(.basedOnSize)
-                .scrollDisabled(shownHeight <= Self.expandedMaxHeight)
-                // Folded, the rows below the newest are hidden, so there is nothing more to show.
-                .scrollEdgeFade(enabled: expanded && shownHeight > Self.expandedMaxHeight)
-                .frame(height: height, alignment: .top)
-                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                // The group reaches out of the content column so its text starts on the transcript's edge and its
-                // copy circles end on the header buttons' column, each 6 pt inside the group (owner request
-                // 2026-10-25: one column for every round button).
-                .padding(.leading, -Self.groupInset)
-                .padding(.trailing, -(Self.groupInset + Spacing.xxs))
-                // Folded, the group takes no room at all: only the label and its expand button show.
-                .opacity(expanded ? 1 : 0)
-                .padding(.top, expanded ? Spacing.xs : 0)
-                .accessibilityHidden(!expanded)
-                .allowsHitTesting(expanded)
-                .onChange(of: expanded) { _, open in
-                    if !open, let first = state.history.first { withAnimation(motion) { proxy.scrollTo(first.id, anchor: .top) } }
-                }
-            }
-        }
-        // The history group sits a step further from the current dictation than its parts sit from each other.
-        .padding(.top, Spacing.xs)
-        // A new dictation folds the group back to its newest row.
-        .onChange(of: state.isDictating) { _, dictating in
-            if dictating { withAnimation(motion) { showsAll.wrappedValue = false } }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "받아쓰기 기록"))
-        .accessibilityIdentifier("notch-history")
-    }
-
-    private func rows(_ records: [DictationRecord], expanded: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(records.enumerated()), id: \.element.id) { depth, record in
-                let hidden = !expanded
-                VStack(spacing: 0) {
-                    if depth > 0 {
-                        // Across the whole row, from the text's edge to the copy circle's edge.
-                        Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.horizontal, Self.groupInset)
-                    }
-                    // Buttons sit at the top so they stay beside the first line however tall the row grows.
-                    HStack(alignment: .top, spacing: Spacing.s) {
-                        Text(record.text)
-                            .font(.callout)
-                            .foregroundStyle(.white.opacity(0.72))
-                            .lineSpacing(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            // Centers a one-line row on its 28 pt buttons and gives longer rows the same margin
-                            // above the first line as below the last.
-                            .padding(.vertical, Self.textInset)
-                            .accessibilityLabel(String(localized: "이전 받아쓰기") + ": " + record.text)
-                            .accessibilityIdentifier("notch-history-row")
-                        OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "이 받아쓰기 복사"),
-                                          id: "notch-history-copy", prominent: false) {
-                            copy(record)
-                        }
-                        if depth == 0 && state.historyPastesNewest {
-                            OverlayIconButton(symbol: "arrow.down.doc", label: pasteLabel, id: "notch-paste",
-                                              prominent: false, action: paste)
-                        }
-                    }
-                    // 6 pt from the group's left edge to the text and from the copy circle to its right edge.
-                    .padding(.leading, Self.groupInset)
-                    .padding(.trailing, Self.groupInset - Spacing.xxs)
-                    .padding(.vertical, Spacing.xxs)
-                }
-                .id(record.id)
-                .opacity(hidden ? 0 : 1)
-                .accessibilityHidden(hidden)
-                .allowsHitTesting(!hidden)
-                .transition(entering)
-            }
-        }
-    }
-
-    /// (28 pt button - one callout line) / 2, so a single line sits on the buttons' center line.
-    static let textInset: CGFloat = 6
-    /// The header buttons reach 4 pt into the panel's side inset; the expand button does the same, so all the circles
-    /// end 10 pt from the panel edge.
-    static let trailingInset: CGFloat = -Spacing.xs
-    /// Inner margin of the history group: 12 pt panel inset - 6 = 6 pt outer margin on the left, 4 on the right.
-    static let groupInset: CGFloat = 6
-}
-
 /// Fades the top or bottom edge of a scroll view while there is more content past it, so a list with no scroller still
 /// shows that it continues (HIG Scroll views: show that more content exists; StyleGallery scroll-shadow pattern).
 private struct ScrollEdgeFade: ViewModifier {
@@ -1082,6 +887,11 @@ private struct TranscriptViewport: View {
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
     private let textHeight = State(initialValue: CGFloat(19))
     private let maxHeight = State(initialValue: NotchOverlayGeometry.fallbackMaxTranscriptHeight)
+    private let position = State(initialValue: ScrollPosition(edge: .bottom))
+    /// The newest words are in view. Changed only by the user's own scrolling, so the view keeps following the tail
+    /// until they scroll up to read, and follows again once they scroll back to the bottom.
+    private let pinned = State(initialValue: true)
+    private let userScrolling = State(initialValue: false)
     /// Underlines, with dots, each word Soniox was unsure of, found in reading order.
     static func marked(_ text: String, uncertain: [String]) -> AttributedString {
         var result = AttributedString(text)
@@ -1097,6 +907,11 @@ private struct TranscriptViewport: View {
 
     private static let lineSample = Array(repeating: "Ag", count: NotchOverlayGeometry.maxTranscriptLines)
         .joined(separator: "\n")
+
+    private func followTail() {
+        guard followsTail, pinned.wrappedValue, !userScrolling.wrappedValue else { return }
+        position.wrappedValue.scrollTo(edge: .bottom)
+    }
 
     private func styled(_ text: Text) -> some View {
         text.font(.title3.weight(.medium)).lineSpacing(2)
@@ -1121,6 +936,23 @@ private struct TranscriptViewport: View {
         .scrollEdgeFade()
         .defaultScrollAnchor(followsTail ? .bottom : .top)
         .defaultScrollAnchor(followsTail ? .bottom : .top, for: .sizeChanges)
+        // The size-change anchor alone lost the tail when the text grew while the viewport itself was still growing to
+        // its five-line cap, or while a wrapped line re-measured (owner report 2026-10-25: a long dictation stopped
+        // following the newest line). Every new height now scrolls to the bottom explicitly unless the user is reading
+        // further up.
+        .scrollPosition(position.projectedValue)
+        .onScrollPhaseChange { old, new, context in
+            userScrolling.wrappedValue = new == .interacting || new == .decelerating || new == .tracking
+            if new == .idle, old == .interacting || old == .decelerating || old == .tracking {
+                let geo = context.geometry
+                pinned.wrappedValue = geo.visibleRect.maxY >= geo.contentSize.height - 4
+            }
+        }
+        .onChange(of: textHeight.wrappedValue) { followTail() }
+        .onChange(of: followsTail) { _, follows in
+            if follows { pinned.wrappedValue = true }
+            followTail()
+        }
         .frame(height: NotchOverlayGeometry.transcriptViewportHeight(textHeight: textHeight.wrappedValue,
                                                                      maxHeight: maxHeight.wrappedValue))
         // Five invisible lines in the same style measure the scroll cap at the current text size.

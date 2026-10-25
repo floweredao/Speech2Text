@@ -35,14 +35,12 @@ enum DemoCapturer {
                        to: directory.appendingPathComponent("notch-idle-\(suffix).png"))
 
         model.configureForDemoCapture()
-        model.seedDemoHistory(locale.history)
         model.configureDemoTarget(name: locale.targetName, icon: targetIcon)
         model.speech.setDemoState(phase: .recording, transcript: finalStep, status: listening, level: 0.62)
         captureOverlay(model: model, width: expandedOverlayWidth,
                        to: directory.appendingPathComponent("notch-recording-\(suffix).png"))
 
         model.configureForDemoCapture()
-        model.seedDemoHistory([finalStep] + locale.history)
         model.feedback = String(localized: "받아쓰기를 보관했어요. 입력 칸을 선택한 뒤 붙여넣어 주세요.")
         model.speech.setDemoState(phase: .idle, transcript: finalStep, status: finished, outcome: .completed)
         captureOverlay(model: model, width: expandedOverlayWidth,
@@ -65,7 +63,6 @@ enum DemoCapturer {
             for sub in 0..<4 {
                 let tick = Double(step * 4 + sub)
                 model.configureForDemoCapture()
-                model.seedDemoHistory(locale.history)
                 model.configureDemoTarget(name: locale.targetName, icon: targetIcon)
                 model.speech.setDemoState(phase: .recording, transcript: text, status: listening,
                                           level: Float(0.35 + 0.35 * abs(sin(tick * 0.9))))
@@ -75,7 +72,6 @@ enum DemoCapturer {
 
         let final = locale.animationSteps.last ?? ""
         model.configureForDemoCapture()
-        model.seedDemoHistory([final] + locale.history)
         model.configureDemoTarget(name: locale.targetName, icon: targetIcon)
         model.setRoutineFeedback(String(localized: "입력 칸에 받아쓰기를 입력했어요."))
         model.speech.setDemoState(phase: .idle, transcript: final, status: finished, outcome: .completed)

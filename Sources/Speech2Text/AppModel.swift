@@ -2,17 +2,8 @@ import AppKit
 import DictationSpeech
 import Observation
 
-/// A finished dictation kept for the overlay's history list. Kept in memory only.
-struct DictationRecord: Identifiable, Equatable {
-    let id = UUID()
-    let text: String
-}
-
 @MainActor @Observable
 final class AppModel {
-    static let historyLimit = 20
-    /// Finished dictations, newest first. The newest is also `transcript` until a new dictation replaces it.
-    private(set) var history: [DictationRecord] = []
     let speech = SpeechEngine()
     private let insertion = TextInsertion()
     @ObservationIgnored private var live: LiveTyper?
@@ -522,8 +513,8 @@ final class AppModel {
         case .applied(.deleteLastCharacter): String(localized: "마지막 글자를 지웠어요. '\(undo)'라고 말하면 되돌려요.")
         case .applied(.clearAll): String(localized: "받아쓴 글을 모두 지웠어요. '\(undo)'라고 말하면 되돌려요.")
         case .applied(.undo): String(localized: "되돌렸어요.")
-        // The mark shows up in the text itself.
-        case .applied(.mark): ""
+        // The mark shows up in the text itself, or was already there.
+        case .applied(.mark), .nothingToChange(.mark): ""
         case .applied(.replace(let old, let new)):
             String(localized: "'\(old)'을(를) '\(new)'(으)로 바꿨어요. '\(undo)'라고 말하면 되돌려요.")
         case .applied(.delete(let old)): String(localized: "'\(old)'을(를) 지웠어요. '\(undo)'라고 말하면 되돌려요.")
@@ -586,12 +577,7 @@ final class AppModel {
         }
         var command: String?
         if case .said(let before) = enterCommand(in: spoken) { command = before }
-        let text = withoutWakeStop(command ?? spoken)
-        let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if !empty {
-            history.insert(DictationRecord(text: text), at: 0)
-            if history.count > Self.historyLimit { history.removeLast(history.count - Self.historyLimit) }
-        }
+        let empty = withoutWakeStop(command ?? spoken).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if endedByReturn {
             endedByReturn = false
             live = nil
@@ -731,17 +717,10 @@ final class AppModel {
         speech.start(audioFile: url)
     }
 
-    /// Scripted synthetic transcript for `--demo <en|ko>`: drives the overlay and its history with made-up
+    /// Scripted synthetic transcript for `--demo <en|ko>`: drives the overlay with made-up
     /// sentences. No microphone, network, Keychain, or other app's text field is touched.
     enum DemoLocale: String, Sendable {
         case en, ko
-
-        var history: [String] {
-            switch self {
-            case .en: ["Checked the build logs and verified all unit tests pass on Apple Silicon."]
-            case .ko: ["애플 실리콘에서 빌드 로그와 단위 테스트 통과를 모두 확인했습니다."]
-            }
-        }
 
         var targetName: String {
             switch self {
@@ -797,10 +776,6 @@ final class AppModel {
         }
     }
 
-    func seedDemoHistory(_ lines: [String]) {
-        history = lines.map { DictationRecord(text: $0) }
-    }
-
     func configureDemoTarget(name: String?, icon: NSImage?) {
         liveTargetName = name
         liveTargetIcon = icon
@@ -822,7 +797,6 @@ final class AppModel {
         inputDevices = [microphone]
         autoInsert = true
         feedback = ""
-        seedDemoHistory([])
         configureDemoTarget(name: nil, icon: nil)
     }
 
@@ -836,9 +810,6 @@ final class AppModel {
     }
     func copyTranscript() {
         feedback = insertion.copy(transcript) ? String(localized: "복사했어요. 원하는 곳에서 ⌘V를 누르세요.") : String(localized: "복사할 텍스트가 없어요.")
-    }
-    func copyHistory(_ record: DictationRecord) {
-        feedback = insertion.copy(record.text) ? String(localized: "복사했어요. 원하는 곳에서 ⌘V를 누르세요.") : String(localized: "복사할 텍스트가 없어요.")
     }
     func copyError() {
         feedback = insertion.copy(status) ? String(localized: "복사했어요. 원하는 곳에서 ⌘V를 누르세요.") : String(localized: "복사할 텍스트가 없어요.")

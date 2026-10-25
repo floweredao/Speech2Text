@@ -121,7 +121,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private func runDemo(_ locale: AppModel.DemoLocale, arguments: [String]) {
         model.autoInsert = false
         model.apiKey = "demo-synthetic-key"
-        model.seedDemoHistory(locale.history)
         if arguments.contains("--demo-settings") {
             model.accessibilityGranted = true
             model.microphoneAccessOverride = .granted
