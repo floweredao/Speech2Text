@@ -581,7 +581,8 @@ final class AppModel {
         let movedOn = cutMs != nil
         let field = edited(from: cutMs).text
         let rest = withoutEnterCommand(field)
-        if live == nil, awaitingTarget, !rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        // The spoken Enter alone, after the user moved the caret, still goes to the field they settled in.
+        if live == nil, awaitingTarget, command != nil || !rest.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             _ = acquireLiveTarget()
         }
         awaitingTarget = false
