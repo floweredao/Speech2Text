@@ -132,6 +132,7 @@
 "Keychain에서 불러오는 중…" = "Loading from Keychain…";
 "Keychain에서 지우는 중…" = "Removing from Keychain…";
 "엔터 보내기" = "send enter";
+"엔터를 눌러 받아쓰기를 마쳤어요." = "Return was pressed, so the dictation ended.";
 "입력하고 엔터를 눌렀어요." = "Typed the dictation and pressed Return.";
 "입력 칸이 바뀌어 엔터는 누르지 않았어요." = "The field changed, so Return was not pressed.";
 "입력 중인 칸이 없어 엔터는 누르지 않았어요." = "No field was being typed into, so Return was not pressed.";

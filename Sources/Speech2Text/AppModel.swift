@@ -552,6 +552,8 @@ final class AppModel {
         if case .said = enterCommand(in: text) { speech.finish() } else if wakeStop { speech.finish() }
     }
 
+    @ObservationIgnored private var endedByReturn = false
+
     private func complete(_: String) {
         overlayVisible = true
         if judgeMode == .jev, waitsForJudge() {
@@ -579,6 +581,16 @@ final class AppModel {
         if !empty {
             history.insert(DictationRecord(text: text), at: 0)
             if history.count > Self.historyLimit { history.removeLast(history.count - Self.historyLimit) }
+        }
+        if endedByReturn {
+            endedByReturn = false
+            live = nil
+            liveTargetName = nil
+            liveTargetIcon = nil
+            awaitingTarget = false
+            cutMs = nil
+            feedback = String(localized: "엔터를 눌러 받아쓰기를 마쳤어요.")
+            return
         }
         // A key or click while the last words were being finalized counts like one during recording.
         if let live, let acted = live.userActedAt { moveOn(at: acted) }
@@ -633,6 +645,7 @@ final class AppModel {
         awaitingTarget = false
         cutMs = nil
         reportedEdits = 0
+        endedByReturn = false
         feedback = ""
         guard autoInsert else { return }
         guard accessibilityGranted else {
@@ -651,9 +664,16 @@ final class AppModel {
 
     private func acquireLiveTarget() -> Bool {
         guard let target = insertion.currentTarget(), insertion.isEditable(target) else { return false }
-        live = LiveTyper(target: target, insertion: insertion) { [weak self] chord in
+        let typer = LiveTyper(target: target, insertion: insertion) { [weak self] chord in
             self?.shortcuts.bindings.keys.contains { $0.trigger == .key(chord) } ?? false
         }
+        // Pressing Return in the field sends what is there, like saying the spoken Enter: the dictation ends.
+        typer.onReturn = { [weak self] in
+            guard let self, self.speech.isRecording else { return }
+            self.endedByReturn = true
+            self.speech.finish()
+        }
+        live = typer
         let app = NSRunningApplication(processIdentifier: target.pid)
         liveTargetName = app?.localizedName
         liveTargetIcon = app?.icon
