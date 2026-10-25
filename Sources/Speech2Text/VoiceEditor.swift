@@ -5,6 +5,8 @@ import Foundation
 enum VoiceCommand: Equatable {
     case deleteLastSentence, deleteLastWord, clearAll, undo
     case replace(String, String)
+    /// A punctuation mark said by name ("물음표", "question mark"), put at the end of the dictated text.
+    case mark(Character)
 
     /// Fixed phrases compared without spaces, punctuation, or a polite ending, because recognition spaces Korean
     /// freely ("지워 줘", "지워줘").
@@ -17,8 +19,17 @@ enum VoiceCommand: Equatable {
         (.undo, ["되돌려", "되돌리기", "실행취소", "원래대로", "undo", "undothat"]),
     ]
     private static let politeEndings = ["주세요", "줘요", "줘"]
+    /// Mark names, compared like the phrases. A name with a particle ("물음표를") or inside a sentence is text.
+    private static let markNames: [(Character, [String])] = [
+        ("?", ["물음표", "questionmark"]),
+        ("!", ["느낌표", "exclamationmark", "exclamationpoint"]),
+        (".", ["마침표", "온점", "fullstop", "period"]),
+        (PunctuationStyle.spokenComma, ["쉼표", "반점", "comma"]),
+    ]
+    /// "물음표 찍어", "쉼표 넣어 줘".
+    private static let markVerbs = ["", "찍어", "붙여", "넣어"]
     /// Words the recognizer gets as context so the commands are heard as written.
-    static let terms = ["지워", "되돌려", "바꿔"]
+    static let terms = ["지워", "되돌려", "바꿔", "물음표", "느낌표", "마침표", "쉼표"]
 
     static func normalized(_ text: String) -> String {
         var compact = text.lowercased().filter { !$0.isWhitespace && !$0.isPunctuation }
@@ -33,6 +44,9 @@ enum VoiceCommand: Equatable {
         let compact = normalized(utterance)
         guard !compact.isEmpty else { return nil }
         if let match = phrases.first(where: { $0.1.contains(compact) }) { return match.0 }
+        for (mark, names) in markNames {
+            if names.contains(where: { name in markVerbs.contains { name + $0 == compact } }) { return .mark(mark) }
+        }
         return replacement(in: utterance)
     }
 
@@ -137,8 +151,13 @@ struct VoiceEditor {
 
     /// Only edits Jev may get wrong are asked. Nothing dictated yet, nothing to undo, or a word to replace that was
     /// never said makes the words text; "되돌려" right after an edit undoes it, so a wrong edit is always revertible.
-    private static func settled(_ command: VoiceCommand, before: String, canUndo: Bool, afterEdit: Bool) -> CommandVerdict? {
+    /// A mark name said as its own chunk is settled; one ending a sentence ("드디어 마침표") is asked.
+    private static func settled(_ command: VoiceCommand, before: String, joint: CommandCandidate.Joint, canUndo: Bool,
+                                afterEdit: Bool) -> CommandVerdict? {
         switch command {
+        case .mark:
+            if before.trimmingCharacters(in: .whitespaces).isEmpty { return .text }
+            return joint == .ownChunk ? .command : nil
         case .undo: return canUndo ? (afterEdit ? .command : nil) : .text
         case .replace(let old, _) where before.range(of: old, options: .caseInsensitive) == nil: return .text
         default: return before.trimmingCharacters(in: .whitespaces).isEmpty ? .text : nil
@@ -165,7 +184,8 @@ struct VoiceEditor {
             var before = result.text
             append(candidate.before, to: &before)
             let key = questionKey(turn)
-            switch settled(candidate.command, before: before, canUndo: !undo.isEmpty, afterEdit: afterEdit) ?? verdicts[key] ?? unanswered {
+            switch settled(candidate.command, before: before, joint: candidate.joint, canUndo: !undo.isEmpty,
+                           afterEdit: afterEdit) ?? verdicts[key] ?? unanswered {
             case .command?:
                 result.text = before
                 let outcome = perform(candidate.command, on: &result.text, undo: &undo)
@@ -206,6 +226,11 @@ struct VoiceEditor {
         case .deleteLastSentence: text = removingLastSentence(text)
         case .deleteLastWord: text = removingLastWord(text)
         case .clearAll: text = ""
+        case .mark(let mark):
+            var body = text.trimmingCharacters(in: .whitespaces)
+            while let last = body.last, markEnds.contains(last) { body.removeLast() }
+            guard !body.isEmpty else { return .nothingToChange(command) }
+            text = body + String(mark)
         case .replace(let old, let new):
             guard let range = text.range(of: old, options: [.caseInsensitive, .backwards]) else { return .notFound(old) }
             text.replaceSubrange(range, with: new)
@@ -216,6 +241,8 @@ struct VoiceEditor {
     }
 
     private static let sentenceEnds: Set<Character> = [".", "?", "!", "。", "…"]
+    /// A spoken mark takes the place of the one Soniox put there ("내일 와요. 물음표" -> "내일 와요?").
+    private static let markEnds: Set<Character> = [".", "?", "!", "。", "？", "！", ",", "，", PunctuationStyle.spokenComma]
 
     static func removingLastSentence(_ text: String) -> String {
         var body = text.trimmingCharacters(in: .whitespaces)
