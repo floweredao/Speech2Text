@@ -11,6 +11,7 @@ import Foundation
     private var converter: PCMConverter?
     private var stopped = false
     private let realTime: Bool
+    private var paceDeadline: ContinuousClock.Instant?
 
     init(url: URL, maximumSeconds: Double = 60, realTime: Bool = true) {
         self.url = url
@@ -42,9 +43,17 @@ import Foundation
         // Each chunk is 20 ms of audio; pacing reproduces microphone timing and live partial revisions.
         return AsyncThrowingStream(unfolding: { [weak self, realTime] in
             guard let chunk = try await self?.nextChunk() else { return nil }
-            if realTime { try await Task.sleep(for: .milliseconds(20)) }
+            if realTime { try await self?.pace() }
             return chunk
         })
+    }
+
+    /// Waits until the next 20 ms chunk is due, measured from the first chunk, so time spent decoding does not slow
+    /// the file below microphone pace.
+    private func pace() async throws {
+        let due = (paceDeadline ?? .now) + .milliseconds(20)
+        paceDeadline = due
+        try await Task.sleep(until: due, clock: .continuous)
     }
 
     private func nextChunk() throws -> Data? {

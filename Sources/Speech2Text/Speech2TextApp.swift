@@ -180,15 +180,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             .flatMap { arguments.indices.contains($0 + 1) ? WakeSensitivity(rawValue: arguments[$0 + 1]) : nil }
             ?? model.wakeSensitivity
         guard let modelURL = Bundle.main.url(forResource: "WakeWord", withExtension: nil),
-              let listener = try? WakeWordListener(model: modelURL, audioFile: file),
+              let listener = try? WakeWordListener(model: modelURL, audioFile: file,
+                                                  realTime: arguments.contains("--wake-realtime")),
               let pieces = listener.tokenizer.pieces(for: phrase) else {
             print("WAKE_UNAVAILABLE")
             exit(2)
         }
         var heard = 0
-        listener.onWake = {
+        let launched = ContinuousClock.now
+        listener.onWake = { [weak listener] in
             heard += 1
-            print("WAKE \(heard)")
+            // Milliseconds of audio fed before the phrase was heard, and how long listening took to start.
+            let fed = listener?.feedingSince.map { ContinuousClock.now - $0 } ?? .zero
+            let setup = (listener?.feedingSince ?? launched) - launched
+            print("WAKE \(heard) at_ms=\(Int(fed / .milliseconds(1))) setup_ms=\(Int(setup / .milliseconds(1)))")
         }
         listener.onFailure = { _ in
             print("WAKE_TOTAL \(heard)")
