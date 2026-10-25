@@ -31,7 +31,18 @@ enum VoiceCommand: Equatable {
     /// "물음표 찍어", "쉼표 넣어 줘".
     private static let markVerbs = ["", "찍어", "붙여", "넣어"]
     /// Words the recognizer gets as context so the commands are heard as written.
-    static let terms = ["지워", "되돌려", "바꿔", "물음표", "느낌표", "마침표", "쉼표"]
+    static let terms = ["지워", "되돌려", "바꿔", "물음표", "느낌표", "마침표", "쉼표", "괄호", "괄호 열고", "괄호 닫고"]
+
+    /// The mark a word names ("물음표" -> "?"), so "물음표 지워" finds the "?" in the text.
+    static func markNamed(_ word: String) -> Character? {
+        let compact = normalized(word)
+        return markNames.first { $0.1.contains(compact) }?.0
+    }
+
+    private static func target(_ word: Substring) -> String {
+        let word = word.trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’ "))
+        return markNamed(word).map(String.init) ?? word
+    }
 
     static func normalized(_ text: String) -> String {
         var compact = text.lowercased().filter { !$0.isWhitespace && !$0.isPunctuation }
@@ -53,7 +64,7 @@ enum VoiceCommand: Equatable {
     }
 
     private static let deletePatterns = [
-        #"^\s*(.{1,30}?)\s*(?:을|를|은|는|이|가)?\s*(?:지워|빼|삭제해)\s*(?:주세요|줘요|줘)?\s*[.!?。]*\s*$"#,
+        #"^\s*(.{1,30}?)\s*(?:을|를|은|는|이|가)?\s*(?:지워|빼|삭제해|삭제|없애|떼)\s*(?:버려)?\s*(?:주세요|줘요|줘)?\s*[.!?。]*\s*$"#,
         #"^\s*(?:delete|remove|erase)\s+(.{1,30}?)\s*[.!?]*\s*$"#,
     ].compactMap { try? NSRegularExpression(pattern: $0, options: [.caseInsensitive]) }
 
@@ -62,25 +73,31 @@ enum VoiceCommand: Equatable {
         for pattern in deletePatterns {
             guard let match = pattern.firstMatch(in: utterance, range: range),
                   let target = Range(match.range(at: 1), in: utterance) else { continue }
-            let word = utterance[target].trimmingCharacters(in: CharacterSet(charactersIn: "\"'“”‘’ "))
+            let word = Self.target(utterance[target])
             return word.isEmpty ? nil : .delete(word)
         }
         return nil
     }
 
     private static let replacePatterns = [
-        #"^\s*(.{1,30}?)\s*(?:을|를)\s+(.{1,30}?)\s*(?:으로|로)\s*바꿔\s*(?:주세요|줘요|줘)?\s*[.!?。]*\s*$"#,
+        #"^\s*(.{1,30}?)\s*(?:을|를)\s*(.{1,30}?)\s*(?:으로|로|라고|이라고)\s*(?:바꿔|고쳐|수정해|변경해)\s*(?:주세요|줘요|줘)?\s*[.!?。]*\s*$"#,
         #"^\s*(?:replace|change)\s+(.{1,30}?)\s+(?:with|to)\s+(.{1,30}?)\s*[.!?]*\s*$"#,
+        // Correcting by saying it again: "세 시 아니고 네 시", "아니 세 시 말고 네 시로", "세 시가 아니라 네 시야", "세 시 대신 네 시".
+        #"^\s*(?:아니\s*[,，]?\s+)?(.{1,15}?)\s*(?:이|가)?\s*(?:아니고|아니라|말고|아니[,，]|아니(?=\s)|대신에|대신)\s*[,，]?\s*(.{1,15}?)\s*(?:으로|로|이야|이에요|예요|야|요)?\s*[.!?。]*\s*$"#,
     ].compactMap { try? NSRegularExpression(pattern: $0, options: [.caseInsensitive]) }
 
     private static func replacement(in utterance: String) -> VoiceCommand? {
         let range = NSRange(utterance.startIndex..., in: utterance)
-        for pattern in replacePatterns {
+        for (index, pattern) in replacePatterns.enumerated() {
             guard let match = pattern.firstMatch(in: utterance, range: range),
-                  let old = Range(match.range(at: 1), in: utterance), let new = Range(match.range(at: 2), in: utterance)
+                  let oldRange = Range(match.range(at: 1), in: utterance),
+                  let newRange = Range(match.range(at: 2), in: utterance)
             else { continue }
-            let quotes = CharacterSet(charactersIn: "\"'“”‘’ ")
-            return .replace(utterance[old].trimmingCharacters(in: quotes), utterance[new].trimmingCharacters(in: quotes))
+            let (old, new) = (Self.target(utterance[oldRange]), Self.target(utterance[newRange]))
+            guard !old.isEmpty, !new.isEmpty else { continue }
+            // A one-letter "A 아니고 B" is mostly a word Soniox split ("3. / 시가 아니라 4시"); it would cut into another word.
+            if index == 2, old.count < 2, markNamed(old) == nil { continue }
+            return .replace(old, new)
         }
         return nil
     }
@@ -130,7 +147,8 @@ struct VoiceEditor {
         while index < turns.endIndex {
             let turn = turns[index]
             index += 1
-            let spoken = turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            var spoken = turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if commandsEnabled { spoken = brackets(spoken) }
             guard !spoken.isEmpty else { continue }
             guard commandsEnabled, let (before, after) = trigger.split(spoken) else {
                 append(heldBack(spoken, isLast: index == turns.endIndex && !turn.isFinal, trigger: commandsEnabled ? trigger : nil),
@@ -162,7 +180,33 @@ struct VoiceEditor {
                 append(said, to: &result.text)
             }
         }
+        result.text = tidyBrackets(result.text)
         return result
+    }
+
+    private static let bracketWords: [(NSRegularExpression, String)] = [
+        (#"[,，.。]?\s*(?:소?괄호\s*(?:를|을)?\s*(?:열고|열어서|열어|열기|시작하고|시작)|여는\s*괄호|open\s+(?:paren(?:thesis)?|bracket))\s*[,，.。]?"#, " ("),
+        (#"[,，.。]?\s*(?:소?괄호\s*(?:를|을)?\s*(?:닫고|닫아서|닫아|닫기|끝)|닫는\s*괄호(?:를|을)?|close\s+(?:paren(?:thesis)?|bracket))\s*[,，]?"#, ") "),
+    ].compactMap { pattern, mark in
+        (try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])).map { ($0, mark) }
+    }
+
+    /// "괄호 열고 오후 괄호 닫고" -> "(오후)": brackets said by name inside a sentence, with the marks Soniox put around them.
+    static func brackets(_ spoken: String) -> String {
+        var text = spoken
+        for (regex, mark) in bracketWords {
+            text = regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: mark)
+        }
+        return text == spoken ? spoken : tidyBrackets(text)
+    }
+
+    /// A bracket hugs the words inside it, also when they were said in turns of their own.
+    static func tidyBrackets(_ text: String) -> String {
+        guard text.contains("(") || text.contains(")") else { return text }
+        return text.replacingOccurrences(of: #"\(\s+"#, with: "(", options: .regularExpression)
+            .replacingOccurrences(of: #"[,，.。]?\s+\)"#, with: ")", options: .regularExpression)
+            .replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
     }
 
     static func questionKey(_ turn: SpokenTurn) -> String { "\(turn.pauseBeforeMs ?? -1)|\(turn.text)" }
@@ -179,6 +223,8 @@ struct VoiceEditor {
         case .undo: return canUndo ? (afterEdit ? .command : nil) : .text
         case .replace(let old, _) where VoiceEditor.lastRange(of: old, in: before) == nil: return .text
         case .delete(let old) where VoiceEditor.lastRange(of: old, in: before) == nil: return .text
+        // "물음표 지워" names a mark the text holds; it is never part of a message, and "되돌려" brings it back.
+        case .delete(let old) where old.count == 1 && VoiceEditor.markEnds.contains(old.first!): return .command
         default: return before.trimmingCharacters(in: .whitespaces).isEmpty ? .text : nil
         }
     }
@@ -188,7 +234,7 @@ struct VoiceEditor {
         var undo: [String] = []
         var afterEdit = false
         for turn in turns {
-            let spoken = turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let spoken = brackets(turn.text.trimmingCharacters(in: .whitespacesAndNewlines))
             guard !spoken.isEmpty else { continue }
             guard let candidate = CommandCandidate(spoken) else {
                 append(spoken, to: &result.text)
@@ -218,9 +264,11 @@ struct VoiceEditor {
                 result.text = before
                 result.question = CommandQuestion(key: key, textBefore: before, utterance: candidate.tail,
                                                   joint: candidate.joint, effect: candidate.effect)
+                result.text = tidyBrackets(result.text)
                 return result
             }
         }
+        result.text = tidyBrackets(result.text)
         return result
     }
 
@@ -253,6 +301,8 @@ struct VoiceEditor {
         case .replace(let old, let new):
             guard let range = lastRange(of: old, in: text) else { return .notFound(old) }
             text.replaceSubrange(range, with: new)
+            // "아니, 세 시 말고 네 시": Soniox often ends the sentence before with the "아니" that starts the fix.
+            text = text.replacingOccurrences(of: #"(?<=[.!?。])\s*아니[.,!?。，]*\s*$"#, with: "", options: .regularExpression)
         case .delete(let old):
             guard let range = lastRange(of: old, in: text) else { return .notFound(old) }
             text.removeSubrange(range)
@@ -270,7 +320,10 @@ struct VoiceEditor {
     static func lastRange(of words: String, in text: String) -> Range<String.Index>? {
         let letters = words.filter { !$0.isWhitespace }
         guard !letters.isEmpty else { return nil }
-        let pattern = letters.map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"\s*"#)
+        // A mark matches its full-width form, and a comma also the spoken one.
+        let pattern = letters.count == 1 && markEnds.contains(letters.first!)
+            ? "[" + NSRegularExpression.escapedPattern(for: Self.sameMark(letters.first!)) + "]"
+            : letters.map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"\s*"#)
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
         let match = regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).last
         return match.flatMap { Range($0.range, in: text) }
@@ -278,7 +331,16 @@ struct VoiceEditor {
 
     private static let sentenceEnds: Set<Character> = [".", "?", "!", "。", "…"]
     /// A spoken mark takes the place of the one Soniox put there ("내일 와요. 물음표" -> "내일 와요?").
-    private static let markEnds: Set<Character> = [".", "?", "!", "。", "？", "！", ",", "，", PunctuationStyle.spokenComma]
+    private static func sameMark(_ mark: Character) -> String {
+        switch mark {
+        case "?", "？": "?？"
+        case "!", "！": "!！"
+        case ".", "。": ".。"
+        default: ",，" + String(PunctuationStyle.spokenComma)
+        }
+    }
+
+    fileprivate static let markEnds: Set<Character> = [".", "?", "!", "。", "？", "！", ",", "，", PunctuationStyle.spokenComma]
 
     static func removingLastSentence(_ text: String) -> String {
         var body = text.trimmingCharacters(in: .whitespaces)
