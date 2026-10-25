@@ -45,7 +45,7 @@ final class GlobalShortcutMonitor {
                 refused = Array(keyChords)
             }
         }
-        if settings.usesModifierOnlyTrigger {
+        if settings.usesModifierOnlyTrigger || settings.usesMouseTrigger {
             let mask: NSEvent.EventTypeMask = [.flagsChanged, .keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
             if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] event in
                 MainActor.assumeIsolated { self?.handle(event) }
@@ -101,6 +101,10 @@ final class GlobalShortcutMonitor {
             if let tapped = detector.update(held: held, at: event.timestamp) {
                 deliver(recognizer.press(.modifiers(tapped), at: event.timestamp))
             }
+        } else if event.type == .otherMouseDown, event.buttonNumber >= 2,
+                  recognizer.bindings.keys.contains(where: { $0.trigger == .mouse(event.buttonNumber) }) {
+            detector.otherInput()
+            deliver(recognizer.press(.mouse(event.buttonNumber), at: event.timestamp))
         } else {
             detector.otherInput()
             deliver(recognizer.interrupt())
@@ -141,7 +145,7 @@ final class ShortcutRecorder {
         model.shortcutNote = ""
         model.shortcutPreview = ""
         model.capturingShortcut = action
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged, .otherMouseDown]) { [weak self] event in
             let consumed = MainActor.assumeIsolated { self?.handle(event) ?? false }
             return consumed ? nil : event
         }
@@ -163,6 +167,11 @@ final class ShortcutRecorder {
             return false
         }
         detector.otherInput()
+        if event.type == .otherMouseDown {
+            guard event.buttonNumber >= 2 else { return false }
+            tap(.mouse(event.buttonNumber), at: event.timestamp)
+            return true
+        }
         guard !event.isARepeat else { return true }
         let chord = KeyChord(keyCode: event.keyCode, modifiers: KeyModifiers(rawFlags: event.modifierFlags.rawValue))
         if chord.keyCode == UInt16(kVK_Escape), chord.modifiers.isEmpty {

@@ -115,6 +115,19 @@ import Testing
         #expect(loaded[.cancelDictation] == nil)
     }
 
+    @Test func mouseButtonShortcutIsSavedAndRuns() throws {
+        let defaults = try #require(UserDefaults(suiteName: "ShortcutTests-\(UUID().uuidString)"))
+        var settings = ShortcutSettings.standard
+        settings[.toggleDictation] = Shortcut(trigger: .mouse(3), taps: 1)
+        settings.save(to: defaults)
+        let loaded = ShortcutSettings.load(from: defaults)
+        #expect(loaded == settings)
+        #expect(loaded.usesMouseTrigger && !loaded.usesModifierOnlyTrigger)
+        var recognizer = TapSequenceRecognizer(bindings: loaded.bindings)
+        #expect(recognizer.press(.mouse(3), at: 0) == [.toggleDictation])
+        #expect(recognizer.press(.mouse(4), at: 1) == [])
+    }
+
     @Test func sameShortcutOnAnotherActionIsReported() {
         let settings = ShortcutSettings.standard
         let toggle = settings[.toggleDictation]!

@@ -1,7 +1,19 @@
+import Foundation
 import Testing
 @testable import Speech2Text
 
 @Suite struct WakeListeningTests {
+    /// The wake phrase starts off, an older "on" is turned off once, and the user's later choice is kept.
+    @Test func wakeListeningIsOffByDefaultAndOldOnIsTurnedOffOnce() throws {
+        let fresh = try #require(UserDefaults(suiteName: "WakeTests-\(UUID().uuidString)"))
+        #expect(!AppModel.loadWakeListeningEnabled(fresh))
+        let old = try #require(UserDefaults(suiteName: "WakeTests-\(UUID().uuidString)"))
+        old.set(true, forKey: "wakeListeningEnabled")
+        #expect(!AppModel.loadWakeListeningEnabled(old))
+        old.set(true, forKey: "wakeListeningEnabled")
+        #expect(AppModel.loadWakeListeningEnabled(old))
+    }
+
     /// The idle microphone listens only when the user turned it on, the phrase can be listened for, and no dictation
     /// is running: dictation must never be started a second time over itself.
     @Test(arguments: [
