@@ -918,6 +918,8 @@ struct HistoryList: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.5))
                     .accessibilityAddTraits(.isHeader)
+                    // Starts where the rows' text starts inside the group, so the label heads its own column.
+                    .padding(.leading, Spacing.s)
                 Spacer(minLength: 0)
                 if state.historyCanExpand {
                     Button {
@@ -1071,10 +1073,11 @@ private struct TranscriptViewport: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { textHeight.wrappedValue = $0 }
                 .accessibilityIdentifier("notch-transcript")
         }
-        // The overlay scroller draws over content; a trailing gutter keeps it off the text.
-        .contentMargins(.trailing, Spacing.m, for: .scrollContent)
+        // No scroller (owner report 2026-10-25): with a mouse attached the legacy scroller took a column of its own
+        // beside the header buttons and the text stopped short of them. The text now runs to the same edge as the
+        // header buttons; a line cut at the bottom edge shows there is more, and the view follows the newest words.
         .scrollBounceBehavior(.basedOnSize)
-        .scrollIndicators(.automatic)
+        .scrollIndicators(.never)
         .defaultScrollAnchor(followsTail ? .bottom : .top)
         .defaultScrollAnchor(followsTail ? .bottom : .top, for: .sizeChanges)
         .frame(height: NotchOverlayGeometry.transcriptViewportHeight(textHeight: textHeight.wrappedValue,
