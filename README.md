@@ -16,16 +16,7 @@
   macOS 15+ · Apple silicon
 </p>
 
-<p align="center">
-  <img src="docs/images/demo-poster-en.png" width="720" alt="The overlay after dictation: the spoken sentence was typed into Notes and the result stays on screen">
-</p>
-
-<details>
-<summary><b>Watch the 7-second demo</b></summary>
-
-https://github.com/user-attachments/assets/2625a6bf-4648-42e0-9715-f4987b3af37a
-
-</details>
+https://github.com/user-attachments/assets/5f1df6f2-6a37-4e5f-a5b2-e27e7f1a33fe
 
 ## Why Malgeul
 

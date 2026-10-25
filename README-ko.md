@@ -16,16 +16,7 @@
   macOS 15+ · Apple silicon
 </p>
 
-<p align="center">
-  <img src="docs/images/demo-poster-ko.png" width="720" alt="받아쓰기를 마친 오버레이: 말한 문장이 메모에 입력되고 결과가 남은 모습">
-</p>
-
-<details>
-<summary><b>7초 데모 영상 보기</b></summary>
-
-https://github.com/user-attachments/assets/06da1df2-3689-483b-b5ae-cb34d0913a19
-
-</details>
+https://github.com/user-attachments/assets/0097db70-a883-4484-bc17-0b359e49d932
 
 ## 왜 말글인가요
 
