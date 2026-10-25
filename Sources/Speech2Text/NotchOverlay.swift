@@ -124,7 +124,7 @@ struct DictationDisplayState: Equatable {
     /// unconfirmed text heard before an error is never history.
     var showsRetainedLine: Bool { retainedKind == .unfinished || (retainedKind == .previous && !historyPastesNewest) }
 
-    /// Rows the history group shows: the newest one until the user expands it.
+    /// Rows the history group shows: none until the user expands it.
     func historyRows(expanded: Bool) -> [DictationRecord] {
         expanded ? history : Array(history.prefix(NotchOverlayGeometry.collapsedHistoryRows))
     }
@@ -191,8 +191,9 @@ enum NotchOverlayGeometry {
     /// The transcript grows to this many lines of its text style, then scrolls. The view measures the lines,
     /// so the cap follows the system text size.
     static let maxTranscriptLines = 5
-    /// History rows shown until the user expands the group (owner decision 2026-10-23: one row until expanded).
-    static let collapsedHistoryRows = 1
+    /// History rows shown until the user expands the group (owner request 2026-10-25: none, only the label and the
+    /// expand button, replacing the 2026-10-23 one-row decision).
+    static let collapsedHistoryRows = 0
     /// Used only until the five-line sample has been measured.
     static let fallbackMaxTranscriptHeight: CGFloat = 96
     /// Smallest hit area of an overlay button, whatever its visible size.
@@ -876,8 +877,8 @@ private struct LevelMeter: View {
     }
 }
 
-/// Every earlier dictation in one labelled inset group, so none reads as the current text. Collapsed it shows only the
-/// newest; the round expand button (owner request 2026-10-23, 2026-10-24, 2026-10-25) shows the rest. Every row has the
+/// Every earlier dictation in one labelled inset group, so none reads as the current text. Collapsed it shows only its
+/// label (owner request 2026-10-25); the round expand button (owner request 2026-10-23, 2026-10-24, 2026-10-25) shows the rest. Every row has the
 /// same text style and color and grows to fit its whole text (owner request 2026-10-25: no dimmer, smaller rows, no
 /// lines squeezed into one row). A new dictation folds it back.
 ///
@@ -894,7 +895,6 @@ struct HistoryList: View {
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
     private let showsAll: State<Bool>
     private let listHeight = State(initialValue: CGFloat(0))
-    private let newestHeight = State(initialValue: CGFloat(0))
     static let expandedMaxHeight: CGFloat = 220
 
     init(state: DictationDisplayState, entering: AnyTransition, expanded: Bool = false, paste: @escaping () -> Void,
@@ -910,9 +910,9 @@ struct HistoryList: View {
     var body: some View {
         let expanded = showsAll.wrappedValue && state.historyCanExpand
         let motion = reduceMotion ? OverlayMotion.reduced : OverlayMotion.layout
-        let shownHeight = expanded ? listHeight.wrappedValue : newestHeight.wrappedValue
-        let height = min(max(shownHeight, 1), Self.expandedMaxHeight)
-        VStack(alignment: .leading, spacing: Spacing.xs) {
+        let shownHeight = expanded ? listHeight.wrappedValue : 0
+        let height = min(shownHeight, Self.expandedMaxHeight)
+        VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center) {
                 Text(String(localized: "받아쓰기 기록"))
                     .font(.caption.weight(.semibold))
@@ -957,7 +957,8 @@ struct HistoryList: View {
                 .scrollIndicators(.never)
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollDisabled(shownHeight <= Self.expandedMaxHeight)
-                .scrollEdgeFade()
+                // Folded, the rows below the newest are hidden, so there is nothing more to show.
+                .scrollEdgeFade(enabled: expanded && shownHeight > Self.expandedMaxHeight)
                 .frame(height: height, alignment: .top)
                 .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -966,6 +967,11 @@ struct HistoryList: View {
                 // 2026-10-25: one column for every round button).
                 .padding(.leading, -Self.groupInset)
                 .padding(.trailing, -(Self.groupInset + Spacing.xxs))
+                // Folded, the group takes no room at all: only the label and its expand button show.
+                .opacity(expanded ? 1 : 0)
+                .padding(.top, expanded ? Spacing.xs : 0)
+                .accessibilityHidden(!expanded)
+                .allowsHitTesting(expanded)
                 .onChange(of: expanded) { _, open in
                     if !open, let first = state.history.first { withAnimation(motion) { proxy.scrollTo(first.id, anchor: .top) } }
                 }
@@ -985,7 +991,7 @@ struct HistoryList: View {
     private func rows(_ records: [DictationRecord], expanded: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(records.enumerated()), id: \.element.id) { depth, record in
-                let hidden = depth > 0 && !expanded
+                let hidden = !expanded
                 VStack(spacing: 0) {
                     if depth > 0 {
                         // Across the whole row, from the text's edge to the copy circle's edge.
@@ -1018,9 +1024,6 @@ struct HistoryList: View {
                     .padding(.trailing, Self.groupInset - Spacing.xxs)
                     .padding(.vertical, Spacing.xxs)
                 }
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                    if depth == 0 { newestHeight.wrappedValue = height }
-                }
                 .id(record.id)
                 .opacity(hidden ? 0 : 1)
                 .accessibilityHidden(hidden)
@@ -1042,24 +1045,24 @@ struct HistoryList: View {
 /// Fades the top or bottom edge of a scroll view while there is more content past it, so a list with no scroller still
 /// shows that it continues (HIG Scroll views: show that more content exists; StyleGallery scroll-shadow pattern).
 private struct ScrollEdgeFade: ViewModifier {
+    var enabled = true
     private let edges = State(initialValue: (top: false, bottom: false))
     static let length: CGFloat = 24
 
     func body(content: Content) -> some View {
         content
             .onScrollGeometryChange(for: [Bool].self) { geo in
-                let offset = geo.contentOffset.y + geo.contentInsets.top
-                let hidden = geo.contentSize.height - geo.containerSize.height
-                return [offset > 1, hidden - offset > 1]
+                // Measured on the visible part of the content, so content insets and rounding never read as more.
+                [geo.visibleRect.minY > 1, geo.visibleRect.maxY < geo.contentSize.height - 1]
             } action: { _, now in
                 withAnimation(.easeOut(duration: 0.15)) { edges.wrappedValue = (now[0], now[1]) }
             }
             .mask {
                 VStack(spacing: 0) {
-                    LinearGradient(colors: [.black.opacity(edges.wrappedValue.top ? 0 : 1), .black],
+                    LinearGradient(colors: [.black.opacity(enabled && edges.wrappedValue.top ? 0 : 1), .black],
                                    startPoint: .top, endPoint: .bottom).frame(height: Self.length)
                     Color.black
-                    LinearGradient(colors: [.black, .black.opacity(edges.wrappedValue.bottom ? 0 : 1)],
+                    LinearGradient(colors: [.black, .black.opacity(enabled && edges.wrappedValue.bottom ? 0 : 1)],
                                    startPoint: .top, endPoint: .bottom).frame(height: Self.length)
                 }
             }
@@ -1067,7 +1070,7 @@ private struct ScrollEdgeFade: ViewModifier {
 }
 
 extension View {
-    func scrollEdgeFade() -> some View { modifier(ScrollEdgeFade()) }
+    func scrollEdgeFade(enabled: Bool = true) -> some View { modifier(ScrollEdgeFade(enabled: enabled)) }
 }
 
 /// Scrolls only when the measured text exceeds the viewport, so short text leaves no gutter.

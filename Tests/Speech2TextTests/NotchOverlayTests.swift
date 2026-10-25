@@ -234,19 +234,19 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(listening.targetName == "Notes")
     }
 
-    /// Owner request (2026-10-23, 2026-10-24): the history shows one row until its expand button is pressed, and the
-    /// button shows every row, while dictating too.
-    @Test func historyShowsOneRowUntilExpanded() {
+    /// Owner request (2026-10-25, replacing 2026-10-23's one row): the history shows no row until its expand button is
+    /// pressed, and the button shows every row, while dictating too.
+    @Test func historyShowsNoRowUntilExpanded() {
         let result = display(.idle, transcript: previous, session: session(.completed, current: true), history: records)
-        #expect(result.historyRows(expanded: false) == [records[1]])
+        #expect(result.historyRows(expanded: false).isEmpty)
         #expect(result.historyRows(expanded: true) == Array(records[1...]))
         #expect(result.historyCanExpand)
         let recording = display(.recording, transcript: live, session: session(current: true), history: records)
-        #expect(recording.historyRows(expanded: false) == [records[0]])
+        #expect(recording.historyRows(expanded: false).isEmpty)
         #expect(recording.historyRows(expanded: true) == records)
         let single = display(.idle, transcript: previous, session: session(.completed, current: true),
                              history: Array(records[0...1]))
-        #expect(!single.historyCanExpand)
+        #expect(single.historyCanExpand)
     }
 
     /// Owner request (2026-10-24): no separate "Previous dictation" line beside "Dictation History"; the previous
@@ -258,7 +258,7 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
             #expect(state.retainedKind == .previous)
             #expect(!state.showsRetainedLine)
             #expect(state.history == records)
-            #expect(state.historyRows(expanded: false) == [records[0]])
+            #expect(state.historyRows(expanded: false).isEmpty)
             #expect(state.historyPastesNewest)
         }
         let unfinished = display(.idle, error: true, transcript: live, session: session(.failed, current: true), history: records)
