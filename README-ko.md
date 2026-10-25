@@ -16,6 +16,12 @@
   macOS 15+ · Apple silicon
 </p>
 
+<p align="center">
+  <img src="docs/images/demo-ko.webp" width="720" alt="노치 아래에서 듣는 동안 문장이 입력되고 받아쓰기를 마치는 모습">
+</p>
+
+같은 장면을 영상으로도 볼 수 있어요.
+
 https://github.com/user-attachments/assets/0097db70-a883-4484-bc17-0b359e49d932
 
 ## 왜 말글인가요

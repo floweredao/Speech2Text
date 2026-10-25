@@ -16,6 +16,12 @@
   macOS 15+ · Apple silicon
 </p>
 
+<p align="center">
+  <img src="docs/images/demo-en.webp" width="720" alt="Malgeul listening under the notch while a sentence is typed, then finishing">
+</p>
+
+The same demo as a video:
+
 https://github.com/user-attachments/assets/5f1df6f2-6a37-4e5f-a5b2-e27e7f1a33fe
 
 ## Why Malgeul

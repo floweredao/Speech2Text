@@ -24,7 +24,13 @@ for lang in en ko; do
   ffmpeg -y -loglevel error -framerate 9 -i "$WORK/$lang/frames-$lang/frame-%03d.png" \
     -vf "scale=1280:-2:flags=lanczos,tpad=stop_mode=clone:stop_duration=1.5,fps=30,crop=1280:320:0:16,trim=start=0.8,setpts=PTS-STARTPTS,format=yuv420p" -c:v libx264 -preset slow -crf 18 \
     -movflags +faststart -an "$WORK/$lang/demo-$lang.mp4"
-  cp "$WORK/$lang"/*.png docs/images/
+  # An animated WebP plays by itself everywhere, including iPhone Safari and the GitHub app, where the uploaded
+  # video shows only an empty box until tapped. The README shows it first and the video right under it.
+  mkdir -p "$WORK/$lang/webp"
+  ffmpeg -y -loglevel error -i "$WORK/$lang/demo-$lang.mp4" -vf "fps=15,scale=960:-1:flags=lanczos" "$WORK/$lang/webp/f%03d.png"
+  img2webp -loop 0 -lossy -q 82 -m 6 -d 67 "$WORK/$lang"/webp/f*.png -o "$WORK/$lang/demo-$lang.webp"
+  rm -rf "$WORK/$lang/webp"
+  cp "$WORK/$lang"/*.png "$WORK/$lang/demo-$lang.webp" docs/images/
   mkdir -p docs/videos
   cp "$WORK/$lang/demo-$lang.mp4" docs/videos/
 done
