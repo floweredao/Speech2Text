@@ -21,7 +21,7 @@
 </p>
 
 <details>
-<summary><b>▶ Watch the 7-second demo</b></summary>
+<summary><b>Watch the 7-second demo</b></summary>
 
 https://github.com/user-attachments/assets/2625a6bf-4648-42e0-9715-f4987b3af37a
 

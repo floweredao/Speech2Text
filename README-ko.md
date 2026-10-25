@@ -21,7 +21,7 @@
 </p>
 
 <details>
-<summary><b>▶ 7초 데모 영상 보기</b></summary>
+<summary><b>7초 데모 영상 보기</b></summary>
 
 https://github.com/user-attachments/assets/06da1df2-3689-483b-b5ae-cb34d0913a19
 
