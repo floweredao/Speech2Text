@@ -37,8 +37,8 @@ import Testing
 
     /// A phrase the user chose is matched as written: the default's sound-alikes do not carry over to it.
     @Test func aChosenPhraseIgnoresTheDefaultsSoundAlikes() {
-        let matches = AppModel.wakeMatcher(for: "Hey Jarvis")
-        #expect(matches("hey jarvis, start"))
+        let matches = AppModel.wakeMatcher(for: "Hey Speech")
+        #expect(matches("hey speech, start"))
         #expect(!matches("에이 컴퓨터"))
     }
 

@@ -17,12 +17,12 @@ import Testing
     }
 
     @Test func splitKeepsTheDictatedPunctuationAndDropsTheLeadIn() throws {
-        let trigger = SpokenPhrase("자비스")
-        let split = try #require(trigger.split("회의는 세 시예요. 자비스, 지워 줘."))
+        let trigger = SpokenPhrase("편집기")
+        let split = try #require(trigger.split("회의는 세 시예요. 편집기, 지워 줘."))
         #expect(split.before == "회의는 세 시예요.")
         #expect(split.after == "지워 줘")
-        #expect(trigger.split("자비스가 왔어요") != nil)
-        #expect(trigger.split("오늘은 자비 없이") == nil)
+        #expect(trigger.split("편집기가 왔어요") != nil)
+        #expect(trigger.split("오늘은 편집 없이") == nil)
     }
 
     /// Live typing waits while the end of the text could still become the phrase.
