@@ -1,6 +1,7 @@
 import AppKit
 import DictationSpeech
 import Observation
+import Security
 
 @MainActor @Observable
 final class AppModel {
@@ -111,11 +112,10 @@ final class AppModel {
     private var recognitionTerms: [String] {
         if let contextTermsOverride { return contextTermsOverride }
         let commands = (spokenEnter?.terms ?? []) + (voiceEditingEnabled ? VoiceCommand.terms : [])
-            + (judgeMode == .trigger ? trigger.terms : [])
             + (wakeListeningEnabled ? wakeSpoken.terms : [])
         return (commands + addedContextTerms).reduce(dictionary) { DictionaryTerms.adding($1, to: $0) }
     }
-    /// Placeholders until the owner settles on the app's name and the trigger word; Settings can change both.
+    /// Placeholders until the owner settles on the app's name; Settings can change the wake phrase.
     /// The on-device model hears real English words far better than made-up names (DESIGN.md, "호출어").
     nonisolated static let defaultWakePhrase = "Hey Computer"
     nonisolated static let defaultWakeSpellings = ["헤이 컴퓨터"]
@@ -134,7 +134,6 @@ final class AppModel {
         let spoken = SpokenPhrase(phrase, alternates: isDefault ? defaultWakeSpellings + defaultWakeSoundAlikes : [])
         return { spoken.split($0) != nil }
     }
-    static let defaultTriggerWord = "자비스"
     /// Starts dictation when heard while idle and finishes it when said at the end of a dictation. Only a phrase
     /// changed from the default is stored, so a new default (the app's final name) reaches everyone who kept it.
     var wakePhrase = UserDefaults.standard.string(forKey: "wakePhrase") ?? AppModel.defaultWakePhrase {
@@ -149,14 +148,6 @@ final class AppModel {
         let isDefault = wakePhrase.trimmingCharacters(in: .whitespaces).lowercased() == Self.defaultWakePhrase.lowercased()
         return SpokenPhrase(wakePhrase, alternates: isDefault ? Self.defaultWakeSpellings : [])
     }
-    /// Said right before a voice command ("<trigger> 지워") so the command is not taken for dictated words.
-    var triggerWord = UserDefaults.standard.string(forKey: "triggerWord") ?? AppModel.defaultTriggerWord {
-        didSet {
-            Self.storeUnlessDefault(triggerWord, Self.defaultTriggerWord, key: "triggerWord")
-            speech.vocabulary = recognitionTerms
-        }
-    }
-    var trigger: SpokenPhrase { SpokenPhrase(triggerWord) }
     private static func storeUnlessDefault(_ value: String, _ standard: String, key: String) {
         let custom = value.trimmingCharacters(in: .whitespacesAndNewlines) != standard
         UserDefaults.standard.set(custom ? value : nil, forKey: key)
@@ -192,14 +183,21 @@ final class AppModel {
     @ObservationIgnored var onWake: (() -> Void)?
     @ObservationIgnored private var wakeListener: WakeWordListener?
     @ObservationIgnored private var wakeAllowed = false
-    /// How a spoken edit is told from dictated words; `.off` types everything. Settings written before this choice
-    /// existed keep their voice-editing switch: on is the trigger word, off is off.
-    var commandJudge = UserDefaults.standard.string(forKey: "commandJudge").flatMap(CommandJudgeMode.init)
-        ?? (UserDefaults.standard.object(forKey: "voiceEditingEnabled") as? Bool == false ? .off : .trigger) {
+    /// How a spoken edit is told from dictated words; `.off` types everything.
+    var commandJudge = CommandJudgeMode.load() {
         didSet {
             UserDefaults.standard.set(commandJudge.rawValue, forKey: "commandJudge")
             speech.vocabulary = recognitionTerms
         }
+    }
+    /// The trigger actions Jev may perform on the text; Return is `spokenEnterEnabled`.
+    var voiceActions = VoiceAction.load() {
+        didSet { VoiceAction.store(voiceActions) }
+    }
+    func isOn(_ action: VoiceAction) -> Bool { action == .enter ? spokenEnterEnabled : voiceActions.contains(action) }
+    func set(_ action: VoiceAction, on: Bool) {
+        if action == .enter { spokenEnterEnabled = on }
+        else if on { voiceActions.insert(action) } else { voiceActions.remove(action) }
     }
     /// Diagnostics (`--command-judge`) use another mode for one run without changing the setting.
     @ObservationIgnored var commandJudgeOverride: CommandJudgeMode? {
@@ -218,9 +216,16 @@ final class AppModel {
         didSet { UserDefaults.standard.set(punctuationStyle.rawValue, forKey: "punctuationStyle") }
     }
     var voiceEditingEnabled: Bool { judgeMode != .off }
-    /// The Jev API key from this app's Keychain.
-    var jevKey = ""
+    /// The Jev API key from this app's Keychain; empty when none is stored.
+    private(set) var jevKey = ""
     private(set) var jevKeyMessage = ""
+    private(set) var jevKeyFailed = false
+    /// The last answer of a key check, until the key is saved or deleted again.
+    private(set) var keyChecks: [ServiceKey: KeyCheck] = [:]
+    private(set) var checkingKeys: Set<ServiceKey> = []
+    @ObservationIgnored var keyChecker = KeyChecker()
+    /// Opens Settings on the key management pane.
+    @ObservationIgnored var keysAction: (() -> Void)?
     /// Diagnostics (`--jev-key-file`) use another key for one run without storing it.
     @ObservationIgnored var jevKeyOverride: String?
     @ObservationIgnored var jevJudge = JevJudge()
@@ -235,9 +240,8 @@ final class AppModel {
     /// Commands already reported for the current field, so each one is announced once.
     @ObservationIgnored private var reportedEdits = 0
     private var spokenEnter: SpokenEnter? {
-        spokenEnterEnabled
-            ? SpokenEnter(setting: spokenEnterPhrase, shownDefault: String(localized: "엔터 보내기"),
-                          trigger: judgeMode == .jev ? nil : trigger) : nil
+        spokenEnterEnabled && judgeMode != .off
+            ? SpokenEnter(setting: spokenEnterPhrase, shownDefault: String(localized: "엔터 보내기")) : nil
     }
     /// Kept current by a CoreAudio listener, so Settings reflects plugged-in or removed microphones at once.
     private(set) var inputDevices = AudioInputDevices.all()
@@ -414,8 +418,7 @@ final class AppModel {
     private func edited(from cut: Int?) -> VoiceEditor.Result {
         let gate: VoiceEditor.Gate = switch judgeMode {
         case .off: .off
-        case .trigger: .trigger(trigger)
-        case .jev: .judged(verdicts, unanswered: unansweredAsText ? .text : nil)
+        case .jev: .judged(verdicts, unanswered: unansweredAsText ? .text : nil, actions: voiceActions)
         }
         let result = VoiceEditor.apply(speech.spokenTurns(from: cut), gate: gate)
         if let question = result.question { ask(question) }
@@ -423,9 +426,7 @@ final class AppModel {
     }
 
     /// What to say to undo a voice edit.
-    var undoPhrase: String {
-        judgeMode == .trigger ? "\(triggerWord) " + String(localized: "되돌려") : String(localized: "되돌려")
-    }
+    var undoPhrase: String { String(localized: "되돌려") }
 
     private func ask(_ question: CommandQuestion) {
         guard verdicts[question.key] == nil, judgeTasks[question.key] == nil else { return }
@@ -471,11 +472,64 @@ final class AppModel {
         unansweredAsText = false
     }
 
-    func saveJevKey() {
-        jevKeyMessage = JevKeychain.save(jevKey) ? String(localized: "Jev 키를 저장했어요.") : String(localized: "Jev 키를 저장하지 못했어요.")
+    /// Stores a pasted Jev key in this app's Keychain; the key in use changes only once it is stored.
+    @discardableResult
+    func saveJevKey(_ draft: String) -> Bool {
+        let key = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let saved = !key.isEmpty && JevKeychain.save(key)
+        if saved { jevKey = key }
+        keyChecks[.jev] = nil
+        jevKeyFailed = !saved
+        jevKeyMessage = saved ? String(localized: "Jev 키를 저장했어요.") : String(localized: "Jev 키를 저장하지 못했어요.")
+        return saved
+    }
+
+    func deleteJevKey() {
+        let status = JevKeychain.delete()
+        let deleted = status == errSecSuccess || status == errSecItemNotFound
+        if deleted { jevKey = "" }
+        keyChecks[.jev] = nil
+        jevKeyFailed = !deleted
+        jevKeyMessage = deleted ? String(localized: "저장된 Jev 키를 지웠어요.") : String(localized: "Jev 키를 지우지 못했어요.")
     }
 
     func loadJevKey() { jevKey = JevKeychain.load() ?? "" }
+
+    /// Stores a pasted Soniox key in this app's Keychain.
+    func saveSonioxKey(_ draft: String) async -> Bool {
+        let key = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return false }
+        keyChecks[.soniox] = nil
+        apiKey = key
+        await speech.saveKey()
+        return !speech.keyFailed
+    }
+
+    func storedKey(_ service: ServiceKey) -> String {
+        switch service {
+        case .soniox: apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .jev: jevKey
+        }
+    }
+
+    /// Asks the service whether the stored key works, with a request that uses no credit.
+    func checkKey(_ service: ServiceKey) async {
+        let key = storedKey(service)
+        guard !key.isEmpty, !checkingKeys.contains(service) else { return }
+        checkingKeys.insert(service)
+        let result = await keyChecker.check(service, key: key)
+        checkingKeys.remove(service)
+        // A key saved or deleted while the check ran makes its answer stale.
+        guard storedKey(service) == key else { return }
+        keyChecks[service] = result
+    }
+
+    func forgetKeyCheck(_ service: ServiceKey) { keyChecks[service] = nil }
+
+    func openKeyManagement() {
+        settingsFocused = true
+        keysAction?()
+    }
 
     private enum EnterCommand {
         case none, said(before: String), pending(before: String), typed
@@ -485,7 +539,7 @@ final class AppModel {
     /// it is pending, and the phrase is held back from the field.
     private func enterCommand(in text: String) -> EnterCommand {
         guard let before = spokenEnter?.strip(text) else { return .none }
-        guard judgeMode == .jev, !before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .said(before: before) }
+        guard !before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .said(before: before) }
         let last = speech.spokenTurns(from: nil).last.map(VoiceEditor.questionKey) ?? ""
         let question = CommandQuestion(key: "enter|" + last, textBefore: before, utterance: spokenEnterPhrase,
                                        joint: .ownChunk, effect: "press Return to send the dictated text")
@@ -791,6 +845,8 @@ final class AppModel {
         let microphone = AudioInputDevice(uid: "demo-mic", name: "MacBook Pro Microphone")
         apiKey = "soniox-demo-synthetic-api-key-0123456789"
         jevKey = "jev-demo-synthetic-api-key-0123456789"
+        // `-demo-no-keys YES` shows what Settings says before any key is saved.
+        if UserDefaults.standard.bool(forKey: "demo-no-keys") { (apiKey, jevKey) = ("", "") }
         accessibilityGranted = true
         microphoneAccessOverride = .granted
         defaultInputDevice = microphone

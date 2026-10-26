@@ -229,17 +229,14 @@ enum VoiceCommand: Equatable {
     }
 }
 
-/// Turns spoken turns into the text to type. With a trigger word a command only counts right after it ("<trigger> 지워"),
-/// in the same turn or, when the speaker paused after the trigger word, as the next turn; the same words without it
-/// are ordinary text. Words after the trigger word that are no command are typed as said. With Jev a finished turn
-/// ending in a command waits for Jev's verdict. See DESIGN.md, "말로 고치기".
+/// Turns spoken turns into the text to type. A finished turn ending in a command of an action that is on waits for
+/// Jev's verdict; commands of actions that are off are typed as said. See DESIGN.md, "말로 고치기".
 struct VoiceEditor {
     enum Gate: Equatable {
         case off
-        case trigger(SpokenPhrase)
         /// Verdicts Jev gave so far, by `CommandQuestion.key`; `unanswered` settles turns not answered yet instead of
-        /// waiting for them.
-        case judged([String: CommandVerdict], unanswered: CommandVerdict? = nil)
+        /// waiting for them. Only commands of `actions` are performed or asked about.
+        case judged([String: CommandVerdict], unanswered: CommandVerdict? = nil, actions: Set<VoiceAction> = VoiceAction.edits)
     }
 
     enum Outcome: Equatable {
@@ -259,52 +256,13 @@ struct VoiceEditor {
         var saidMoreAfterEdit: Bool { textAtLastEdit.map { $0 != text } ?? false }
     }
 
-    static func apply(_ turns: [SpokenTurn], commandsEnabled: Bool, trigger: SpokenPhrase) -> Result {
-        apply(turns, gate: commandsEnabled ? .trigger(trigger) : .off)
-    }
-
     static func apply(_ turns: [SpokenTurn], gate: Gate) -> Result {
-        if case .judged(let verdicts, let unanswered) = gate { return judged(turns, verdicts: verdicts, unanswered: unanswered) }
-        var commandsEnabled = false, trigger = SpokenPhrase("")
-        if case .trigger(let phrase) = gate { (commandsEnabled, trigger) = (true, phrase) }
+        if case .judged(let verdicts, let unanswered, let actions) = gate {
+            return judged(turns, verdicts: verdicts, unanswered: unanswered, actions: actions)
+        }
         var result = Result()
-        var undo: [String] = []
-        var index = turns.startIndex
-        while index < turns.endIndex {
-            let turn = turns[index]
-            index += 1
-            var spoken = turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if commandsEnabled { spoken = brackets(spoken) }
-            guard !spoken.isEmpty else { continue }
-            guard commandsEnabled, let (before, after) = trigger.split(spoken) else {
-                append(heldBack(spoken, isLast: index == turns.endIndex && !turn.isFinal, trigger: commandsEnabled ? trigger : nil),
-                       to: &result.text)
-                continue
-            }
-            var said = spoken, command = after, isFinal = turn.isFinal
-            if after.isEmpty {
-                // The speaker paused after the trigger word; the command is the next turn, still to come when none.
-                guard index < turns.endIndex else {
-                    append(before, to: &result.text)
-                    continue
-                }
-                command = turns[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
-                said += " " + command
-                isFinal = turns[index].isFinal
-                index += 1
-            }
-            // Nothing after the trigger word is typed before Soniox finalizes it: it may still become a command.
-            guard isFinal else {
-                append(before, to: &result.text)
-                continue
-            }
-            if let parsed = VoiceCommand.parse(command) {
-                append(before, to: &result.text)
-                result.outcomes.append(perform(parsed, on: &result.text, undo: &undo))
-                result.textAtLastEdit = result.text
-            } else {
-                append(said, to: &result.text)
-            }
+        for turn in turns {
+            append(turn.text.trimmingCharacters(in: .whitespacesAndNewlines), to: &result.text)
         }
         result.text = tidyBrackets(result.text)
         return result
@@ -410,7 +368,8 @@ struct VoiceEditor {
         return joined
     }
 
-    private static func judged(_ turns: [SpokenTurn], verdicts: [String: CommandVerdict], unanswered: CommandVerdict?) -> Result {
+    private static func judged(_ turns: [SpokenTurn], verdicts: [String: CommandVerdict], unanswered: CommandVerdict?,
+                               actions: Set<VoiceAction>) -> Result {
         var result = Result()
         var undo: [String] = []
         var afterEdit = false
@@ -419,12 +378,14 @@ struct VoiceEditor {
             guard !spoken.isEmpty else { continue }
             // "지워. 되돌려": the speaker took the edit back in the same breath, so neither is typed.
             if let candidate = CommandCandidate(spoken), turn.isFinal, case .undo = candidate.command, undo.isEmpty,
-               let taken = CommandCandidate(candidate.before), taken.command != .undo {
+               actions.contains(.undo), let taken = CommandCandidate(candidate.before), taken.command != .undo,
+               actions.contains(taken.command.action) {
                 append(taken.before, to: &result.text)
                 afterEdit = false
                 continue
             }
-            guard let candidate = CommandCandidate(spoken) else {
+            // A command whose action is off is ordinary words, never held back or asked about.
+            guard let candidate = CommandCandidate(spoken), actions.contains(candidate.command.action) else {
                 append(spoken, to: &result.text)
                 afterEdit = false
                 continue
@@ -458,12 +419,6 @@ struct VoiceEditor {
         }
         result.text = tidyBrackets(result.text)
         return result
-    }
-
-    /// A provisional last turn ending in the start of the trigger word waits for the rest before it is typed.
-    private static func heldBack(_ spoken: String, isLast: Bool, trigger: SpokenPhrase?) -> String {
-        guard isLast, let trigger, let start = trigger.partialSuffixStart(spoken) else { return spoken }
-        return String(spoken[..<start]).trimmingCharacters(in: .whitespaces)
     }
 
     private static func append(_ words: String, to text: inout String) {

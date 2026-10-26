@@ -27,7 +27,7 @@ https://github.com/user-attachments/assets/fb68b1a6-9bd5-4914-9324-e3e74c0a9a5f
 ## 설치
 
 1. [최신 릴리스](https://github.com/floweredao/Speech2Text/releases/latest)에서 `.zip`을 받아 앱을 응용 프로그램 폴더로 옮겨요.
-2. 앱을 열고 설정에 [Soniox](https://soniox.com) API 키를 저장해요.
+2. 앱을 열고 설정 › 키 관리에 [Soniox](https://soniox.com) API 키를 저장해요.
 3. 마이크와 손쉬운 사용을 허용해요.
 
 ## 쓰는 법
@@ -50,11 +50,11 @@ https://github.com/user-attachments/assets/fb68b1a6-9bd5-4914-9324-e3e74c0a9a5f
 | "A를 B로 바꿔" | 마지막 A를 B로 바꿔요 |
 | "엔터 보내기" · "send enter" | 끝내고 Return을 눌러요 |
 
-명령인지 글인지는 설정 › 입력 › **말로 고치기**에서 고른 방식이 정해요.
+명령인지 글인지는 설정 › 일반 › **말로 고치기**에서 정해요.
 
-- **Jev가 판단** (추천): 명령만 말하면 TypeSafe Jev가 앞 글을 보고 판단해요. 애매하면 글로 써요. Jev API 키가 필요해요.
-- **트리거 단어**: 정해 둔 단어 바로 뒤에 말할 때만 명령이에요. 단어는 설정에서 바꿔요.
-- **끄기**: 모두 글로 써요.
+- **Jev로 명령 알아듣기**: 명령만 말하면 TypeSafe Jev가 앞 글을 보고 판단해요. 애매하면 글로 써요. 끄면 모두 글로 써요.
+- **동작 고르기**: 명령이 할 일(지우기, 모두 지우기, 고치기, 되돌리기, 문장부호 넣기, 엔터 누르기)을 체크해요. 끈 동작은 글로 쓰고 Jev에 보내지 않아요.
+- **내 Jev 키**: [TypeSafe 콘솔](https://console.typesafe.ai)에서 만들어 설정 › 키 관리에 붙여넣어요. 키가 없으면 명령도 글로 써요.
 
 ## 말로 시작하기
 
@@ -98,7 +98,7 @@ https://github.com/user-attachments/assets/fb68b1a6-9bd5-4914-9324-e3e74c0a9a5f
 <details>
 <summary><b>권한과 준비</b></summary>
 
-- **Soniox API 키**: 이 앱 전용 키체인에만 저장해요. Soniox 요금은 따로 들어요.
+- **API 키**: Soniox·Jev 키는 이 앱 전용 키체인에만 저장하고 파일로 남기지 않아요. 설정 › 키 관리에서 확인하거나 지워요. Soniox·TypeSafe 요금은 따로 들어요.
 - **마이크**: 처음 녹음할 때 macOS가 물어요. 설정 › **사용할 마이크**에서 골라요.
 - **손쉬운 사용**: 다른 앱에 바로 쓰려면 필요해요. 설정에서 **허용 요청**을 눌러요.
 - macOS 27에서는 이 권한 이름이 **Device Control and Data Management**예요.

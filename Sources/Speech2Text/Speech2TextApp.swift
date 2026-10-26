@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private let model = AppModel()
     private var overlay: NotchOverlayController?
     private var settings: NSWindow?
+    private var settingsPanes: SettingsPanesController?
     private var statusItem: NSStatusItem?
     private let shortcuts = GlobalShortcutMonitor()
     private var updater: AppUpdater?
@@ -42,6 +43,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             print(key.map(JevKeychain.save) == true ? "JEV_KEY_STORED" : "JEV_KEY_NOT_STORED")
             exit(0)
         }
+        // Diagnostics: asks Soniox or TypeSafe whether a key works (the stored one, or one read from a file) with a
+        // request that uses no credit, prints KEY_VALID, KEY_REFUSED or KEY_CHECK_FAILED, never the key, then quits.
+        if let name = Self.value(after: "--check-key", in: launchArguments) {
+            guard let service = ServiceKey(rawValue: name) else {
+                print("KEY_CHECK_FAILED unknown service")
+                exit(2)
+            }
+            let key = Self.value(after: "--key-file", in: launchArguments)
+                .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+            Task {
+                // The Keychain is read only without a key file: another build reading the installed app's item asks
+                // for the login password.
+                var stored = ""
+                if key == nil {
+                    if service == .jev { stored = JevKeychain.load() ?? "" } else {
+                        await model.speech.loadKey()
+                        stored = model.apiKey
+                    }
+                }
+                let result = await KeyChecker().check(service, key: key ?? stored)
+                switch result {
+                case .valid: print("KEY_VALID")
+                case .refused: print("KEY_REFUSED")
+                case .failed(let reason): print("KEY_CHECK_FAILED \(reason)")
+                }
+                exit(result == .valid ? 0 : 1)
+            }
+            return
+        }
         if let file = Self.value(after: "--edit-corpus", in: launchArguments) {
             let key = Self.value(after: "--jev-key-file", in: launchArguments)
                 .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) } ?? JevKeychain.load()
@@ -63,6 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let updater = demoLocale == nil ? AppUpdater() : nil
         self.updater = updater
         model.settingsAction = { [weak self] in self?.presentSettings() }
+        model.keysAction = { [weak self] in self?.presentSettings(.keys) }
         if demoLocale != nil {
             NotchOverlayController.demoScreenID = Self.value(after: "--demo-screen", in: launchArguments).flatMap(UInt32.init)
         }
@@ -252,19 +283,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func showOverlay() { model.showOverlay(); overlay?.present() }
     @objc private func showSettings() { model.openSettings() }
     @objc private func checkForUpdates() { updater?.checkForUpdates() }
-    private func presentSettings() {
+    private func presentSettings(_ pane: SettingsPane? = nil) {
         if settings == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 540),
-                                  styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                                  backing: .buffered, defer: false)
-            window.title = "Speech2Text"
-            window.contentView = NSHostingView(rootView: SettingsView(model: model))
-            window.minSize = NSSize(width: 440, height: 420)
-            window.isReleasedWhenClosed = false
+            let (window, panes) = SettingsPanesController.window(model: model, size: NSSize(width: 480, height: 540))
             window.delegate = self
             window.center()
             settings = window
+            settingsPanes = panes
         }
+        if let pane { settingsPanes?.pane = pane }
         model.accessibilityGranted = AXIsProcessTrusted()
         NSApp.activate()
         settings?.makeKeyAndOrderFront(nil)
