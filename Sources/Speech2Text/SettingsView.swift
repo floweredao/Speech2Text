@@ -73,7 +73,6 @@ struct SettingsView: View {
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
     private let microphoneState = State(initialValue: MicrophoneAccess(AVCaptureDevice.authorizationStatus(for: .audio)))
     private var microphone: MicrophoneAccess { model.microphoneAccessOverride ?? microphoneState.wrappedValue }
-    private let confirmDeleteState = State(initialValue: false)
     private let recorderState = State(initialValue: ShortcutRecorder())
     private var recorder: ShortcutRecorder { recorderState.wrappedValue }
     private let newTermState = State(initialValue: "")
@@ -83,15 +82,6 @@ struct SettingsView: View {
 
     private let pane = ControlPermissionPane.current
     private var state: DictationDisplayState { DictationDisplayState(model: model) }
-    private var keyBusy: Bool { model.speech.keyActivity != .idle }
-    private var keyActivityText: String? {
-        switch model.speech.keyActivity {
-        case .idle: nil
-        case .saving: String(localized: "Keychain에 저장하는 중…")
-        case .loading: String(localized: "Keychain에서 불러오는 중…")
-        case .deleting: String(localized: "Keychain에서 지우는 중…")
-        }
-    }
     private var hasKey: Bool { !model.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var readiness: SetupReadiness {
         SetupReadiness(hasKey: hasKey, microphone: microphone, controlGranted: model.accessibilityGranted)
@@ -102,6 +92,7 @@ struct SettingsView: View {
             statusSection
             setupSection
             inputSection
+            voiceEditSection
             vocabularySection
             shortcutSection
             voiceStartSection
@@ -180,54 +171,17 @@ struct SettingsView: View {
 
     private var setupSection: some View {
         Section("준비") {
-            SecureField("Soniox API 키", text: $model.apiKey, prompt: Text("키를 붙여넣으세요"))
-                .textContentType(.password)
-                .disabled(keyBusy)
-                .accessibilityIdentifier("settings-api-key")
-            HStack {
-                Button("저장") { model.saveKey() }
-                    .disabled(!hasKey || keyBusy)
-                    .help("이 앱 전용 Keychain 항목에 저장해요.")
-                    .accessibilityIdentifier("settings-save-key")
-                Button("불러오기") { model.loadKey() }
-                    .disabled(keyBusy)
-                    .help("이 앱의 Keychain 항목에서 불러와요.")
-                    .accessibilityIdentifier("settings-load-key")
-                Spacer()
-                Button("저장된 키 삭제", role: .destructive) { confirmDeleteState.wrappedValue = true }
-                    .disabled(keyBusy)
-                    .help("이 Mac의 Keychain에서 Soniox API 키를 지워요.")
-                    .accessibilityIdentifier("settings-delete-key")
-            }
-            .confirmationDialog("저장된 API 키를 지울까요?", isPresented: confirmDeleteState.projectedValue) {
-                Button("삭제", role: .destructive) { model.deleteKey() }
-                    .accessibilityIdentifier("settings-confirm-delete-key")
-            } message: {
-                Text("다시 받아쓰려면 키를 새로 붙여넣고 저장해야 해요.")
-            }
-            if let activity = keyActivityText {
-                HStack(spacing: Spacing.s) {
-                    ProgressView().controlSize(.small)
-                    Text(activity)
+            LabeledContent {
+                fitting {
+                    statusBadge(hasKey ? String(localized: "저장됨") : String(localized: "필요함"), granted: hasKey)
+                        .accessibilityIdentifier("settings-key-status")
+                    Button("키 관리 열기") { model.openKeyManagement() }
+                        .accessibilityIdentifier("settings-open-keys")
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("settings-key-activity")
-            } else if !model.speech.keyMessage.isEmpty {
-                Text(model.speech.keyMessage)
-                    .font(.caption)
-                    .foregroundStyle(model.speech.keyFailed ? Color.warningText : Color.secondary)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("settings-key-message")
-            }
-            if !hasKey {
-                Text("키를 저장해야 받아쓰기를 시작할 수 있어요.")
-                    .font(.caption)
-                    .foregroundStyle(Color.warningText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("settings-key-status")
+            } label: {
+                Text("Soniox API 키")
+                Text(hasKey ? String(localized: "키는 키 관리에서 바꾸거나 지워요.")
+                            : String(localized: "키를 저장해야 받아쓰기를 시작할 수 있어요."))
             }
 
             LabeledContent {
@@ -296,73 +250,6 @@ struct SettingsView: View {
                 Text("선택한 칸에 실시간으로 쓰고, 인식이 고쳐지면 바로 고쳐요.")
             }
             .accessibilityIdentifier("settings-auto-insert")
-            Toggle(isOn: $model.spokenEnterEnabled.animation(rowMotion)) {
-                Text("말로 엔터 누르기")
-                if model.commandJudge == .jev {
-                    Text("끝에 ‘\(model.spokenEnterPhrase)’라고 말하면 Jev가 명령이라고 판단할 때 엔터를 눌러요.")
-                } else {
-                    Text("끝에 ‘\(model.triggerWord) \(model.spokenEnterPhrase)’라고 말하고 잠깐 멈추면 엔터를 눌러요.")
-                }
-            }
-            .accessibilityIdentifier("settings-spoken-enter")
-            if model.spokenEnterEnabled {
-                TextField("명령어", text: $model.spokenEnterPhrase, prompt: Text("엔터 보내기"))
-                    .multilineTextAlignment(.trailing)
-                    .accessibilityIdentifier("settings-spoken-enter-phrase")
-            }
-            Picker(selection: $model.commandJudge.animation(rowMotion)) {
-                Text("트리거 단어").tag(CommandJudgeMode.trigger)
-                Text("Jev가 판단").tag(CommandJudgeMode.jev)
-                Text("끄기").tag(CommandJudgeMode.off)
-            } label: {
-                Text("말로 고치기")
-                switch model.commandJudge {
-                case .trigger:
-                    Text("‘\(model.triggerWord) 지워’, ‘\(model.triggerWord) 되돌려’, ‘\(model.triggerWord) A를 B로 바꿔’처럼 말하면 고쳐요.")
-                case .jev:
-                    Text("‘지워’, ‘되돌려’, ‘A를 B로 바꿔’를 따로 말하면 Jev가 명령인지 글인지 판단해요. 애매하면 글로 써요. 그 말과 앞 글 일부를 TypeSafe로 보내요.")
-                case .off:
-                    Text("명령을 듣지 않고 모두 글로 써요.")
-                }
-            }
-            .accessibilityIdentifier("settings-command-judge")
-            if model.commandJudge == .jev {
-                SecureField("Jev API 키", text: $model.jevKey, prompt: Text("키를 붙여넣으세요"))
-                    .textContentType(.password)
-                    .accessibilityIdentifier("settings-jev-key")
-                HStack {
-                    Button("저장") { model.saveJevKey() }
-                        .disabled(model.jevKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .help("이 앱 전용 Keychain 항목에 저장해요.")
-                        .accessibilityIdentifier("settings-save-jev-key")
-                    Spacer()
-                    if !model.jevKeyMessage.isEmpty {
-                        Text(model.jevKeyMessage).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                if model.jevKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("Jev 키가 없으면 명령처럼 들린 말도 모두 글로 써요.")
-                        .font(.caption)
-                        .foregroundStyle(Color.warningText)
-                }
-            }
-            if model.commandJudge == .trigger || (model.commandJudge == .off && model.spokenEnterEnabled) {
-                // LabeledContent, not the field's own label: a grouped form centers a two-line field label.
-                LabeledContent {
-                    TextField("트리거 단어", text: $model.triggerWord, prompt: Text(AppModel.defaultTriggerWord))
-                        .labelsHidden()
-                        .multilineTextAlignment(.trailing)
-                        .accessibilityIdentifier("settings-trigger-word")
-                } label: {
-                    Text("트리거 단어")
-                    Text("명령 앞에 붙이는 말이에요. 없이 말한 ‘지워’는 그대로 글로 써요.")
-                }
-                if model.trigger.isEmpty {
-                    Text("트리거 단어가 비어 있으면 말로 고치기와 엔터가 먹지 않아요.")
-                        .font(.caption)
-                        .foregroundStyle(Color.warningText)
-                }
-            }
             Picker(selection: $model.punctuationStyle) {
                 Text("그대로").tag(PunctuationStyle.asIs)
                 Text("쉼표 빼기").tag(PunctuationStyle.noCommas)
@@ -394,6 +281,84 @@ struct SettingsView: View {
                 Button("열기") { model.showOverlay() }
                     .accessibilityIdentifier("settings-show-overlay")
             }
+        }
+    }
+
+    /// Jev judges whether words are a command; the user picks which actions a command may do.
+    private var voiceEditSection: some View {
+        Section {
+            Toggle(isOn: voiceEditingBinding.animation(rowMotion)) {
+                Text("Jev로 명령 알아듣기")
+                Text("명령처럼 들리면 Jev가 앞 글을 보고 고칠 말인지 받아쓸 말인지 판단해 아래 동작을 해요. 애매하면 글로 써요. 그 말과 앞 글 일부를 TypeSafe로 보내요.")
+            }
+            .accessibilityIdentifier("settings-command-judge")
+            if model.commandJudge == .jev {
+                ForEach(VoiceAction.allCases, id: \.self) { action in
+                    Toggle(isOn: actionBinding(action).animation(rowMotion)) {
+                        Text(Self.actionTitle(action))
+                        Text(actionExample(action))
+                    }
+                    .toggleStyle(.checkbox)
+                    .accessibilityIdentifier("settings-action-\(action.rawValue)")
+                    if action == .enter, model.spokenEnterEnabled {
+                        LabeledContent {
+                            TextField("명령어", text: $model.spokenEnterPhrase, prompt: Text("엔터 보내기"))
+                                .labelsHidden()
+                                .multilineTextAlignment(.trailing)
+                                .accessibilityIdentifier("settings-spoken-enter-phrase")
+                        } label: {
+                            Text("엔터 명령어")
+                        }
+                    }
+                }
+                if model.jevKey.isEmpty {
+                    LabeledContent {
+                        Button("키 관리 열기") { model.openKeyManagement() }
+                            .accessibilityIdentifier("settings-open-keys-jev")
+                    } label: {
+                        Label {
+                            Text("Jev 키가 없어 명령처럼 들린 말도 모두 글로 써요.")
+                                .foregroundStyle(Color.warningText)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        }
+                        .font(.callout)
+                    }
+                    .accessibilityIdentifier("settings-jev-key-missing")
+                }
+            }
+        } header: {
+            Text("말로 고치기")
+        }
+    }
+
+    private var voiceEditingBinding: Binding<Bool> {
+        Binding { model.commandJudge == .jev } set: { model.commandJudge = $0 ? .jev : .off }
+    }
+
+    private func actionBinding(_ action: VoiceAction) -> Binding<Bool> {
+        Binding { model.isOn(action) } set: { model.set(action, on: $0) }
+    }
+
+    static func actionTitle(_ action: VoiceAction) -> String {
+        switch action {
+        case .delete: String(localized: "지우기")
+        case .clearAll: String(localized: "모두 지우기")
+        case .replace: String(localized: "고치기")
+        case .undo: String(localized: "되돌리기")
+        case .mark: String(localized: "문장부호 넣기")
+        case .enter: String(localized: "엔터 누르기")
+        }
+    }
+
+    private func actionExample(_ action: VoiceAction) -> String {
+        switch action {
+        case .delete: String(localized: "‘지워’, ‘한 단어 지워’, ‘A 지워’")
+        case .clearAll: String(localized: "‘다 지워’")
+        case .replace: String(localized: "‘A를 B로 바꿔’, ‘A 아니고 B’")
+        case .undo: String(localized: "‘되돌려’")
+        case .mark: String(localized: "‘물음표’, ‘쉼표 찍어’")
+        case .enter: String(localized: "끝에 ‘\(model.spokenEnterPhrase)’라고 말하면 엔터를 눌러요.")
         }
     }
 

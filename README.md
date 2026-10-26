@@ -27,7 +27,7 @@ https://github.com/user-attachments/assets/5fa20082-573e-489c-92de-b7b39ca3aa9f
 ## Install
 
 1. Download the `.zip` from the [latest release](https://github.com/floweredao/Speech2Text/releases/latest) and move the app to Applications.
-2. Open the app and save your [Soniox](https://soniox.com) API key in Settings.
+2. Open the app and save your [Soniox](https://soniox.com) API key in Settings › Keys.
 3. Allow Microphone and Accessibility.
 
 ## How to use it
@@ -50,11 +50,11 @@ Say these while dictating.
 | "replace A with B" | Replaces the last A with B |
 | "send enter" · "엔터 보내기" | Finishes and presses Return |
 
-Settings › Input › **Edit by Voice** decides what counts as a command.
+Settings › General › **Edit by Voice** decides what counts as a command.
 
-- **Jev Decides** (recommended): say just the command. TypeSafe Jev reads the words before it and decides. When unsure, it types the words. Needs a Jev API key.
-- **Trigger Word**: only words right after your trigger word are commands. You set the word in Settings.
-- **Off**: everything is typed.
+- **Understand Commands with Jev**: say just the command. TypeSafe Jev reads the words before it and decides. When unsure, it types the words. Turn it off and everything is typed.
+- **Actions**: tick what a command may do (delete, clear all, correct, undo, add punctuation, press Return). An action you turn off is typed as words and never sent to Jev.
+- **Your own Jev key**: create one in the [TypeSafe console](https://console.typesafe.ai) and paste it in Settings › Keys. Without it, commands are typed as words.
 
 ## Start by voice
 
@@ -98,7 +98,7 @@ The Settings window, light and then dark.
 <details>
 <summary><b>Permissions and setup</b></summary>
 
-- **Soniox API key**: kept only in this app's own Keychain item. Soniox bills you separately.
+- **API keys**: your Soniox and Jev keys are kept only in this app's own Keychain item, never in a file. Check or delete them in Settings › Keys. Soniox and TypeSafe bill you separately.
 - **Microphone**: macOS asks the first time you record. Pick one in Settings › **Input Microphone**.
 - **Accessibility**: needed to type into other apps. Press **Request Access** in Settings.
 - On macOS 27 this permission is called **Device Control and Data Management**.

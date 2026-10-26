@@ -7,8 +7,13 @@ enum DemoCapturer {
     static let scale: CGFloat = 2
     static let expandedOverlayWidth: CGFloat = 480
     /// Ends on the row separator after Punctuation at the default text size, so the last row is not cut through.
+    /// `--demo-settings-width` and `--demo-settings-height` render another size, to check the panes at the window's
+    /// narrowest and widest and to see every row.
     static func settingsSize(for locale: AppModel.DemoLocale) -> NSSize {
-        NSSize(width: 480, height: locale == .en ? 787 : 745)
+        let defaults = UserDefaults.standard
+        let width = defaults.string(forKey: "demo-settings-width").flatMap(Double.init) ?? 480
+        let height = defaults.string(forKey: "demo-settings-height").flatMap(Double.init) ?? (locale == .en ? 787 : 745)
+        return NSSize(width: width, height: height)
     }
     static let stageSize = NSSize(width: 640, height: 212)
     static let offscreenOrigin = NSPoint(x: -10_000, y: -10_000)
@@ -28,6 +33,10 @@ enum DemoCapturer {
                         to: directory.appendingPathComponent("settings-light-\(suffix).png"))
         captureSettings(model: model, size: settingsSize(for: locale), appearanceName: .darkAqua,
                         to: directory.appendingPathComponent("settings-dark-\(suffix).png"))
+        captureSettings(model: model, size: settingsSize(for: locale), appearanceName: .aqua, pane: .keys,
+                        to: directory.appendingPathComponent("settings-keys-light-\(suffix).png"))
+        captureSettings(model: model, size: settingsSize(for: locale), appearanceName: .darkAqua, pane: .keys,
+                        to: directory.appendingPathComponent("settings-keys-dark-\(suffix).png"))
 
         model.configureForDemoCapture()
         model.speech.setDemoState(phase: .idle, transcript: "", status: ready)
@@ -124,21 +133,17 @@ enum DemoCapturer {
         writePNG(from: hosting, size: NSSize(width: width, height: height), appearance: appearance, to: url)
     }
 
-    /// The real titled window, never ordered in: its frame view draws the title bar around the Settings form.
-    private static func captureSettings(model: AppModel, size: NSSize, appearanceName: NSAppearance.Name, to url: URL) {
+    /// The real settings window with its pane toolbar, never ordered in: its frame view draws the title bar and the
+    /// toolbar around the pane.
+    private static func captureSettings(model: AppModel, size: NSSize, appearanceName: NSAppearance.Name,
+                                        pane: SettingsPane = .general, to url: URL) {
         let appearance = NSAppearance(named: appearanceName)
-        let window = NSWindow(contentRect: NSRect(origin: offscreenOrigin, size: size),
-                              styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                              backing: .buffered, defer: false)
-        window.title = "Speech2Text"
+        let (window, panes) = SettingsPanesController.window(model: model, size: size, pane: pane, remembersPane: false)
+        window.setFrameOrigin(offscreenOrigin)
         window.appearance = appearance
-        window.isReleasedWhenClosed = false
-        let hosting = NSHostingView(rootView: SettingsView(model: model).frame(width: size.width, height: size.height))
-        hosting.appearance = appearance
-        window.contentView = hosting
         giveKeyAppearance(window)
-        settle(hosting)
-        let frame = window.contentView?.superview ?? hosting
+        settle(panes.view)
+        let frame = window.contentView?.superview ?? panes.view
         writePNG(from: frame, size: frame.bounds.size, appearance: appearance, to: url)
     }
 

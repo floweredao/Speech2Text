@@ -31,7 +31,6 @@ private func judged(_ turns: [SpokenTurn], _ verdicts: [String: CommandVerdict] 
     ])
     func bracketsAreSaidByName(spoken: String, typed: String) {
         #expect(judged([final(spoken)]).text == typed)
-        #expect(VoiceEditor.apply([final(spoken)], gate: .trigger(SpokenPhrase("자비스"))).text == typed)
     }
 
     @Test func bracketsAcrossTurnsHugTheirWords() {

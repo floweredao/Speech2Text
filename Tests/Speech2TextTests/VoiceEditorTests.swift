@@ -1,4 +1,5 @@
 import DictationSpeech
+import Foundation
 import Testing
 @testable import Speech2Text
 
@@ -23,32 +24,13 @@ private func live(_ text: String) -> SpokenTurn { SpokenTurn(text: text, isFinal
         #expect(VoiceCommand.parse("") == nil)
     }
 
-    /// The safety rule: a command counts only right after the trigger word; without it the same words are text.
-    @Test func aCommandWithoutTheTriggerWordIsTyped() {
-        let inside = apply([final("오늘 회의 자료는 지워 주세요.")])
-        #expect(inside.text == "오늘 회의 자료는 지워 주세요.")
-        #expect(inside.outcomes.isEmpty)
-        let alone = apply([final("안녕하세요."), final("지워")])
-        #expect(alone.text == "안녕하세요. 지워")
-        #expect(alone.outcomes.isEmpty)
-    }
-
+    /// Every command is performed here as if Jev called it one; what Jev answers is `JevGateTests`.
     @Test func deleteReplaceAndUndoEditOnlyTheDictatedText() {
-        let turns = [final("첫 문장입니다."), final("둘째 문장이에요."), final("자비스 지워"), final("회의는 세 시예요."),
-                     final("자비스, 세 시를 네 시로 바꿔"), final("자비스 되돌려")]
+        let turns = [final("첫 문장입니다."), final("둘째 문장이에요."), final("지워"), final("회의는 세 시예요."),
+                     final("세 시를 네 시로 바꿔"), final("되돌려")]
         let result = apply(turns)
         #expect(result.text == "첫 문장입니다. 회의는 세 시예요.")
         #expect(result.outcomes == [.applied(.deleteLastSentence), .applied(.replace("세 시", "네 시")), .applied(.undo)])
-    }
-
-    /// Soniox may keep the trigger word in the sentence's turn or give the command a turn of its own.
-    @Test func theCommandMayFollowInTheSameTurnOrTheNext() {
-        let sameTurn = apply([final("하나. 둘? 셋 자비스 지워")])
-        #expect(sameTurn.text == "하나. 둘?")
-        #expect(sameTurn.outcomes == [.applied(.deleteLastSentence)])
-        let nextTurn = apply([final("hello big world."), final("자비스."), final("delete last word")])
-        #expect(nextTurn.text == "hello big")
-        #expect(nextTurn.outcomes == [.applied(.deleteLastWord)])
     }
 
     @Test(arguments: [("세 시 지워", "세 시"), ("'급히'를 지워 주세요.", "급히"), ("회의 자료 빼 줘", "회의 자료"),
@@ -58,45 +40,84 @@ private func live(_ text: String) -> SpokenTurn { SpokenTurn(text: text, isFinal
     }
 
     /// Only the last place the words were said goes, found whatever the recognizer did with the spaces, and the
-    /// sentence around it closes up.
+    /// sentence around it closes up. Words that were never said are no edit and are typed.
     @Test func deletingANamedPartRemovesOnlyItsLastOccurrence() {
-        let result = apply([final("세 시에 봐요. 회의는 급히 세시예요."), final("자비스 급히 지워"), final("자비스 세 시를 지워"),
-                            final("자비스 사과 지워")])
-        #expect(result.text == "세 시에 봐요. 회의는 예요.")
-        #expect(result.outcomes == [.applied(.delete("급히")), .applied(.delete("세 시")), .notFound("사과")])
-    }
-
-    @Test func missingTargetsAndEmptyUndoChangeNothingAndSaySo() {
-        let result = apply([final("좋아요."), final("자비스 사과를 배로 바꿔"), final("자비스 되돌려")])
-        #expect(result.text == "좋아요.")
-        #expect(result.outcomes == [.notFound("사과"), .nothingToChange(.undo)])
-    }
-
-    /// Words after the trigger word that are no command are typed as said, trigger word included.
-    @Test func wordsAfterTheTriggerWordThatAreNoCommandAreTyped() {
-        let result = apply([final("자비스 고마워요.")])
-        #expect(result.text == "자비스 고마워요.")
-        #expect(result.outcomes.isEmpty)
-    }
-
-    /// Nothing after the trigger word is typed before Soniox finalizes it, so a command never flashes into the field.
-    @Test func aProvisionalCommandIsHeldBack() {
-        #expect(apply([final("안녕하세요."), live("자비스 지워")]).text == "안녕하세요.")
-        #expect(apply([final("안녕하세요."), live("자비스")]).text == "안녕하세요.")
-        #expect(apply([final("안녕하세요."), final("자비스"), live("되돌")]).text == "안녕하세요.")
-        #expect(apply([final("안녕하세요."), live("내일 봬요 자비")]).text == "안녕하세요. 내일 봬요")
-        #expect(apply([final("안녕하세요."), live("내일 봬요")]).text == "안녕하세요. 내일 봬요")
-        #expect(apply([final("안녕하세요."), final("내일 봬요 자비")]).text == "안녕하세요. 내일 봬요 자비")
+        let result = apply([final("세 시에 봐요. 회의는 급히 세시예요."), final("급히 지워"), final("세 시를 지워"),
+                            final("사과 지워")])
+        #expect(result.text == "세 시에 봐요. 회의는 예요. 사과 지워")
+        #expect(result.outcomes == [.applied(.delete("급히")), .applied(.delete("세 시"))])
     }
 
     @Test func turnedOffEverythingIsTyped() {
-        let result = VoiceEditor.apply([final("안녕하세요."), final("자비스 지워")], commandsEnabled: false, trigger: trigger)
-        #expect(result.text == "안녕하세요. 자비스 지워")
+        let result = VoiceEditor.apply([final("안녕하세요."), final("지워")], gate: .off)
+        #expect(result.text == "안녕하세요. 지워")
         #expect(result.outcomes.isEmpty)
+    }
+
+    @Test func everyCommandBelongsToOneAction() {
+        #expect(VoiceCommand.deleteLastWord.action == .delete)
+        #expect(VoiceCommand.delete("A").action == .delete)
+        #expect(VoiceCommand.clearAll.action == .clearAll)
+        #expect(VoiceCommand.replace("A", "B").action == .replace)
+        #expect(VoiceCommand.undo.action == .undo)
+        #expect(VoiceCommand.mark("?").action == .mark)
+        #expect(!VoiceAction.edits.contains(.enter))
+    }
+
+    /// A command of an action that is off is typed as said, never held back and never sent to Jev.
+    @Test(arguments: [
+        (VoiceAction.delete, "지워"), (.clearAll, "다 지워"), (.replace, "세 시를 네 시로 바꿔"), (.mark, "물음표"),
+    ])
+    func aCommandWhoseActionIsOffIsTypedWithoutAsking(action: VoiceAction, utterance: String) {
+        let turns = [final("회의는 세 시예요."), final(utterance)]
+        let on = VoiceEditor.apply(turns, gate: .judged([:]))
+        #expect(on.question != nil || !on.outcomes.isEmpty)
+        let off = VoiceEditor.apply(turns, gate: .judged([:], actions: VoiceAction.edits.subtracting([action])))
+        #expect(off.text == "회의는 세 시예요. " + utterance)
+        #expect(off.question == nil)
+        #expect(off.outcomes.isEmpty)
+        #expect(VoiceEditor.apply([final("회의는 세 시예요."), live(utterance)],
+                                  gate: .judged([:], actions: VoiceAction.edits.subtracting([action]))).text
+                == "회의는 세 시예요. " + utterance)
+    }
+
+    @Test func undoOffKeepsATakenBackEditAsWords() {
+        let turns = [final("좋아요."), final("지워. 되돌려")]
+        #expect(VoiceEditor.apply(turns, gate: .judged([:])).text == "좋아요.")
+        let result = VoiceEditor.apply(turns, gate: .judged([:], unanswered: .command,
+                                                            actions: VoiceAction.edits.subtracting([.undo])))
+        #expect(result.text == "좋아요. 지워. 되돌려")
+        #expect(result.outcomes.isEmpty)
+    }
+
+    @Test func actionsTurnedOffAreStoredAndNewOnesStartOn() throws {
+        let defaults = try #require(UserDefaults(suiteName: "VoiceActionTests"))
+        defaults.removePersistentDomain(forName: "VoiceActionTests")
+        #expect(VoiceAction.load(defaults) == VoiceAction.edits)
+        VoiceAction.store(VoiceAction.edits.subtracting([.mark, .undo]), defaults)
+        #expect(defaults.stringArray(forKey: "voiceActionsOff") == ["mark", "undo"])
+        defaults.set(["mark", "undo", "retired"], forKey: "voiceActionsOff")
+        #expect(VoiceAction.load(defaults) == [.delete, .clearAll, .replace])
+        VoiceAction.store(VoiceAction.edits, defaults)
+        #expect(defaults.object(forKey: "voiceActionsOff") == nil)
+    }
+
+    /// The trigger word mode is gone: whoever chose it gets Jev, and an old \"voice editing off\" stays off.
+    @Test func theStoredJudgeChoiceMovesFromTheTriggerWordToJev() throws {
+        let defaults = try #require(UserDefaults(suiteName: "CommandJudgeModeTests"))
+        defaults.removePersistentDomain(forName: "CommandJudgeModeTests")
+        #expect(CommandJudgeMode.load(defaults) == .jev)
+        defaults.set(false, forKey: "voiceEditingEnabled")
+        #expect(CommandJudgeMode.load(defaults) == .off)
+        defaults.set("trigger", forKey: "commandJudge")
+        #expect(CommandJudgeMode.load(defaults) == .jev)
+        defaults.set("off", forKey: "commandJudge")
+        #expect(CommandJudgeMode.load(defaults) == .off)
+        defaults.set("jev", forKey: "commandJudge")
+        #expect(CommandJudgeMode.load(defaults) == .jev)
     }
 }
 
-private let trigger = SpokenPhrase("자비스")
 private func apply(_ turns: [SpokenTurn]) -> VoiceEditor.Result {
-    VoiceEditor.apply(turns, commandsEnabled: true, trigger: trigger)
+    VoiceEditor.apply(turns, gate: .judged([:], unanswered: .command))
 }

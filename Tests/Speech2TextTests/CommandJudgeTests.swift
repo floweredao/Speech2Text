@@ -170,6 +170,34 @@ private let question = CommandQuestion(key: "k", textBefore: String(repeating: "
     }
 }
 
+private func status(_ code: Int) -> KeyChecker.Send {
+    { request in (Data(), HTTPURLResponse(url: request.url!, statusCode: code, httpVersion: nil, headerFields: nil)!) }
+}
+
+@Suite struct KeyCheckerTests {
+    @Test func theCheckListsModelsWithTheKeyInTheHeader() {
+        let jev = KeyChecker.request(.jev, key: " secret\n")
+        #expect(jev.url?.absoluteString == "https://api.typesafe.ai/v1/models")
+        #expect(jev.value(forHTTPHeaderField: "Authorization") == "Bearer secret")
+        #expect(jev.httpMethod == "GET")
+        #expect(KeyChecker.request(.soniox, key: "k").url?.absoluteString == "https://api.soniox.com/v1/models")
+    }
+
+    @Test func theAnswerTellsAWorkingKeyFromARefusedOne() async {
+        #expect(await KeyChecker(send: status(200)).check(.jev, key: "k") == .valid)
+        #expect(await KeyChecker(send: status(401)).check(.soniox, key: "k") == .refused)
+        #expect(await KeyChecker(send: status(403)).check(.jev, key: "k") == .refused)
+        #expect(await KeyChecker(send: status(500)).check(.jev, key: "k") == .failed("HTTP 500"))
+        let offline = KeyChecker(send: { _ in throw URLError(.notConnectedToInternet) })
+        #expect(await offline.check(.jev, key: "k") == .failed("URLError \(URLError.Code.notConnectedToInternet.rawValue)"))
+    }
+
+    @Test func aStoredKeyShowsOnlyItsLastFourCharacters() {
+        #expect(ServiceKey.masked("abcdefghijkl1234") == "••••1234")
+        #expect(ServiceKey.masked("short123") == "••••")
+    }
+}
+
 @Suite struct CommandCandidateTests {
     @Test func onlyAChunkEndingInACommandIsACandidate() {
         #expect(CommandCandidate("지워 줘.")?.command == .deleteLastSentence)

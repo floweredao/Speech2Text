@@ -5,12 +5,58 @@ import Security
 /// How a spoken edit ("지워", "되돌려", "A를 B로 바꿔", "엔터 보내기") is told apart from dictated words.
 /// See DESIGN.md, "말로 고치기".
 enum CommandJudgeMode: String, CaseIterable, Sendable {
-    /// A command counts only right after the trigger word.
-    case trigger
     /// Jev decides from the words before; unsure, failed or slow answers type the words.
     case jev
     /// Everything is typed.
     case off
+
+    /// The stored choice. The trigger word it once offered is gone, so that choice reads as Jev; settings written
+    /// before any choice existed keep their voice-editing switch.
+    static func load(_ defaults: UserDefaults = .standard) -> Self {
+        if let stored = defaults.string(forKey: "commandJudge") { return stored == Self.off.rawValue ? .off : .jev }
+        return defaults.object(forKey: "voiceEditingEnabled") as? Bool == false ? .off : .jev
+    }
+}
+
+/// What a spoken command may do. Jev judges whether the words are a command; each action can be turned off, and an
+/// action that is off is typed as said and never sent to Jev. See DESIGN.md, "말로 고치기".
+enum VoiceAction: String, CaseIterable, Sendable {
+    /// The last sentence, word or letter, or a part named in the command ("A 지워").
+    case delete
+    case clearAll
+    /// "A를 B로 바꿔", "A 아니고 B", spacing and case.
+    case replace
+    case undo
+    /// A punctuation mark said by name.
+    case mark
+    /// The spoken Return at the end of a dictation (`SpokenEnter`).
+    case enter
+
+    /// The actions `VoiceEditor` performs on the text; Return is pressed by `AppModel`.
+    static let edits = Set(allCases).subtracting([.enter])
+
+    /// Actions turned off in Settings are stored, so an action added later starts on.
+    static func load(_ defaults: UserDefaults = .standard) -> Set<Self> {
+        let off = Set((defaults.stringArray(forKey: "voiceActionsOff") ?? []).compactMap(Self.init))
+        return edits.subtracting(off)
+    }
+
+    static func store(_ on: Set<Self>, _ defaults: UserDefaults = .standard) {
+        let off = edits.subtracting(on).map(\.rawValue).sorted()
+        defaults.set(off.isEmpty ? nil : off, forKey: "voiceActionsOff")
+    }
+}
+
+extension VoiceCommand {
+    var action: VoiceAction {
+        switch self {
+        case .deleteLastSentence, .deleteLastWord, .deleteLastCharacter, .delete: .delete
+        case .clearAll: .clearAll
+        case .replace: .replace
+        case .undo: .undo
+        case .mark: .mark
+        }
+    }
 }
 
 enum CommandVerdict: Equatable, Sendable { case command, text }
@@ -234,4 +280,68 @@ enum JevKeychain {
 
     @discardableResult
     static func delete() -> OSStatus { SecItemDelete(query as CFDictionary) }
+}
+
+/// A service whose API key this app keeps in its own Keychain item. See DESIGN.md, "키 관리".
+enum ServiceKey: String, CaseIterable, Sendable {
+    case soniox, jev
+
+    /// Where a person gets a key of their own.
+    var consoleURL: URL {
+        switch self {
+        case .soniox: URL(string: "https://console.soniox.com")!
+        case .jev: URL(string: "https://console.typesafe.ai")!
+        }
+    }
+
+    /// Lists the service's models: needs a valid key, transcribes or judges nothing, and costs nothing.
+    var checkURL: URL {
+        switch self {
+        case .soniox: URL(string: "https://api.soniox.com/v1/models")!
+        case .jev: URL(string: "https://api.typesafe.ai/v1/models")!
+        }
+    }
+
+    /// Shows which key is stored without showing the key: its last four characters, only when it is long enough
+    /// that they give little away.
+    static func masked(_ key: String) -> String {
+        let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        return key.count >= 12 ? "••••" + key.suffix(4) : "••••"
+    }
+}
+
+enum KeyCheck: Equatable, Sendable {
+    case valid
+    /// The service turned the key down (HTTP 401 or 403).
+    case refused
+    /// No answer about the key: offline, timeout, or another HTTP status.
+    case failed(String)
+}
+
+/// Asks a service whether a key works, with a request that uses no credit.
+struct KeyChecker: Sendable {
+    typealias Send = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    var send: Send = { try await URLSession.shared.data(for: $0) }
+
+    static func request(_ service: ServiceKey, key: String) -> URLRequest {
+        var request = URLRequest(url: service.checkURL, timeoutInterval: 10)
+        request.setValue("Bearer \(key.trimmingCharacters(in: .whitespacesAndNewlines))", forHTTPHeaderField: "Authorization")
+        return request
+    }
+
+    func check(_ service: ServiceKey, key: String) async -> KeyCheck {
+        do {
+            let (_, response) = try await send(Self.request(service, key: key))
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            switch status {
+            case 200..<300: return .valid
+            case 401, 403: return .refused
+            default: return .failed("HTTP \(status)")
+            }
+        } catch let error as URLError {
+            return .failed(error.code == .timedOut ? "timeout" : "URLError \(error.code.rawValue)")
+        } catch {
+            return .failed("\(type(of: error))")
+        }
+    }
 }

@@ -66,12 +66,4 @@ private func judged(_ turns: [SpokenTurn], _ verdicts: [String: CommandVerdict] 
         #expect(PunctuationStyle.noCommas.apply(comma.text + " 그럼요, 좋아요") == "네, 그럼요 좋아요")
         #expect(PunctuationStyle.asIs.apply(comma.text) == "네,")
     }
-
-    @Test func theTriggerWordGateTakesMarksToo() {
-        let result = VoiceEditor.apply([final("좋아요."), final("자비스 느낌표")], commandsEnabled: true,
-                                       trigger: SpokenPhrase("자비스"))
-        #expect(result.text == "좋아요!")
-        let plain = VoiceEditor.apply([final("좋아요."), final("느낌표")], commandsEnabled: true, trigger: SpokenPhrase("자비스"))
-        #expect(plain.text == "좋아요. 느낌표")
-    }
 }
