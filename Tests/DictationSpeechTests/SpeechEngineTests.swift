@@ -367,6 +367,24 @@ actor TestCredentials: CredentialStoring {
         #expect(live.count == 2)
     }
 
+    /// Regression: a provisional word Soniox dropped at an endpoint stayed in the transcript and the typed field.
+    @Test func aProvisionalWordDroppedAtAnEndpointLeavesTheLiveText() async throws {
+        let socket = TestSocket(), audio = TestAudio()
+        let engine = engine(socket, audio)
+        var live: [String] = []
+        engine.onLiveText = { live.append($0) }
+        audio.pair.continuation.yield(pcm)
+        engine.start()
+        await socket.waitUntilSent(.binary(pcm))
+        await socket.push(.text(#"{"tokens":[{"text":"첫 문장.","is_final":true},{"text":"<end>","is_final":true},{"text":" 음","is_final":false}]}"#))
+        try await waitUntil { engine.transcript == "첫 문장. 음" }
+        await socket.push(.text(#"{"tokens":[{"text":"<end>","is_final":true}]}"#))
+        try await waitUntil { engine.transcript == "첫 문장." }
+        #expect(live.last == "첫 문장.")
+        engine.cancel()
+        await engine.runTask?.value
+    }
+
     /// Live typing makes accessibility calls into the target app on the main actor, and a busy app answers slowly.
     /// Audio waiting for the main actor reached Soniox late, so text stalled until the user stopped.
     @Test func audioKeepsReachingTheProviderWhileTheMainActorIsBusy() async throws {

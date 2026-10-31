@@ -64,3 +64,35 @@ import Testing
     // Live recognition is verified through the signed app's --audio-file entry point,
     // not an environment-gated skipped test. See README.md and the QA evidence.
 }
+
+@MainActor extension FileRecognitionTests {
+    @Test func rawPCMIsReadIn20MillisecondChunksWithItsTail() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".pcm")
+        let pcm = Data((0..<1_500).map { UInt8(truncatingIfNeeded: $0 * 7) })
+        try pcm.write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let capture = FileAudioCapture(url: file, realTime: false)
+        let stream = try await capture.start(format: .pcm16Mono16k)
+        var chunks: [Data] = []
+        for try await chunk in stream { chunks.append(chunk) }
+        await capture.stop()
+        let joined = chunks.reduce(into: Data()) { $0.append($1) }
+        #expect(chunks.map(\.count) == [640, 640, 220])
+        #expect(joined == pcm)
+    }
+
+    @Test func rawPCMBeyondTheLimitIsRejectedAndAtTheLimitAccepted() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".pcm")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try Data(repeating: 0, count: 32_002).write(to: file)
+        let tooLong = FileAudioCapture(url: file, maximumSeconds: 1, realTime: false)
+        await #expect(throws: AppError.self) { _ = try await tooLong.start(format: .pcm16Mono16k) }
+        try Data(repeating: 0, count: 32_000).write(to: file)
+        let capture = FileAudioCapture(url: file, maximumSeconds: 1, realTime: false)
+        let stream = try await capture.start(format: .pcm16Mono16k)
+        var bytes = 0
+        for try await chunk in stream { bytes += chunk.count }
+        await capture.stop()
+        #expect(bytes == 32_000)
+    }
+}

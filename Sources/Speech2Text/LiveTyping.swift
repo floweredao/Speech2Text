@@ -228,7 +228,7 @@ final class LiveTyper {
         var strokes = Array(repeating: Keystroke(key: 51, text: "\u{8}"), count: edit.removed.count)
         var chunk = ""
         for character in edit.insert {
-            if chunk.utf16.count + character.utf16.count > 16 {
+            if !chunk.isEmpty, chunk.utf16.count + character.utf16.count > 16 {
                 strokes.append(Keystroke(key: 0, text: chunk))
                 chunk = ""
             }

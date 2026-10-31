@@ -34,8 +34,10 @@ struct SonioxTranscriptReducer: Sendable {
                 guard token.is_final else { continue }
                 if !committed.isEmpty {
                     events.append(update(committed, final: true, spans: committedSpans)); turn += 1; revision = 0
+                    lastText = ""
                 }
-                committed = ""; provisional = ""; lastText = ""; committedSpans = []; provisionalSpans = []
+                // Without final text the turn goes on, and provisional text it showed must still be cleared.
+                committed = ""; provisional = ""; committedSpans = []; provisionalSpans = []
             } else if (token.translation_status == "translation") != translating {
                 continue
             } else if token.is_final {
