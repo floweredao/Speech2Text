@@ -152,7 +152,7 @@ https://github.com/user-attachments/assets/fb68b1a6-9bd5-4914-9324-e3e74c0a9a5f
 <details>
 <summary><b>소스에서 빌드</b></summary>
 
-Apple silicon Mac과 Xcode Command Line Tools가 필요해요.
+Apple silicon Mac과 Xcode Command Line Tools가 필요해요. Xcode.app이 있으면 단축어와 음성 제어 동작도 함께 넣고, 없으면 그 동작만 빠진 채로 빌드돼요.
 
 ```sh
 bash scripts/test.sh        # 테스트

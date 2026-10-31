@@ -15,6 +15,9 @@ OUTPUT="$2"
 [[ "$(shasum -a 256 "$ARCHIVE_TOOLS" | awk '{print $1}')" == "$SPARKLE_SHA256" ]] \
   || { printf '%s\n' 'Tools archive is not the official Sparkle 2.9.6.' >&2; exit 65; }
 codesign --verify --deep --strict "$APP"
+# A build without Xcode.app leaves out the Shortcuts and Voice Control actions; never ship one.
+[[ -f "$APP/Contents/Resources/Metadata.appintents/extract.actionsdata" ]] \
+  || { printf '%s\n' 'App Intents metadata missing; build the release on a Mac with Xcode.app.' >&2; exit 65; }
 INFO="$APP/Contents/Info.plist"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO")"
 PUBLIC_KEY="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$INFO")"
