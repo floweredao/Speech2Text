@@ -146,6 +146,7 @@ https://github.com/user-attachments/assets/fb68b1a6-9bd5-4914-9324-e3e74c0a9a5f
 - 소리는 받아쓰는 동안에만 Soniox로 보내요.
 - 녹음 파일을 남기지 않아요.
 - 호출어 소리는 맥 밖으로 나가지 않아요.
+- 사전에 적은 단어와 명령이 쓸 수 있는 단어는 적힌 대로 인식되게 받아쓰기마다 함께 보내요.
 
 </details>
 
@@ -160,11 +161,21 @@ bash scripts/build-app.sh   # build/Speech2Text.app 만들기
 ```
 
 - 빌드 전에 호출어 모델을 `Vendor/`에 자동으로 받아요.
-- 애드혹 서명은 `SPEECH2TEXT_SIGNING_IDENTITY=-`로 해요.
+- Apple Development 인증서가 없으면 애드혹으로 서명해요. 직접 빌드해 쓰는 데는 그걸로 충분하고, 애드혹 서명은 빌드할 때마다 바뀌어서 macOS가 손쉬운 사용을 다시 물어요.
 - `bash scripts/capture-readme-images.sh`가 이 문서의 사진을 다시 만들어요.
 - `bash scripts/record-demo-video.sh`가 데모 영상을 찍어요. 앱을 가상 디스플레이에 띄워 60fps로 녹화하기 때문에 쓰던 화면에는 아무것도 뜨지 않아요. 화면 기록 권한이 필요해요.
 
+| 변수 | 기본값 | 무엇을 정하나요 |
+| --- | --- | --- |
+| `DEVELOPER_DIR` | `/Library/Developer/CommandLineTools` | `scripts/test.sh`·`scripts/build-app.sh`가 쓰는 툴체인이에요. Xcode 툴체인으로 빌드하려면 `/Applications/Xcode.app/Contents/Developer`를 넣어요. |
+| `SPEECH2TEXT_SIGNING_IDENTITY` | 설치된 `Apple Development` 인증서, 없으면 `-`(애드혹) | `scripts/build-app.sh`가 앱을 서명할 때 쓰는 신원이에요. |
+| `SPEECH2TEXT_XCODE_TOOLCHAIN` | `/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain` | 빌드가 Xcode의 App Intents 메타데이터 처리기를 찾는 곳이에요. 넣어 두면 처리기가 없을 때 단축어·음성 제어 동작을 빼고 넘어가지 않고 빌드가 실패해요. |
+
 </details>
+
+## 함께 만들기
+
+버그 신고와 풀 리퀘스트 모두 환영해요. 무엇을 돌리고 무엇이 필요한지는 [CONTRIBUTING.md](CONTRIBUTING.md)에 있어요.
 
 ## 라이선스
 
