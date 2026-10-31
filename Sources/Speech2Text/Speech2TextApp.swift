@@ -124,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             self?.overlay?.present()
         }
         model.onWake = { [weak self] in
-            self?.model.handle(.start)
+            self?.model.handle(.start, byWake: true)
             self?.overlay?.present()
         }
         model.shortcutsChanged = { [weak self] in self?.applyShortcuts() }

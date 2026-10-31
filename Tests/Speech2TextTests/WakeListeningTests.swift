@@ -42,6 +42,21 @@ import Testing
         #expect(!matches("에이 컴퓨터"))
     }
 
+    /// A dictation the wake phrase started had no key press, so anyone nearby could have said the phrase. Its spoken
+    /// Enter is typed as words and Return is never pressed; a dictation started by the user still presses Return.
+    @MainActor @Test(arguments: [false, true])
+    func aWakeStartedDictationNeverPressesReturnByVoice(byWake: Bool) {
+        let model = AppModel()
+        model.autoInsert = false
+        model.commandJudgeOverride = .jev
+        model.jevKeyOverride = "test-key"
+        model.jevJudge.send = { _ in throw URLError(.notConnectedToInternet) }
+        model.handle(.start, byWake: byWake)
+        model.speech.setDemoState(phase: .idle, transcript: "엔터 보내기", status: "", outcome: .completed)
+        #expect(model.transcript == (byWake ? "엔터 보내기" : ""))
+        model.commandJudgeOverride = nil
+    }
+
     /// The wake phrase starts dictation the way a spoken start request does: never toggling a running one off.
     @Test(arguments: [(false, false, DictationRequest.Effect.start), (true, true, .none), (false, true, .none)])
     func theWakePhraseOnlyStarts(recording: Bool, busy: Bool, effect: DictationRequest.Effect) {

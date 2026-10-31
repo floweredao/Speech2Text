@@ -240,7 +240,7 @@ final class AppModel {
     /// Commands already reported for the current field, so each one is announced once.
     @ObservationIgnored private var reportedEdits = 0
     private var spokenEnter: SpokenEnter? {
-        spokenEnterEnabled && judgeMode != .off
+        spokenEnterEnabled && judgeMode != .off && !startedByWake
             ? SpokenEnter(setting: spokenEnterPhrase, shownDefault: String(localized: "엔터 보내기")) : nil
     }
     /// Kept current by a CoreAudio listener, so Settings reflects plugged-in or removed microphones at once.
@@ -353,7 +353,7 @@ final class AppModel {
     private func wakeHeard() {
         wakeListener?.stop()
         isListeningForWake = false
-        if let onWake { onWake() } else { handle(.start) }
+        if let onWake { onWake() } else { handle(.start, byWake: true) }
         syncWakeListening()
     }
 
@@ -731,18 +731,23 @@ final class AppModel {
         return true
     }
 
-    func toggleRecording() {
+    /// Whether the wake phrase started the running or last dictation. Nobody pressed a key for it, so a voice nearby
+    /// may have said the phrase; such a dictation never presses Return by voice.
+    @ObservationIgnored private var startedByWake = false
+
+    func toggleRecording(byWake: Bool = false) {
         overlayVisible = true
         if isRecording { speech.finish() }
         else if !isBusy {
+            startedByWake = byWake
             stopJudging()
             startLiveTypingIfAdmitted()
             speech.start()
         }
     }
-    func handle(_ request: DictationRequest) {
+    func handle(_ request: DictationRequest, byWake: Bool = false) {
         switch request.effect(isRecording: isRecording, isBusy: isBusy) {
-        case .start, .finish: toggleRecording()
+        case .start, .finish: toggleRecording(byWake: byWake)
         case .none: overlayVisible = true
         }
     }
