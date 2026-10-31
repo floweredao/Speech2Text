@@ -33,7 +33,7 @@ private func judged(_ turns: [SpokenTurn], _ verdicts: [String: CommandVerdict] 
         #expect(result.outcomes == [.applied(.mark("?"))])
     }
 
-    /// Owner report (2026-10-25): with the text already ending in "?", the name "물음표" was typed as a word. The mark is
+    /// Regression: with the text already ending in "?", the name "물음표" was typed as a word. The mark is
     /// already there, so it is settled without asking Jev and nothing is typed.
     @Test func aMarkTheTextAlreadyEndsWithIsNeverTyped() {
         for turns in [[final("내일 오나요? 물음표.")], [final("내일 오나요? 물음표 찍어 줘")], [final("내일 오나요?"), final("물음표?")]] {

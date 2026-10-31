@@ -295,7 +295,7 @@ actor TestCredentials: CredentialStoring {
     @Test func dictionaryTermsReachTheProviderAndAPauseReportsTheTranscript() async throws {
         let socket = TestSocket(), audio = TestAudio()
         let engine = engine(socket, audio)
-        engine.vocabulary = ["OMO", "센파이"]
+        engine.vocabulary = ["SwiftUI", "쿠버네티스"]
         var turnFinals: [String] = []
         engine.onTurnFinal = { turnFinals.append($0) }
         audio.pair.continuation.yield(pcm)
@@ -303,15 +303,15 @@ actor TestCredentials: CredentialStoring {
         await socket.waitUntilSent(.binary(pcm))
         guard case .text(let text) = await socket.sent.first else { Issue.record("Missing configuration"); return }
         let config = try #require(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
-        #expect((config["context"] as? [String: Any])?["terms"] as? [String] == ["OMO", "센파이"])
+        #expect((config["context"] as? [String: Any])?["terms"] as? [String] == ["SwiftUI", "쿠버네티스"])
         #expect((config["context"] as? [String: Any])?["text"] == nil)
-        await socket.push(.text(#"{"tokens":[{"text":"센파이 호출","is_final":false}]}"#))
-        try await waitUntil { engine.transcript == "센파이 호출" }
+        await socket.push(.text(#"{"tokens":[{"text":"쿠버네티스 배포","is_final":false}]}"#))
+        try await waitUntil { engine.transcript == "쿠버네티스 배포" }
         #expect(turnFinals.isEmpty)
-        await socket.push(.text(#"{"tokens":[{"text":"센파이 호출","is_final":true},{"text":"<end>","is_final":true}]}"#))
+        await socket.push(.text(#"{"tokens":[{"text":"쿠버네티스 배포","is_final":true},{"text":"<end>","is_final":true}]}"#))
         await socket.push(.text(#"{"tokens":[{"text":" 다음","is_final":false}]}"#))
-        try await waitUntil { engine.transcript == "센파이 호출 다음" }
-        #expect(turnFinals == ["센파이 호출"])
+        try await waitUntil { engine.transcript == "쿠버네티스 배포 다음" }
+        #expect(turnFinals == ["쿠버네티스 배포"])
         engine.cancel()
         await engine.runTask?.value
     }
@@ -523,7 +523,7 @@ actor TestCredentials: CredentialStoring {
         #expect(!engine.isBusy)
     }
 
-    /// Owner request: a recording that recognizes nothing new for the silence limit finishes by itself and keeps
+    /// A recording that recognizes nothing new for the silence limit finishes by itself and keeps
     /// what it heard.
     @Test func recordingFinishesAfterTheSilenceLimitAndKeepsTheText() async throws {
         let socket = TestSocket(), audio = TestAudio()

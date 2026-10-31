@@ -115,7 +115,7 @@ final class AppModel {
             + (wakeListeningEnabled ? wakeSpoken.terms : [])
         return (commands + addedContextTerms).reduce(dictionary) { DictionaryTerms.adding($1, to: $0) }
     }
-    /// Placeholders until the owner settles on the app's name; Settings can change the wake phrase.
+    /// The default wake phrase; Settings can change it.
     /// The on-device model hears real English words far better than made-up names (DESIGN.md, "호출어").
     nonisolated static let defaultWakePhrase = "Hey Computer"
     nonisolated static let defaultWakeSpellings = ["헤이 컴퓨터"]
@@ -357,11 +357,11 @@ final class AppModel {
         syncWakeListening()
     }
 
-    private static func storedDictionary() -> [String] {
-        let defaults = UserDefaults.standard
+    /// A fresh install starts with an empty dictionary; only words the user added are sent to Soniox.
+    static func storedDictionary(_ defaults: UserDefaults = .standard) -> [String] {
         if let terms = defaults.stringArray(forKey: "dictionaryTerms") { return terms }
         if let lines = defaults.string(forKey: "vocabulary") { return DictionaryTerms.migrating(lines: lines) }
-        return DictionaryTerms.standard
+        return []
     }
 
     func addDictionaryTerms(_ input: String) { dictionary = DictionaryTerms.adding(input, to: dictionary) }

@@ -1,8 +1,6 @@
 import Foundation
 
 enum DictionaryTerms {
-    static let standard = ["OMO", "ULW", "센파이"]
-
     static func adding(_ input: String, to terms: [String]) -> [String] {
         var result = terms
         for word in input.split(whereSeparator: { $0 == "," || $0.isNewline }) {
