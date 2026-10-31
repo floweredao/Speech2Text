@@ -37,6 +37,8 @@ ditto -c -k --keepParent "$APP" "$STAGING/release/$ZIP_NAME"
 SIGNATURE="$(xmllint --xpath 'string(/rss/channel/item/enclosure/@*[local-name()="edSignature"])' "$STAGING/release/appcast.xml")"
 [[ -n "$SIGNATURE" ]] || { printf '%s\n' 'Appcast has no EdDSA signature.' >&2; exit 65; }
 "$TOOLS/sign_update" --account "$KEY_ACCOUNT" --verify "$STAGING/release/$ZIP_NAME" "$SIGNATURE"
+# The app sets SURequireSignedFeed, so generate_appcast signs the feed; an unsigned feed would stop every update.
+"$TOOLS/sign_update" --account "$KEY_ACCOUNT" --verify "$STAGING/release/appcast.xml"
 (cd "$STAGING/release" && shasum -a 256 "$ZIP_NAME" appcast.xml > SHA256SUMS)
 mv "$STAGING/release" "$OUTPUT"
 ls "$OUTPUT"

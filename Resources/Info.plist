@@ -20,5 +20,6 @@
 <key>SUAutomaticallyUpdate</key><false/>
 <key>SUEnableSystemProfiling</key><false/>
 <key>SUVerifyUpdateBeforeExtraction</key><true/>
+<key>SURequireSignedFeed</key><true/>
 <key>NSMicrophoneUsageDescription</key><string>Speech2Text needs the microphone to transcribe what you say. Audio is sent to Soniox only while dictation is running.</string>
 </dict></plist>
