@@ -19,6 +19,14 @@ import Testing
     #expect(wakes == 1)
 }
 
+/// The overlay's Paste and the paste shortcut send what live typing sends: one line, so a terminal never runs it.
+@Test func manualInsertionSendsTheLiveTypingSingleLinePayload() {
+    let transcript = "list files\nrm -rf tmp\r\nls"
+    #expect(InsertionPolicy.payload(transcript) == LiveTextEdit.sanitize(transcript))
+    #expect(InsertionPolicy.payload("list files\nrm -rf tmp") == "list files rm -rf tmp")
+    #expect(InsertionPolicy.payload("a\u{2028}b\rc") == "a b c")
+}
+
 @Test func insertionRequiresExactSafeConditions() {
     #expect(InsertionPolicy.allows(text: "한글 English", trusted: true, sameTarget: true, editable: true))
     #expect(!InsertionPolicy.allows(text: " \n ", trusted: true, sameTarget: true, editable: true))
