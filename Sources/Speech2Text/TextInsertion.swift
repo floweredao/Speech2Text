@@ -16,6 +16,38 @@ struct InsertionPolicy {
     }
 }
 
+/// What the pasteboard held before the automatic paste replaced it.
+@MainActor
+struct PasteboardRestore {
+    let pasteboard: NSPasteboard
+    let items: [[(NSPasteboard.PasteboardType, Data)]]
+    /// The pasteboard's change count right after the paste wrote to it.
+    let changeCount: Int
+
+    static func contents(of pasteboard: NSPasteboard) -> [[(NSPasteboard.PasteboardType, Data)]] {
+        (pasteboard.pasteboardItems ?? []).map { item in
+            item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
+        }
+    }
+
+    /// Gives back the earlier contents, or nothing when the clipboard was empty, unless something was copied after
+    /// the paste: that copy is the user's newest and stays. The given-back items are marked transient, because
+    /// clipboard managers already recorded them when they were first copied.
+    @discardableResult
+    func restore() -> Bool {
+        guard pasteboard.changeCount == changeCount else { return false }
+        pasteboard.clearContents()
+        let restored = items.map { types in
+            let item = NSPasteboardItem()
+            for (type, data) in types { item.setData(data, forType: type) }
+            for type in TextInsertion.transientPasteTypes where !item.types.contains(type) { item.setString("", forType: type) }
+            return item
+        }
+        if !restored.isEmpty { pasteboard.writeObjects(restored) }
+        return true
+    }
+}
+
 @MainActor
 final class TextInsertion {
     struct Target {
@@ -105,6 +137,18 @@ final class TextInsertion {
         return true
     }
 
+    /// How long the automatic paste keeps the dictation on the pasteboard before giving back what it held. The target
+    /// app reads the pasteboard when it handles Cmd-V, which a busy app does late; a copy the user makes in the
+    /// meantime is never overwritten, so a longer wait costs nothing.
+    static let clipboardRestoreDelay: Duration = .milliseconds(1500)
+
+    /// Puts the dictation on the pasteboard for an automatic paste and returns what puts the earlier contents back.
+    func copyForPaste(_ text: String, to pasteboard: NSPasteboard = .general) -> PasteboardRestore? {
+        let held = PasteboardRestore.contents(of: pasteboard)
+        guard copy(text, to: pasteboard, transient: true) else { return nil }
+        return PasteboardRestore(pasteboard: pasteboard, items: held, changeCount: pasteboard.changeCount)
+    }
+
     func insert(_ text: String, expected: Target?) -> String {
         let payload = InsertionPolicy.payload(text)
         guard isTrusted else { return String(localized: "'\(ControlPermissionPane.current.title)' 권한이 필요해요. 복사해서 직접 붙여넣을 수 있어요.") }
@@ -124,13 +168,17 @@ final class TextInsertion {
         guard let source = CGEventSource(stateID: .combinedSessionState),
               let down = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
               let up = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false),
-              copy(payload, transient: true) else { return String(localized: "붙여넣기를 보내지 못했어요. 복사 버튼을 사용해 주세요.") }
+              let restore = copyForPaste(payload) else { return String(localized: "붙여넣기를 보내지 못했어요. 복사 버튼을 사용해 주세요.") }
         // Sent to the field's own app, the way live typing sends its keys: a focus change between the check above and
         // delivery cannot paste into another app, and the marker tells the input guard these keys are the app's own.
         for event in [down, up] {
             event.flags = .maskCommand
             event.setIntegerValueField(.eventSourceUserData, value: LiveTyper.eventMarker)
             event.postToPid(current.pid)
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: Self.clipboardRestoreDelay)
+            restore.restore()
         }
         return String(localized: "붙여넣기를 요청했어요. 입력되지 않았다면 칸을 선택하고 다시 눌러 주세요.")
     }

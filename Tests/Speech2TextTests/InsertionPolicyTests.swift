@@ -46,6 +46,52 @@ import Testing
     #expect(!insertion.copy("", to: board, transient: true))
 }
 
+/// The automatic paste borrows the clipboard: after the paste, the user's own copy (every type of it) is back.
+@Test @MainActor func theAutomaticPasteGivesBackWhatTheClipboardHeld() throws {
+    let board = NSPasteboard(name: .init("Speech2TextTests-\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    let rich = NSPasteboard.PasteboardType("com.example.rich")
+    board.clearContents()
+    let own = NSPasteboardItem()
+    own.setString("user copy", forType: .string)
+    own.setData(Data([1, 2, 3]), forType: rich)
+    board.writeObjects([own])
+
+    let restore = try #require(TextInsertion().copyForPaste("dictated line", to: board))
+    #expect(board.string(forType: .string) == "dictated line")
+
+    #expect(restore.restore())
+    #expect(board.string(forType: .string) == "user copy")
+    #expect(board.data(forType: rich) == Data([1, 2, 3]))
+    #expect(board.pasteboardItems?.count == 1)
+}
+
+/// A clipboard that was empty is empty again, so the dictation does not stay behind on it.
+@Test @MainActor func theAutomaticPasteLeavesAnEmptyClipboardEmpty() throws {
+    let board = NSPasteboard(name: .init("Speech2TextTests-\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    board.clearContents()
+
+    let restore = try #require(TextInsertion().copyForPaste("dictated line", to: board))
+    #expect(restore.restore())
+    #expect(board.string(forType: .string) == nil)
+}
+
+/// Something copied after the paste is the user's newest copy and is never overwritten by the old contents.
+@Test @MainActor func aCopyMadeAfterTheAutomaticPasteIsKept() throws {
+    let board = NSPasteboard(name: .init("Speech2TextTests-\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    board.clearContents()
+    board.setString("older copy", forType: .string)
+
+    let restore = try #require(TextInsertion().copyForPaste("dictated line", to: board))
+    board.clearContents()
+    board.setString("newest copy", forType: .string)
+
+    #expect(!restore.restore())
+    #expect(board.string(forType: .string) == "newest copy")
+}
+
 @Test func insertionRequiresExactSafeConditions() {
     #expect(InsertionPolicy.allows(text: "한글 English", trusted: true, sameTarget: true, editable: true))
     #expect(!InsertionPolicy.allows(text: " \n ", trusted: true, sameTarget: true, editable: true))
