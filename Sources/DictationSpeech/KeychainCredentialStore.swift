@@ -4,13 +4,23 @@ import Security
 
 actor KeychainCredentialStore: CredentialStoring {
     private let service: String
-    init() { service = "com.speech2text.credentials" }
-    init(service: String) { self.service = service }
-    private func query(_ kind: CredentialKind) -> [String: Any] {
+    /// The keychain to use instead of the user's default keychains; tests pass a temporary keychain.
+    private let keychain: SecKeychain?
+    init() { self.init(service: "com.speech2text.credentials") }
+    init(service: String, keychain: sending SecKeychain? = nil) {
+        self.service = service
+        self.keychain = keychain
+    }
+    private func item(_ kind: CredentialKind) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
          kSecAttrService as String: service,
          kSecAttrAccount as String: kind.rawValue,
          kSecAttrSynchronizable as String: false]
+    }
+    private func query(_ kind: CredentialKind) -> [String: Any] {
+        var query = item(kind)
+        if let keychain { query[kSecMatchSearchList as String] = [keychain] }
+        return query
     }
     func load(_ kind: CredentialKind) throws -> String? {
         var attributes = query(kind)
@@ -29,13 +39,14 @@ actor KeychainCredentialStore: CredentialStoring {
         guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AppError.missingCredential(kind)
         }
-        let update = [kSecValueData as String: Data(value.utf8)]
-        let status = SecItemUpdate(query(kind) as CFDictionary, update as CFDictionary)
-        if status == errSecItemNotFound {
-            var attributes = query(kind).merging(update) { _, new in new }
-            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-            try check(SecItemAdd(attributes as CFDictionary, nil))
-        } else { try check(status) }
+        // Replaced, never updated in place: an item another program created under this service keeps its own access
+        // list when only its data changes, so that program could read the key.
+        try delete(kind)
+        var attributes = item(kind)
+        attributes[kSecValueData as String] = Data(value.utf8)
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        if let keychain { attributes[kSecUseKeychain as String] = keychain }
+        try check(SecItemAdd(attributes as CFDictionary, nil))
     }
     func delete(_ kind: CredentialKind) throws {
         let status = SecItemDelete(query(kind) as CFDictionary)
