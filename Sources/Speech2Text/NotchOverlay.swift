@@ -855,7 +855,7 @@ private struct LevelMeter: View {
 }
 
 /// Fades the top or bottom edge of a scroll view while there is more content past it, so a list with no scroller still
-/// shows that it continues (HIG Scroll views: show that more content exists; StyleGallery scroll-shadow pattern).
+/// shows that it continues (HIG Scroll views: show that more content exists).
 private struct ScrollEdgeFade: ViewModifier {
     var enabled = true
     private let edges = State(initialValue: (top: false, bottom: false))
