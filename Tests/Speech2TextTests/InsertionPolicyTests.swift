@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 @testable import Speech2Text
 
@@ -25,6 +26,24 @@ import Testing
     #expect(InsertionPolicy.payload(transcript) == LiveTextEdit.sanitize(transcript))
     #expect(InsertionPolicy.payload("list files\nrm -rf tmp") == "list files rm -rf tmp")
     #expect(InsertionPolicy.payload("a\u{2028}b\rc") == "a b c")
+}
+
+/// The automatic paste leaves the dictation on the pasteboard, so it is marked for clipboard managers and Universal
+/// Clipboard to skip. A Copy the user pressed is their own action and stays a plain copy.
+@Test @MainActor func onlyTheAutomaticPasteMarksItsPasteboardWriteAsTransient() throws {
+    let board = NSPasteboard(name: .init("Speech2TextTests-\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    let insertion = TextInsertion()
+
+    #expect(insertion.copy("한글 one line", to: board, transient: true))
+    #expect(board.string(forType: .string) == "한글 one line")
+    #expect(TextInsertion.transientPasteTypes.allSatisfy { board.types?.contains($0) == true })
+
+    #expect(insertion.copy("한글 one line", to: board))
+    #expect(board.string(forType: .string) == "한글 one line")
+    #expect(TextInsertion.transientPasteTypes.allSatisfy { board.types?.contains($0) == false })
+
+    #expect(!insertion.copy("", to: board, transient: true))
 }
 
 @Test func insertionRequiresExactSafeConditions() {
