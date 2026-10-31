@@ -703,20 +703,27 @@ struct NotchOverlayView: View {
             TranscriptViewport(text: state.transcript, followsTail: state.followsTail, uncertain: state.uncertainWords)
                 .transition(entering)
         }
-        if !state.noteText.isEmpty {
-            Text(state.noteText)
-                .font(.subheadline)
-                .foregroundStyle(Color.white.opacity(0.68))
-                .lineLimit(2)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .help(state.noteText)
-                .accessibilityIdentifier("notch-feedback")
+        let showsRetained = state.showsRetainedLine && state.retainedKind != nil
+        let showsActions = !showsRetained && state.phase == .result && !state.inserted
+        if !state.noteText.isEmpty || showsActions {
+            // The feedback line and the result's copy and paste share one row, buttons at the trailing edge under
+            // the header buttons, so the panel spends no extra row on two small circles.
+            HStack(alignment: .center, spacing: Spacing.s) {
+                if !state.noteText.isEmpty {
+                    Text(state.noteText)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.white.opacity(0.68))
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .help(state.noteText)
+                        .accessibilityIdentifier("notch-feedback")
+                }
+                Spacer(minLength: 0)
+                if showsActions { transcriptActions }
+            }
         }
-        if state.showsRetainedLine, let kind = state.retainedKind {
+        if showsRetained, let kind = state.retainedKind {
             retainedLine(state.retained, kind: kind)
-        } else if state.phase == .result, !state.inserted {
-            transcriptActions
         }
     }
 
@@ -728,7 +735,8 @@ struct NotchOverlayView: View {
 
     private var transcriptActions: some View {
         // Small round buttons (owner request 2026-10-25), so every copy
-        // and paste in the overlay is one control; the circle edge lines up with the text above.
+        // and paste in the overlay is one control; like the header row, the row reaches into the side inset so the
+        // last circle lines up with the close button above.
         HStack(spacing: Spacing.xs) {
             OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "복사"), id: "notch-copy", prominent: false) {
                 model.copyTranscript()
@@ -737,9 +745,8 @@ struct NotchOverlayView: View {
                               id: "notch-paste", prominent: false) {
                 model.pasteTranscript()
             }
-            Spacer(minLength: 0)
         }
-        .padding(.leading, -Spacing.xxs)
+        .padding(.trailing, -Spacing.xs)
     }
 
     /// Older or unconfirmed text: labelled, dimmed, one line, with compact copy and paste.
