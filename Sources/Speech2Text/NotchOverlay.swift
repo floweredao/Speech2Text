@@ -734,7 +734,7 @@ struct NotchOverlayView: View {
 
 
     private var transcriptActions: some View {
-        // Small round buttons (owner request 2026-10-25), so every copy
+        // Small round buttons, so every copy
         // and paste in the overlay is one control; like the header row, the row reaches into the side inset so the
         // last circle lines up with the close button above.
         HStack(spacing: Spacing.xs) {
@@ -935,7 +935,7 @@ private struct TranscriptViewport: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { textHeight.wrappedValue = $0 }
                 .accessibilityIdentifier("notch-transcript")
         }
-        // No scroller (owner report 2026-10-25): with a mouse attached the legacy scroller took a column of its own
+        // No scroller: with a mouse attached the legacy scroller took a column of its own
         // beside the header buttons and the text stopped short of them. The text now runs to the same edge as the
         // header buttons; a line cut at the bottom edge shows there is more, and the view follows the newest words.
         .scrollBounceBehavior(.basedOnSize)
@@ -944,7 +944,7 @@ private struct TranscriptViewport: View {
         .defaultScrollAnchor(followsTail ? .bottom : .top)
         .defaultScrollAnchor(followsTail ? .bottom : .top, for: .sizeChanges)
         // The size-change anchor alone lost the tail when the text grew while the viewport itself was still growing to
-        // its five-line cap, or while a wrapped line re-measured (owner report 2026-10-25: a long dictation stopped
+        // its five-line cap, or while a wrapped line re-measured (a long dictation stopped
         // following the newest line). Every new height now scrolls to the bottom explicitly unless the user is reading
         // further up.
         .scrollPosition(position.projectedValue)

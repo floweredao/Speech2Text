@@ -196,7 +196,7 @@ private func display(_ phase: SpeechPhase, error: Bool = false, transcript: Stri
         #expect(state.transcript.isEmpty)
     }
 
-    /// Owner request: the overlay stays calm. Routine confirmations are not shown, and a result already typed into the
+    /// The overlay stays calm. Routine confirmations are not shown, and a result already typed into the
     /// field offers copy as one header button instead of a row of buttons; problems still show.
     @Test func routineConfirmationsStayOutOfTheWay() {
         let typed = DictationDisplayState(speechPhase: .idle, hasError: false, status: "마쳤어요", transcript: live,
@@ -217,7 +217,7 @@ private func display(_ phase: SpeechPhase, error: Bool = false, transcript: Stri
         #expect(listening.targetName == "Notes")
     }
 
-    /// Owner request (2026-10-25): no dictation history. The previous result keeps its own labelled line with copy and
+    /// No dictation history. The previous result keeps its own labelled line with copy and
     /// paste; unconfirmed text heard before an error keeps its own label.
     @Test func previousResultKeepsItsOwnLine() {
         for state in [display(.idle, transcript: previous, feedback: "인식 없음", session: session(.empty)),
@@ -233,7 +233,7 @@ private func display(_ phase: SpeechPhase, error: Bool = false, transcript: Stri
         #expect(!idle.isExpanded)
     }
 
-    /// Owner request: the overlay closes by itself only while no dictation runs, and never when the setting is off.
+    /// The overlay closes by itself only while no dictation runs, and never when the setting is off.
     @Test func overlayAutoClosesOnlyWhenNotDictating() {
         let limit = Duration.seconds(30)
         for phase in [SpeechPhase.preparing, .recording, .finishing] {

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Speech2Text
 
@@ -5,7 +6,7 @@ import Testing
     private let command = SpokenEnter(phrase: "엔터 보내기")
 
     @Test(arguments: [
-        ("ulw 이거 고쳐 줘 엔터 보내기", "ulw 이거 고쳐 줘"),
+        ("xcode 이거 고쳐 줘 엔터 보내기", "xcode 이거 고쳐 줘"),
         ("이거 고쳐 줘. 엔터보내기.", "이거 고쳐 줘."),
         ("고쳐 줘 엔터 보내기!", "고쳐 줘"),
         ("엔터 보내기", ""),
@@ -21,7 +22,7 @@ import Testing
         #expect(command.strip(text) == nil)
     }
 
-    /// An English UI shows "send enter" as the default, but the speaker may say the Korean command (owner's 2026-10-19 note).
+    /// An English UI shows "send enter" as the default, but the speaker may say the Korean command.
     @Test func defaultCommandAcceptsEveryLanguagesDefaultPhrase() {
         let english = SpokenEnter(setting: "send enter", shownDefault: "send enter")
         #expect(english.strip("이제 잘 되나 보내기 엔터.") == "이제 잘 되나")
@@ -42,11 +43,20 @@ import Testing
 
 @Suite struct DictionaryTermsTests {
     @Test func commasAndLinesAddSeveralWordsAndDuplicatesAreSkippedInAnyCase() {
-        #expect(DictionaryTerms.adding(" 센파이, omo\nULW ,,", to: ["OMO"]) == ["OMO", "센파이", "ULW"])
-        #expect(DictionaryTerms.adding("  ", to: ["OMO"]) == ["OMO"])
+        #expect(DictionaryTerms.adding(" 쿠버네티스, swiftui\nXcode ,,", to: ["SwiftUI"]) == ["SwiftUI", "쿠버네티스", "Xcode"])
+        #expect(DictionaryTerms.adding("  ", to: ["SwiftUI"]) == ["SwiftUI"])
     }
 
     @Test func linesFromVersion130KeepOnlyTheWrittenWord() {
-        #expect(DictionaryTerms.migrating(lines: "OMO\n쏀빠이 → 센파이\nulw -> ULW\n\n센파이") == ["OMO", "센파이", "ULW"])
+        #expect(DictionaryTerms.migrating(lines: "SwiftUI\n쿠베네티스 → 쿠버네티스\nxcode -> Xcode\n\n쿠버네티스") == ["SwiftUI", "쿠버네티스", "Xcode"])
+    }
+
+    @MainActor @Test func aFreshInstallStartsWithAnEmptyDictionary() throws {
+        let defaults = try #require(UserDefaults(suiteName: "DictionaryTermsTests-\(UUID().uuidString)"))
+        #expect(AppModel.storedDictionary(defaults).isEmpty)
+        defaults.set("SwiftUI\nxcode -> Xcode", forKey: "vocabulary")
+        #expect(AppModel.storedDictionary(defaults) == ["SwiftUI", "Xcode"])
+        defaults.set(["쿠버네티스"], forKey: "dictionaryTerms")
+        #expect(AppModel.storedDictionary(defaults) == ["쿠버네티스"])
     }
 }
