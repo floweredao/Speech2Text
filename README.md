@@ -152,7 +152,7 @@ The Settings window, light and then dark.
 <details>
 <summary><b>Build from source</b></summary>
 
-Needs an Apple silicon Mac with the Xcode Command Line Tools.
+Needs an Apple silicon Mac with the Xcode Command Line Tools. With Xcode.app installed, the build also adds the Shortcuts and Voice Control actions; without it the app builds and works without them.
 
 ```sh
 bash scripts/test.sh        # tests
