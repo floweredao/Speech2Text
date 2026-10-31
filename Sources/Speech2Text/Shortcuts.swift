@@ -336,9 +336,18 @@ enum KeyNames {
         26: "7", 27: "-", 28: "8", 29: "0", 30: "]", 31: "O", 32: "U", 33: "[", 34: "I", 35: "P", 36: "↩", 37: "L",
         38: "J", 39: "'", 40: "K", 41: ";", 42: "\\", 43: ",", 44: "/", 45: "N", 46: "M", 47: ".", 48: "⇥",
         49: "Space", 50: "`", 51: "⌫", 53: "⎋", 115: "↖", 116: "⇞", 117: "⌦", 119: "↘", 121: "⇟",
-        123: "←", 124: "→", 125: "↓", 126: "↑",
+        123: "←", 124: "→", 125: "↓", 126: "↑", 10: "§",
+    ]
+    /// The keypad repeats the digits and operators of the main keyboard, so its keys are named apart from them.
+    private static let keypadKeys: [UInt16: String] = [
+        82: "0", 83: "1", 84: "2", 85: "3", 86: "4", 87: "5", 88: "6", 89: "7", 91: "8", 92: "9",
+        65: ".", 67: "*", 69: "+", 71: "⌧", 75: "/", 76: "⌤", 78: "-", 81: "=",
     ]
 
     static func isFunctionKey(_ code: UInt16) -> Bool { functionKeys[code] != nil }
-    static func name(_ code: UInt16) -> String { functionKeys[code] ?? names[code] ?? String(localized: "키 \(Int(code))") }
+    static func name(_ code: UInt16) -> String {
+        if let name = functionKeys[code] ?? names[code] { return name }
+        if let key = keypadKeys[code] { return String(localized: "키패드 \(key)") }
+        return String(localized: "키 \(Int(code))")
+    }
 }

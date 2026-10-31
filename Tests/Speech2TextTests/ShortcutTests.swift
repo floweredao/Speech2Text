@@ -128,6 +128,18 @@ import Testing
         #expect(recognizer.press(.mouse(4), at: 1) == [])
     }
 
+    /// A keypad key is a legal chord with Control, Option or Command, so its label must name the key.
+    @Test func keypadAndSectionKeysAreNamedInsteadOfNumbered() {
+        #expect(KeyNames.name(UInt16(kVK_ANSI_Keypad1)) == "키패드 1")
+        #expect(KeyNames.name(UInt16(kVK_ANSI_KeypadEnter)) == "키패드 ⌤")
+        #expect(KeyNames.name(UInt16(kVK_ANSI_KeypadPlus)) == "키패드 +")
+        #expect(KeyNames.name(UInt16(kVK_ISO_Section)) == "§")
+        // The number row, the function keys and an unknown code keep their own labels.
+        #expect(KeyNames.name(UInt16(kVK_ANSI_1)) == "1")
+        #expect(KeyNames.name(UInt16(kVK_F20)) == "F20")
+        #expect(KeyNames.name(200) == "키 200")
+    }
+
     @Test func sameShortcutOnAnotherActionIsReported() {
         let settings = ShortcutSettings.standard
         let toggle = settings[.toggleDictation]!

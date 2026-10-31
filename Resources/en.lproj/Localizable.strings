@@ -22,6 +22,7 @@
 " 두 번" = " twice";
 " 세 번" = " three times";
 "키 %lld" = "Key %lld";
+"키패드 %@" = "Keypad %@";
 "음성 인식 요청이 거절됐어요." = "The speech recognition request was rejected.";
 "%@은 글자 입력을 막아서 쓸 수 없어요. ⌃·⌥·⌘와 함께 누르거나, 수정 키만 누르거나, F1–F20을 써 주세요." = "%@ can't be used because it would block typing. Add ⌃, ⌥, or ⌘, press modifiers alone, or use F1–F20.";
 "%@은 이미 '%@'에 쓰고 있어요." = "%1$@ is already used for '%2$@'.";
