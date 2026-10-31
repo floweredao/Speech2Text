@@ -109,7 +109,8 @@ Task {
         app.arguments = ["--demo", locale, "--demo-screen", String(displayID),
                          "-AppleLanguages", "(\(locale))", "-inputDeviceUID", "demo-mic", "-shortcuts", "x",
                          "-wakeListeningEnabled", "NO", "-commandJudge", "jev", "-punctuationStyle", "asIs",
-                         "-overlayAutoCloseSeconds", "30", "-marksUncertainWords", "NO"]
+                         "-overlayAutoCloseSeconds", "30", "-marksUncertainWords", "NO",
+                         "-dictionaryTerms", "()"]
         try app.run()
         while app.isRunning { try await Task.sleep(for: .milliseconds(100)) }
         try await Task.sleep(for: .milliseconds(300))
