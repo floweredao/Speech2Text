@@ -9,12 +9,12 @@
 <key>CFBundleDisplayName</key><string>Speech2Text</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
-<key>CFBundleVersion</key><string>16</string>
-<key>CFBundleShortVersionString</key><string>1.7.1</string>
+<key>CFBundleVersion</key><string>17</string>
+<key>CFBundleShortVersionString</key><string>1.7.2</string>
 <key>LSMinimumSystemVersion</key><string>15.0</string>
 <key>LSUIElement</key><true/>
 <key>SUFeedURL</key><string>https://github.com/floweredao/Speech2Text/releases/latest/download/appcast.xml</string>
-<key>SUPublicEDKey</key><string>kL2fnAXLkg0G4UFqTgkASvZemWBh3qlGX/ZPhHF9+PI=</string>
+<key>SUPublicEDKey</key><string>ftvvFLh5j+XQRrX9FoVt0agsMQshh+e3L258D/asHrg=</string>
 <key>SUEnableAutomaticChecks</key><true/>
 <key>SUScheduledCheckInterval</key><integer>86400</integer>
 <key>SUAutomaticallyUpdate</key><false/>
