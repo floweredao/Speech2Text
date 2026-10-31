@@ -11,7 +11,9 @@ struct SpokenEnter: Equatable {
 
     let phrases: [String]
 
-    init(phrase: String) { phrases = [phrase] }
+    init(phrase: String) {
+        phrases = [phrase]
+    }
 
     /// A phrase left at the default shown in Settings counts in every language; a phrase the user typed counts alone.
     init(setting phrase: String, shownDefault: String) {

@@ -59,9 +59,9 @@ extension SonioxReducerTests {
 
  @Test func tokensKeepTheirConfidence() throws {
   var r = SonioxTranscriptReducer()
-  let events = try r.reduce(Data(#"{"tokens":[{"text":"스피치","is_final":false,"start_ms":10,"confidence":0.42}]}"#.utf8))
+  let events = try r.reduce(Data(#"{"tokens":[{"text":"스피치","is_final":false,"start_ms":10,"end_ms":480,"confidence":0.42}]}"#.utf8))
   guard case .update(let update) = events.first else { Issue.record("no update"); return }
-  #expect(update.spans == [TimedText(text: "스피치", startMs: 10, confidence: 0.42)])
+  #expect(update.spans == [TimedText(text: "스피치", startMs: 10, confidence: 0.42, endMs: 480)])
  }
 
  /// Each word keeps the time it was spoken, so text can be split where the user acted, not where it arrived.

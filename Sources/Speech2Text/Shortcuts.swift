@@ -124,11 +124,15 @@ enum ShortcutTrigger: Codable, Hashable, Sendable {
     case key(KeyChord)
     /// Only modifier keys pressed and released together, such as both Shift keys or the right ⌘.
     case modifiers(Set<ModifierKey>)
+    /// An extra mouse button such as a side button (macOS numbers them from 2: 2 is the middle button).
+    /// The click still reaches the app under the pointer, so the left and right buttons are never used.
+    case mouse(Int)
 
     var label: String {
         switch self {
         case .key(let chord): chord.label
         case .modifiers(let keys): Self.describe(keys, name: \.symbol)
+        case .mouse(let button): Self.mouseName(button)
         }
     }
 
@@ -136,7 +140,12 @@ enum ShortcutTrigger: Codable, Hashable, Sendable {
         switch self {
         case .key(let chord): chord.spokenLabel
         case .modifiers(let keys): Self.describe(keys, name: \.spokenName)
+        case .mouse(let button): Self.mouseName(button)
         }
+    }
+
+    private static func mouseName(_ button: Int) -> String {
+        button == 2 ? String(localized: "마우스 가운데 버튼") : String(localized: "마우스 버튼 \(button + 1)")
     }
 
     private static func describe(_ keys: Set<ModifierKey>, name: KeyPath<ModifierGroup, String>) -> String {
@@ -206,6 +215,10 @@ struct ShortcutSettings: Codable, Equatable, Sendable {
 
     var usesModifierOnlyTrigger: Bool {
         bindings.keys.contains { if case .modifiers = $0.trigger { true } else { false } }
+    }
+
+    var usesMouseTrigger: Bool {
+        bindings.keys.contains { if case .mouse = $0.trigger { true } else { false } }
     }
 
     func action(using shortcut: Shortcut, except action: ShortcutAction) -> ShortcutAction? {

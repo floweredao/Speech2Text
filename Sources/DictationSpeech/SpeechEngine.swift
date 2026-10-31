@@ -21,12 +21,15 @@ public enum KeyActivity: Sendable {
     public var inputDeviceUID: String?
     /// Words sent to Soniox as context when a dictation starts; changes apply to the next one.
     public var vocabulary: [String] = []
+    /// Example sentences sent to Soniox as context text with `vocabulary`; nil for none.
+    public var contextText: String?
     /// A recording finishes by itself once this long passes without newly recognized text. Nil keeps listening.
     public var silenceLimit: Duration? = .seconds(30)
     /// A language code to type a live translation instead of the spoken words (experimental); nil for none.
     public var translationTarget: String?
     /// Microphone loudness now, 0-1, for the recording indicator. Poll it; it is not observable.
-    public var inputLevel: Float { audio?.inputLevel ?? 0 }
+    public var inputLevel: Float { simulatedLevel ?? audio?.inputLevel ?? 0 }
+    @ObservationIgnored public var simulatedLevel: Float?
     /// The last recording was finished by `silenceLimit`, not by the user.
     public private(set) var finishedForSilence = false
     public private(set) var transcript = ""
@@ -134,6 +137,7 @@ public enum KeyActivity: Sendable {
         audioOrigin = nil
         finishedForSilence = false
         let terms = vocabulary
+        let text = contextText
         let target = translationTarget
         let previousTranscript = lastFinalTranscript
         // Keep the previous transcript until new speech arrives, even if startup fails.
@@ -149,14 +153,14 @@ public enum KeyActivity: Sendable {
                 guard generation == epoch, !Task.isCancelled else { return }
                 // The microphone starts at once and buffers while the provider connects, so the first
                 // words are kept. A pending permission prompt comes first: Soniox drops idle sockets.
-                let early = capture.promptsForPermission ? nil : connect(client, apiKey: key, terms: terms, target: target, epoch: epoch)
+                let early = capture.promptsForPermission ? nil : connect(client, apiKey: key, terms: terms, text: text, target: target, epoch: epoch)
                 let chunks = try await capture.start(format: .pcm16Mono16k)
                 guard generation == epoch, !Task.isCancelled else { return }
                 audioOrigin = ProcessInfo.processInfo.systemUptime - capture.capturedDuration
                 phase = .recording
                 armSilenceLimit(epoch: epoch)
                 status = String(localized: "듣고 있어요 · 연결 중…")
-                let (provider, events) = try await (early ?? connect(client, apiKey: key, terms: terms, target: target, epoch: epoch)).value
+                let (provider, events) = try await (early ?? connect(client, apiKey: key, terms: terms, text: text, target: target, epoch: epoch)).value
                 guard generation == epoch, !Task.isCancelled else { return }
                 // Finishing while connecting already armed its own timeout; keep it.
                 if phase == .recording {
@@ -233,18 +237,18 @@ public enum KeyActivity: Sendable {
 
     /// Opens the provider while audio buffers. A failed connection is retried once on a fresh session:
     /// no audio has been sent yet, so the retry loses nothing.
-    private func connect(_ first: any STTSession, apiKey key: String, terms: [String], target: String?, epoch: UUID)
+    private func connect(_ first: any STTSession, apiKey key: String, terms: [String], text: String?, target: String?, epoch: UUID)
         -> Task<(any STTSession, AsyncThrowingStream<TranscriptEvent, Error>), Error> {
         Task {
             guard generation == epoch else { throw AppError.cancelled }
             do {
-                return (first, try await first.open(apiKey: key, terms: terms, translateTo: target))
+                return (first, try await first.open(apiKey: key, terms: terms, text: text, translateTo: target))
             } catch AppError.connectionFailed {
                 guard generation == epoch else { throw AppError.cancelled }
                 let retry = sessionFactory()
                 session = retry
                 if phase == .recording { status = String(localized: "듣고 있어요 · 다시 연결 중…") }
-                return (retry, try await retry.open(apiKey: key, terms: terms, translateTo: target))
+                return (retry, try await retry.open(apiKey: key, terms: terms, text: text, translateTo: target))
             }
         }
     }
@@ -281,16 +285,29 @@ public enum KeyActivity: Sendable {
     }
 
     public func spokenTurns(from ms: Int?) -> [SpokenTurn] {
-        turns.compactMap { turn in
-            guard let ms else { return SpokenTurn(text: turn.text, isFinal: turn.isFinal) }
+        turns.indices.compactMap { index in
+            let turn = turns[index]
+            let pause = index > turns.startIndex ? Self.silence(after: turns[index - 1], before: turn) : nil
+            guard let ms else { return SpokenTurn(text: turn.text, isFinal: turn.isFinal, pauseBeforeMs: pause) }
             guard let first = turn.spans.firstIndex(where: { ($0.startMs ?? Int.min) >= ms }) else { return nil }
             var kept = turn.spans[first...]
             if first > turn.spans.startIndex {
                 kept = kept.drop { $0.text.first?.isWhitespace != true }
             }
             let text = kept.map(\.text).joined()
-            return text.isEmpty ? nil : SpokenTurn(text: text, isFinal: turn.isFinal)
+            return text.isEmpty ? nil : SpokenTurn(text: text, isFinal: turn.isFinal, pauseBeforeMs: pause)
         }
+    }
+
+    /// Milliseconds between the last sound of `previous` and the first sound of `turn`; nil when a time is missing.
+    private static func silence(after previous: TranscriptUpdate, before turn: TranscriptUpdate) -> Int? {
+        let words = { (spans: [TimedText]) in
+            spans.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        }
+        guard let end = words(previous.spans).last?.endMs, let start = words(turn.spans).first?.startMs else {
+            return nil
+        }
+        return max(0, start - end)
     }
 
     private func joined(_ turns: [TranscriptUpdate]) -> String {
@@ -359,6 +376,7 @@ public enum KeyActivity: Sendable {
 
     private func stop(with message: String) {
         generation = UUID()
+        simulatedLevel = nil
         runTask?.cancel()
         senderTask?.cancel()
         timerTask?.cancel()
@@ -406,6 +424,79 @@ public enum KeyActivity: Sendable {
         } catch { reportKey(error.localizedDescription, failed: true) }
     }
 
+    /// Drives the engine with a scripted sequence of partial transcripts, with no microphone or network.
+    /// Returns the task that finishes the demo, so a caller can wait for the result.
+    @discardableResult
+    public func runDemo(steps: [String], stepInterval: Duration = .milliseconds(90),
+                        holdBeforeFinish: Duration = .milliseconds(450)) -> Task<Void, Never>? {
+        guard !isBusy, let final = steps.last else { return nil }
+        let epoch = UUID()
+        generation = epoch
+        hasError = false
+        outcome = .none
+        hasCurrentTranscript = false
+        turns = []
+        audioOrigin = ProcessInfo.processInfo.systemUptime
+        finishedForSilence = false
+        phase = .recording
+        status = String(localized: "듣고 있어요.")
+        simulatedLevel = 0.45
+        let demo = Task { [weak self] in
+            guard let self else { return }
+            for (index, step) in steps.enumerated() {
+                if index > 0 {
+                    do { try await Task.sleep(for: stepInterval) } catch { return }
+                }
+                guard generation == epoch, !Task.isCancelled else { return }
+                simulatedLevel = Float(0.32 + 0.28 * abs(sin(Double(index) * 1.3)))
+                let isLast = index == steps.count - 1
+                let update = TranscriptUpdate(turnID: "demo-0", revision: index + 1, text: step, isFinal: isLast,
+                                              spans: [TimedText(text: step, startMs: index * 80)])
+                if receive(update) { onLiveText?(transcript) }
+            }
+            if holdBeforeFinish > .zero {
+                do { try await Task.sleep(for: holdBeforeFinish) } catch { return }
+            }
+            guard generation == epoch, !Task.isCancelled else { return }
+            finishDemo(final)
+        }
+        runTask = demo
+        return demo
+    }
+
+    /// Sets the engine synchronously to a synthetic state for offscreen `--demo-capture` renders.
+    public func setDemoState(phase: SpeechPhase, transcript: String, status: String,
+                             outcome: SpeechOutcome = .none, level: Float? = nil) {
+        generation = UUID()
+        runTask?.cancel()
+        hasError = false
+        self.phase = phase
+        self.status = status
+        self.transcript = transcript
+        lastFinalTranscript = outcome == .completed ? transcript : lastFinalTranscript
+        hasCurrentTranscript = !transcript.isEmpty && (phase != .idle || outcome == .completed)
+        self.outcome = outcome
+        simulatedLevel = level
+        turns = transcript.isEmpty ? [] : [
+            TranscriptUpdate(turnID: "demo-0", revision: 1, text: transcript,
+                             isFinal: phase == .idle && outcome == .completed,
+                             spans: [TimedText(text: transcript, startMs: 0)])
+        ]
+    }
+
+    private func finishDemo(_ final: String) {
+        simulatedLevel = nil
+        lastFinalTranscript = final
+        transcript = final
+        hasCurrentTranscript = !final.isEmpty
+        outcome = final.isEmpty ? .empty : .completed
+        generation = UUID()
+        phase = .idle
+        hasError = false
+        status = final.isEmpty ? String(localized: "인식된 음성이 없어요.") : String(localized: "받아쓰기를 마쳤어요.")
+        onFinal?(final)
+    }
+
     public func deleteKey() async {
         guard keyActivity == .idle else { return }
         keyActivity = .deleting
@@ -427,9 +518,13 @@ public enum KeyActivity: Sendable {
 public struct SpokenTurn: Equatable, Sendable {
     public let text: String
     public let isFinal: Bool
-    public init(text: String, isFinal: Bool) {
+    /// Silence Soniox's word times show between the previous turn's last word and this turn's first word; nil for
+    /// the first turn or when a time is missing.
+    public let pauseBeforeMs: Int?
+    public init(text: String, isFinal: Bool, pauseBeforeMs: Int? = nil) {
         self.text = text
         self.isFinal = isFinal
+        self.pauseBeforeMs = pauseBeforeMs
     }
 }
 

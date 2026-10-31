@@ -12,7 +12,7 @@ struct SonioxTranscriptReducer: Sendable {
     init(translating: Bool = false) { self.translating = translating }
     mutating func reduce(_ data: Data) throws -> [TranscriptEvent] {
         struct Token: Decodable {
-            let text: String; let is_final: Bool; let start_ms: Int?; let confidence: Double?; let translation_status: String?
+            let text: String; let is_final: Bool; let start_ms: Int?; let end_ms: Int?; let confidence: Double?; let translation_status: String?
         }
         struct Frame: Decodable { let tokens: [Token]?; let finished: Bool?; let error_code: Int?; let error_message: String? }
         let frame: Frame
@@ -42,10 +42,12 @@ struct SonioxTranscriptReducer: Sendable {
                 continue
             } else if token.is_final {
                 committed += token.text
-                committedSpans.append(TimedText(text: token.text, startMs: token.start_ms, confidence: token.confidence))
+                committedSpans.append(TimedText(text: token.text, startMs: token.start_ms, confidence: token.confidence,
+                                                endMs: token.end_ms))
             } else {
                 provisional += token.text
-                provisionalSpans.append(TimedText(text: token.text, startMs: token.start_ms, confidence: token.confidence))
+                provisionalSpans.append(TimedText(text: token.text, startMs: token.start_ms, confidence: token.confidence,
+                                                  endMs: token.end_ms))
             }
         }
         if frame.finished == true {

@@ -111,13 +111,10 @@ private func session(_ outcome: SpeechOutcome = .none, current: Bool = false) ->
 }
 
 private func display(_ phase: SpeechPhase, error: Bool = false, transcript: String, feedback: String = "",
-                     session: DictationSession, history: [DictationRecord] = []) -> DictationDisplayState {
+                     session: DictationSession) -> DictationDisplayState {
     DictationDisplayState(speechPhase: phase, hasError: error, status: "엔진 상태", transcript: transcript,
-                          feedback: feedback, session: session, history: history)
+                          feedback: feedback, session: session)
 }
-
-/// Newest first; the newest is the dictation that just finished.
-private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map { DictationRecord(text: $0) }
 
 @Suite struct DictationDisplayStateTests {
     @Test func launchIdleIsCompactAndCanStartRecording() {
@@ -199,20 +196,6 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(state.transcript.isEmpty)
     }
 
-    /// Owner request: a new dictation pushes the finished one down into the history list instead of replacing it.
-    @Test func startingANewDictationMovesTheResultIntoHistory() {
-        let result = display(.idle, transcript: previous, session: session(.completed, current: true), history: records)
-        #expect(result.transcript == previous)
-        #expect(result.history == [records[1]])
-        let connecting = display(.preparing, transcript: previous, session: session(), history: records)
-        #expect(connecting.transcript.isEmpty)
-        #expect(connecting.history == [records[0]])
-        #expect(connecting.isExpanded)
-        let recording = display(.recording, transcript: live, session: session(current: true), history: records)
-        #expect(recording.transcript == live)
-        #expect(recording.history == [records[0]])
-    }
-
     /// Owner request: the overlay stays calm. Routine confirmations are not shown, and a result already typed into the
     /// field offers copy as one header button instead of a row of buttons; problems still show.
     @Test func routineConfirmationsStayOutOfTheWay() {
@@ -234,22 +217,19 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(listening.targetName == "Notes")
     }
 
-    /// Owner request: after a dictation the rest of the history stays reachable behind "more"; never while dictating.
-    @Test func olderHistoryWaitsBehindMoreOnlyWhenNotDictating() {
-        let result = display(.idle, transcript: previous, session: session(.completed, current: true), history: records)
-        #expect(result.moreHistory == Array(records[2...4]))
-        let recording = display(.recording, transcript: live, session: session(current: true), history: records)
-        #expect(recording.moreHistory.isEmpty)
-    }
-
-    @Test func historyNeverRepeatsTheLabelledPreviousLineAndHidesWhenIdle() {
-        let notice = display(.idle, transcript: previous, feedback: "인식 없음", session: session(.empty), history: records)
-        #expect(notice.retained == previous)
-        #expect(notice.history == [records[1]])
-        let unfinished = display(.idle, error: true, transcript: live, session: session(.failed, current: true), history: records)
-        #expect(unfinished.history == [records[0]])
-        let idle = display(.idle, transcript: "", session: session(), history: records)
-        #expect(idle.history.isEmpty)
+    /// Owner request (2026-10-25): no dictation history. The previous result keeps its own labelled line with copy and
+    /// paste; unconfirmed text heard before an error keeps its own label.
+    @Test func previousResultKeepsItsOwnLine() {
+        for state in [display(.idle, transcript: previous, feedback: "인식 없음", session: session(.empty)),
+                      display(.idle, transcript: previous, feedback: "취소했어요", session: session(.cancelled)),
+                      display(.idle, error: true, transcript: previous, session: session(.failed))] {
+            #expect(state.retainedKind == .previous)
+            #expect(state.showsRetainedLine)
+        }
+        let unfinished = display(.idle, error: true, transcript: live, session: session(.failed, current: true))
+        #expect(unfinished.retainedKind == .unfinished)
+        #expect(unfinished.showsRetainedLine)
+        let idle = display(.idle, transcript: "", session: session())
         #expect(!idle.isExpanded)
     }
 
@@ -264,6 +244,19 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         #expect(NotchOverlayController.autoCloseLimit(result, setting: limit) == limit)
         #expect(NotchOverlayController.autoCloseLimit(display(.idle, transcript: "", session: session()), setting: limit) == limit)
         #expect(NotchOverlayController.autoCloseLimit(result, setting: nil) == nil)
+    }
+
+    /// Regression: Settings opened by itself after a dictation. Its button appears where Finish was, so a second
+    /// or late click on Finish landed on it; a header button that just appeared ignores that click.
+    @Test func clickOnFinishThatLandsOnTheNewSettingsButtonIsIgnored() {
+        let recording = display(.recording, transcript: live, session: session(current: true)).headerActions
+        let result = display(.idle, transcript: live, session: session(.completed, current: true)).headerActions
+        let slotFromRight = { (actions: [DictationDisplayState.Action], action: DictationDisplayState.Action) in
+            actions.firstIndex(of: action).map { actions.count - 1 - $0 }
+        }
+        #expect(slotFromRight(recording, .finish) == slotFromRight(result, .settings))
+        #expect(!DictationDisplayState.acceptsPress(shownFor: .milliseconds(300)))
+        #expect(DictationDisplayState.acceptsPress(shownFor: .seconds(1)))
     }
 
     /// Regression: cancelling during finalization was shown as a finished result.
@@ -334,6 +327,41 @@ private let records = [previous, "둘째", "셋째", "넷째", "다섯째"].map 
         model.openSettings()
         model.settingsFocused = false
         #expect(!model.overlayVisible)
+    }
+
+    /// Regression: Jev's late answer typed the held-back last words into the field, but the overlay kept showing the
+    /// text without them, because the answer changed nothing the overlay observes.
+    @MainActor @Test func jevsAnswerRedrawsTheOverlayWithTheHeldBackWords() async throws {
+        let model = AppModel()
+        model.commandJudgeOverride = .jev
+        model.jevKeyOverride = "test-key"
+        model.jevJudge.send = { _ in throw URLError(.notConnectedToInternet) }
+        model.speech.setDemoState(phase: .idle, transcript: "회의는 세 시예요. 다 지워", status: "", outcome: .completed)
+        let (redrawn, signal) = AsyncStream<Void>.makeStream()
+        let shown = withObservationTracking { model.transcript } onChange: { signal.yield() }
+        #expect(shown == "회의는 세 시예요.")
+        let observed = await withTaskGroup(of: Bool.self) { group in
+            group.addTask { for await _ in redrawn { return true }; return false }
+            group.addTask { try? await Task.sleep(for: .seconds(3)); return false }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            signal.finish()
+            return first
+        }
+        #expect(observed)
+        #expect(model.transcript == "회의는 세 시예요. 다 지워")
+        model.commandJudgeOverride = nil
+    }
+
+    /// `--demo` drives the overlay with scripted text: no microphone, network, or other app's field is involved.
+    @MainActor @Test func syntheticDemoStreamsStepsIntoResultWithoutNetwork() async throws {
+        let model = AppModel()
+        model.autoInsert = false
+        let demo = try #require(model.runDemo(.en, stepInterval: .zero, holdBeforeFinish: .zero))
+        await demo.value
+        let state = DictationDisplayState(model: model)
+        #expect(state.phase == .result)
+        #expect(state.transcript == AppModel.DemoLocale.en.steps.last)
     }
 
     @Test(arguments: [(26, ControlPermissionPane.accessibility), (27, .deviceControl), (28, .deviceControl)])

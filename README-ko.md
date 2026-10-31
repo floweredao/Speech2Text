@@ -1,119 +1,171 @@
 <p align="center">
-  <img src="Resources/AppIcon.png" width="128" alt="Speech2Text 앱 아이콘">
+  <img src="Resources/AppIcon.png" width="112" height="112" alt="Speech2Text 앱 아이콘">
 </p>
 
 <h1 align="center">Speech2Text</h1>
 
 <p align="center">
-  말한 내용을 지금 쓰고 있는 입력 칸에 바로 받아쓰는 macOS 네이티브 앱
-  <br>
-  <a href="README.md">English</a> · <b>한국어</b>
+  말하면, 지금 쓰고 있는 칸에 글이 돼요.
 </p>
 
 <p align="center">
-  <img src="docs/images/hero-ko.png" width="820" alt="메뉴 막대 아래에서 받아쓰는 동안 메모에 실시간으로 입력되는 모습">
+  <a href="https://github.com/floweredao/Speech2Text/releases/latest"><b>내려받기</b></a>
+  ·
+  <a href="README.md">English</a>
+  ·
+  macOS 15+ · Apple silicon
 </p>
 
-Mac에서 말한 내용을 현재 입력 칸에 받아쓰는 메뉴바 앱입니다. 단축키를 누르고 말하면 터미널·브라우저·메모 등 클릭해 둔 입력 칸에 바로 써지고, 노치 아래 작은 창에 실시간 전사가 보입니다. 명령을 해석하거나 문장을 다시 작성하지 않습니다.
+https://github.com/user-attachments/assets/fb68b1a6-9bd5-4914-9324-e3e74c0a9a5f
 
-<p align="center">
-  <a href="https://github.com/floweredao/Speech2Text/releases/latest"><b>최신 릴리스 내려받기</b></a>
-</p>
+## 왜 Speech2Text인가요
 
-## 둘러보기
-
-<table>
-  <tr>
-    <td width="56%" valign="top">
-      <b>대기</b>: 노치 아래 한 줄 캡슐<br><br>
-      <img src="docs/images/notch-idle-ko.png" width="340" alt="대기 중인 오버레이"><br><br>
-      <b>듣는 중</b>: 말하는 동안 전사가 실시간으로 바뀝니다<br><br>
-      <img src="docs/images/notch-recording-ko.png" width="480" alt="녹음 중인 오버레이"><br><br>
-      <b>완료</b>: 닫을 때까지 결과가 남고, 복사·붙여넣기로 되살릴 수 있습니다<br><br>
-      <img src="docs/images/notch-result-ko.png" width="480" alt="받아쓰기를 마친 오버레이">
-    </td>
-    <td width="44%" valign="top">
-      <b>설정</b>: API 키, 마이크, 권한, 입력, 단축키<br><br>
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark-ko.png">
-        <img src="docs/images/settings-light-ko.png" width="360" alt="설정 창">
-      </picture>
-    </td>
-  </tr>
-</table>
+- **어디서나 바로 써요.** 메모, 브라우저, 터미널 어디든 클릭해 둔 칸에 써져요.
+- **말로 시작하고 고쳐요.** "Hey Computer"로 시작하고, "지워"·"되돌려"로 고쳐요.
+- **흐름을 끊지 않아요.** 오버레이는 포커스를 가져가지 않아요. 결과는 닫을 때까지 남아요.
 
 ## 설치
 
-macOS 15 이상, Apple Silicon Mac이 필요합니다.
+1. [최신 릴리스](https://github.com/floweredao/Speech2Text/releases/latest)에서 `.zip`을 받아 앱을 응용 프로그램 폴더로 옮겨요.
+2. 앱을 열고 설정 › 키 관리에 [Soniox](https://soniox.com) API 키를 저장해요.
+3. 마이크와 손쉬운 사용을 허용해요.
 
-1. [최신 릴리스](https://github.com/floweredao/Speech2Text/releases/latest)에서 `.zip`을 내려받아 압축을 풀고 `Speech2Text.app`을 응용 프로그램 폴더로 옮깁니다.
-2. 앱을 엽니다. 열 수 없다는 안내가 나오면 시스템 설정 › 개인정보 보호 및 보안에서 아래 **보안** 항목의 Speech2Text 옆 **그래도 열기**를 누릅니다. 버전마다 한 번만 하면 됩니다.
-3. 그다음 버전부터는 앱 안에서 업데이트합니다. 하루 한 번 GitHub 릴리스를 확인하며, 메뉴 막대 아이콘의 **업데이트 확인…**으로 바로 확인할 수도 있습니다.
+## 쓰는 법
 
-## 받아쓰기
+- **시작·끝**: <kbd>⌃</kbd><kbd>⌥</kbd><kbd>D</kbd> 또는 "Hey Computer"
+- **마지막 결과 붙여넣기**: <kbd>⌃</kbd><kbd>⌥</kbd><kbd>V</kbd>
+- **취소**: 메뉴 막대 메뉴의 **받아쓰기 취소**
+- **저절로 끝남**: 30초 동안 말이 없으면 끝나요
 
-1. 설정에서 Soniox API 키를 붙여넣고 **저장**합니다. 키는 Speech2Text 전용 Keychain 항목(`com.speech2text.credentials`)에만 보관되고 다음 실행 때 자동으로 불러옵니다. **저장된 키 삭제**를 누르면 이 Mac에서 지웁니다. 설정의 **사용할 마이크**에서 녹음에 쓸 마이크를 고릅니다(기본값은 시스템 기본 입력).
-2. 접근성 권한을 허용합니다. 처음 녹음을 시작할 때 마이크 권한도 허용합니다.
-3. 터미널·브라우저·메모 등 원하는 앱의 **입력 칸을 먼저 클릭**합니다.
-4. **Control+Option+D**(기본값, 아래 "단축키 바꾸기" 참고)로 시작하고 말합니다. 노치 아래에서 인식 중인 내용을 볼 수 있습니다.
-   - 마이크가 켜지는 즉시 녹음을 시작하므로 바로 말해도 됩니다. Soniox 연결은 뒤에서 이어지고, 그동안 노치에 "연결 중"이 보입니다. 연결이 한 번 실패하면 자동으로 한 번 더 시도합니다.
-   - 인터넷이 끊겨 있으면 녹음을 시작하지 않고 바로 알려 줍니다.
-5. 말하는 동안 처음 선택한 입력 칸에 바로 써집니다. 인식이 앞말을 고치면 바뀐 끝부분만 지우고 다시 씁니다. 같은 단축키 또는 마무리 버튼을 누르면 확정된 문장으로 맞춥니다. 녹음은 최대 30분입니다.
-   - 일반 Mac 입력 칸(메모, TextEdit, 대부분의 앱)은 접근성 텍스트 교체로, 터미널처럼 교체를 지원하지 않는 곳은 그 앱에만 보내는 키 입력으로 씁니다. 한국어 입력기가 켜져 있어도 동작합니다.
-   - 도중에 다른 칸이나 앱으로 옮기면 실시간 입력을 멈추고, 결과는 노치에 보관합니다. 터미널에서는 커서 위치를 알 수 없어서, 받아쓰는 동안 그 칸에서 키를 누르거나 클릭해도 멈춥니다. 취소하면 이번에 쓴 글자만 지웁니다. 줄바꿈이나 Return은 보내지 않으므로 터미널에서 명령이 실행되지 않습니다.
+## 말로 고치기
 
-## 단축키 바꾸기
+받아쓰는 중에 이렇게 말하면 고쳐요.
 
-설정 › **단축키**에서 각 동작의 단축키 버튼을 누른 뒤 원하는 키를 누르면 저장됩니다. Esc를 누르면 기록을 취소하고, ✕는 그 단축키를 끕니다.
+| 말 | 하는 일 |
+| --- | --- |
+| "지워" · "delete that" | 마지막 문장을 지워요 |
+| "한 단어 지워" | 마지막 단어를 지워요 |
+| "다 지워" · "clear all" | 받아쓴 글을 모두 지워요 |
+| "되돌려" · "undo" | 방금 고친 것을 되돌려요 |
+| "A를 B로 바꿔" | 마지막 A를 B로 바꿔요 |
+| "엔터 보내기" · "send enter" | 끝내고 Return을 눌러요 |
 
-- **키 조합**: ⌃·⌥·⌘ 중 하나 이상과 함께 누르는 키(예: ⌃⌥D, ⌘⇧K) 또는 F1–F20. 글자 입력을 막는 키(수식 키 없는 글자, ⇧+글자)는 쓸 수 없습니다.
-- **수정 키만**: 수정 키만 눌렀다 떼는 동작. 양쪽 ⇧을 함께 누르거나, 오른쪽 ⌘ 하나, 양쪽 ⌥, ⌘+⌥처럼 왼쪽·오른쪽을 구분해 기록합니다. 누르는 사이 다른 키를 치거나 클릭했거나 0.6초보다 오래 누르고 있었으면 단축키로 보지 않습니다. 이 방식은 기기 제어(손쉬운 사용) 권한이 있어야 동작합니다.
-- **여러 번 누르기**: 기록할 때 같은 키나 수정 키 조합을 0.5초 안에 두세 번 연달아 누르면 "두 번"·"세 번" 누르기로 저장됩니다. 같은 키의 한 번 누르기와 두 번 누르기를 서로 다른 동작에 지정하면 한 번 누르기는 0.5초 기다린 뒤 실행됩니다.
+명령인지 글인지는 설정 › 일반 › **말로 고치기**에서 정해요.
 
-## 입력되지 않았을 때
+- **Jev로 명령 알아듣기**: 명령만 말하면 TypeSafe Jev가 앞 글을 보고 판단해요. 애매하면 글로 써요. 끄면 모두 글로 써요.
+- **동작 고르기**: 명령이 할 일(지우기, 모두 지우기, 고치기, 되돌리기, 문장부호 넣기, 엔터 누르기)을 체크해요. 끈 동작은 글로 쓰고 Jev에 보내지 않아요.
+- **내 Jev 키**: [TypeSafe 콘솔](https://console.typesafe.ai)에서 만들어 설정 › 키 관리에 붙여넣어요. 키가 없으면 명령도 글로 써요.
 
-말하는 사이 다른 앱이나 입력 칸으로 이동하면 자동 입력을 중단합니다. 결과는 노치에 남습니다.
+## 말로 시작하기
 
-- **복사**: 현재 받아쓰기를 클립보드에 복사합니다. 원하는 칸에서 ⌘V로 붙여넣으세요.
-- **붙여넣기** 또는 **Control+Option+V**: 현재 선택한 입력 칸으로 다시 보냅니다. 버튼이 있는 노치 창은 키보드 포커스를 가져오지 않습니다.
-- 마우스 없이: 메뉴 막대 아이콘 메뉴에도 **받아쓰기 취소**와 **마지막 받아쓰기 복사**가 있습니다(Control+F8과 방향키로 열기). 받아쓰기 취소는 기본 단축키가 없고 설정 › 단축키에서 지정할 수 있습니다.
-- 접근성이 지원되지 않는 칸은 복사 후 직접 붙여넣으세요.
+- **호출어**: 설정 › 음성으로 시작에서 켜요. "Hey Computer"로 시작하고, 끝에 다시 말하면 끝나요.
+- **한국어 억양도 들어요**: macOS 26부터는 기기 내 음성 인식이 "헤이 컴퓨터"도 알아들어요.
+- **소리는 맥 안에서만**: 호출어를 듣는 소리는 저장하거나 보내지 않아요.
+- **단축어·음성 제어**: **받아쓰기 시작**·**받아쓰기 끝내기** 동작을 쓸 수 있어요.
 
-일부 앱은 입력 성공 여부를 외부에 알려 주지 않습니다. 이 경우 앱은 **붙여넣기를 요청했어요**라고 표시하며 성공을 단정하지 않습니다. 기본 붙여넣기 경로는 클립보드 내용을 받아쓰기로 바꿉니다. 자동 입력이 지원되는 모든 타사 앱 조합을 보장하지는 않습니다.
+## 둘러보기
 
-## 사용자가 직접 완료하는 입력 설정
+대기 중에는 노치 아래 캡슐 하나예요.
 
-메뉴바 파형 아이콘 → **설정…**에서 아래 항목을 설정합니다.
+<p align="center">
+  <img src="docs/images/notch-idle-ko.png" width="340" alt="대기 중인 오버레이">
+</p>
 
-1. **권한 → 손쉬운 사용 → 허용 요청**을 누릅니다. **시스템 설정 열기**를 눌러 macOS 목록에서 Speech2Text를 직접 허용합니다. 앱은 권한을 임의로 바꾸지 않습니다.
-2. 설정 창 아래로 스크롤해 **입력 → 말하는 동안 바로 입력**을 켜거나 끕니다. 끄면 전사를 보관하고 사용자가 원하는 시점에 복사·붙여넣기합니다.
-3. 원하는 앱의 입력 칸을 클릭한 뒤 노치의 **붙여넣기** 또는 **Control+Option+V**를 사용합니다. 권한 없이 사용하려면 **복사 → 직접 ⌘V**를 사용합니다.
+말하는 동안 실시간 글과 입력 중인 앱이 보여요.
 
-시스템 설정에서 돌아오면 권한 상태가 갱신됩니다. 비밀번호 입력이나 macOS 권한 승인은 사용자가 직접 합니다.
+<p align="center">
+  <img src="docs/images/notch-recording-ko.png" width="560" alt="듣는 중인 오버레이: 실시간 글, 입력 중인 앱">
+</p>
 
-macOS 버전에 따라 개인정보 보호 및 보안의 해당 항목이 **Device Control and Data Management**로 표시될 수 있습니다. 왼쪽 사이드바의 확대·VoiceOver 등을 설정하는 **Accessibility** 화면과는 다릅니다.
+끝나면 결과와 복사·붙여넣기 버튼이 남아요.
 
-목록에서 이미 켜져 있는데도 권한이 없다고 나오면, Speech2Text 항목을 **−**로 지우고 **+**로 `/Applications/Speech2Text.app`을 다시 추가해 허용하세요.
+<p align="center">
+  <img src="docs/images/notch-result-ko.png" width="560" alt="끝난 오버레이: 결과, 복사·붙여넣기 버튼">
+</p>
 
-## 데이터
+설정 창이에요. 라이트, 그다음 다크예요.
 
-녹음 중 오디오를 Soniox로 전송합니다. Soniox 사용 요금이 적용됩니다. 키는 소스·로그에 기록하지 않습니다. 전사는 메모리에만 남으며 앱 종료 시 사라집니다. 녹음 파일을 자동 저장하거나 화면을 수집하지 않습니다.
+<p align="center">
+  <img src="docs/images/settings-light-ko.png" width="420" alt="라이트 모드 설정 창">
+</p>
 
-## 로컬 검증
+<p align="center">
+  <img src="docs/images/settings-dark-ko.png" width="420" alt="다크 모드 설정 창">
+</p>
+
+## 자세히
+
+<details>
+<summary><b>권한과 준비</b></summary>
+
+- **API 키**: Soniox·Jev 키는 이 앱 전용 키체인에만 저장하고 파일로 남기지 않아요. 설정 › 키 관리에서 확인하거나 지워요. Soniox·TypeSafe 요금은 따로 들어요.
+- **마이크**: 처음 녹음할 때 macOS가 물어요. 설정 › **사용할 마이크**에서 골라요.
+- **손쉬운 사용**: 다른 앱에 바로 쓰려면 필요해요. 설정에서 **허용 요청**을 눌러요.
+- macOS 27에서는 이 권한 이름이 **Device Control and Data Management**예요.
+
+</details>
+
+<details>
+<summary><b>단축키</b></summary>
+
+- 설정 › **단축키**에서 동작마다 바꿔요.
+- 키 조합: ⌃·⌥·⌘ 중 하나와 함께 누르는 키, 또는 F1–F20.
+- 수정 키만: 양쪽 ⇧, 오른쪽 ⌘처럼 수정 키만 눌렀다 떼요.
+- 여러 번 누르기: 같은 키를 0.5초 안에 두세 번 눌러 저장해요.
+
+</details>
+
+<details>
+<summary><b>입력이 어떻게 들어가나요</b></summary>
+
+- 말하는 동안 고른 칸에 실시간으로 써요.
+- 다른 칸으로 옮기면 실시간 입력이 멈춰요. 결과는 오버레이에 남아요.
+- 취소하면 이번에 쓴 글자만 지워요.
+- 앱은 스스로 Return을 보내지 않아요. "엔터 보내기"만 예외예요.
+- **문장부호**는 설정 › 입력에서 그대로·쉼표 빼기·모두 빼기 중에 골라요.
+- **사전**에 적은 단어는 적힌 대로 인식되게 도와요.
+
+</details>
+
+<details>
+<summary><b>문제가 생기면</b></summary>
+
+- **글이 안 들어갔어요**: 오버레이의 **복사** 또는 **붙여넣기**(<kbd>⌃</kbd><kbd>⌥</kbd><kbd>V</kbd>)를 써요.
+- **권한이 있는데 없다고 해요**: 시스템 설정 목록에서 앱을 **−**로 지우고 **+**로 다시 넣어요.
+- **녹음이 시작되지 않아요**: 설정 맨 위에 빠진 준비 항목이 보여요.
+- **호출어가 안 먹어요**: 설정에서 마이크와 **민감도**를 확인해요.
+- **터미널에서 멈춰요**: 터미널은 커서 위치를 알려 주지 않아요. 끝난 뒤 붙여넣어요.
+- **음성 제어가 글을 두 번 넣어요**: 음성 제어를 명령 모드로 바꿔요.
+- **앱이 열리지 않아요**: 시스템 설정 › 개인정보 보호 및 보안 › **그래도 열기**를 눌러요.
+
+</details>
+
+<details>
+<summary><b>개인정보</b></summary>
+
+- 소리는 받아쓰는 동안에만 Soniox로 보내요.
+- 녹음 파일을 남기지 않아요.
+- 호출어 소리는 맥 밖으로 나가지 않아요.
+
+</details>
+
+<details>
+<summary><b>소스에서 빌드</b></summary>
+
+Apple silicon Mac과 Xcode Command Line Tools가 필요해요. Xcode.app이 있으면 단축어와 음성 제어 동작도 함께 넣고, 없으면 그 동작만 빠진 채로 빌드돼요.
 
 ```sh
-bash scripts/test.sh
-bash -n scripts/build-app.sh
-bash scripts/build-app.sh
-codesign --verify --deep --strict build/Speech2Text.app
+bash scripts/test.sh        # 테스트
+bash scripts/build-app.sh   # build/Speech2Text.app 만들기
 ```
 
-이 Mac의 Swift 6.4 Command Line Tools에서는 기본 테스트 명령이 `TestingMacros`/`Testing` 경로를 찾지 못합니다. `scripts/test.sh`는 설치된 프레임워크와 매크로 경로를 명시하며 테스트를 제외하지 않습니다. 현재 도구 체인은 `native` 빌드 백엔드의 사용 중단 예정 경고를 출력합니다.
+- 빌드 전에 호출어 모델을 `Vendor/`에 자동으로 받아요.
+- 애드혹 서명은 `SPEECH2TEXT_SIGNING_IDENTITY=-`로 해요.
+- `bash scripts/capture-readme-images.sh`가 이 문서의 사진을 다시 만들어요.
+- `bash scripts/record-demo-video.sh`가 데모 영상을 찍어요. 앱을 가상 디스플레이에 띄워 60fps로 녹화하기 때문에 쓰던 화면에는 아무것도 뜨지 않아요. 화면 기록 권한이 필요해요.
 
-실제 오디오 파일을 같은 인식 경로로 보내는 진단 실행도 지원합니다. 앱을 먼저 종료하세요.
+</details>
 
-```sh
-open build/Speech2Text.app --args --audio-file /absolute/path/sample.aiff --no-auto-insert
-```
+## 라이선스
 
-이 실행도 Soniox와 앱 전용 Keychain의 키를 사용합니다. `--no-auto-insert`를 빼면 실행 당시 입력 칸이 그대로 유지되는 경우 자동 입력합니다.
+[MIT](LICENSE). 함께 든 오픈소스의 고지는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 있어요.

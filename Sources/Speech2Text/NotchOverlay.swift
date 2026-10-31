@@ -33,11 +33,6 @@ struct DictationDisplayState: Equatable {
     let noteText: String
     /// The error comes from setup (key, microphone, permission), so retrying without a change repeats it.
     let needsSettings: Bool
-    /// Earlier dictations below the current one, newest first. Never includes the text shown as the body or the
-    /// labelled retained line.
-    let history: [DictationRecord]
-    /// Older records behind the "more" button; offered only while no dictation runs.
-    let moreHistory: [DictationRecord]
     /// The app live typing writes into, shown quietly beside the title while it matters.
     let targetName: String?
     /// The result already went into the field, so copy and paste step back to one header button.
@@ -51,14 +46,14 @@ struct DictationDisplayState: Equatable {
                   transcript: model.transcript, feedback: model.feedback,
                   session: DictationSession(outcome: model.speechOutcome,
                                             hasCurrentTranscript: model.hasCurrentTranscript),
-                  toggleShortcut: model.shortcuts[.toggleDictation]?.label, history: model.history,
+                  toggleShortcut: model.shortcuts[.toggleDictation]?.label,
                   feedbackIsRoutine: model.feedbackIsRoutine, targetName: model.liveTargetName,
                   uncertainWords: model.uncertainWords)
     }
 
     init(speechPhase: SpeechPhase, hasError: Bool, needsSettings: Bool = false, status: String, transcript: String,
          feedback: String, session: DictationSession = DictationSession(), toggleShortcut: String? = "⌃⌥D",
-         history: [DictationRecord] = [], feedbackIsRoutine: Bool = false, targetName: String? = nil,
+         feedbackIsRoutine: Bool = false, targetName: String? = nil,
          uncertainWords: [String] = []) {
         self.needsSettings = needsSettings
         let fresh = session.freshTranscript(transcript)
@@ -109,28 +104,20 @@ struct DictationDisplayState: Equatable {
         inserted = phase == .result && feedbackIsRoutine
         self.targetName = phase == .recording || phase == .finalizing || inserted ? targetName : nil
         self.uncertainWords = uncertainWords
-        // The newest record is the finished result itself, or the "previous" line, until a new dictation starts.
-        let older: ArraySlice<DictationRecord>
-        switch phase {
-        case .idle: older = []
-        case .result: older = history.dropFirst()
-        default: older = retainedKind == .previous ? history.dropFirst() : history[...]
-        }
-        self.history = Array(older.prefix(NotchOverlayGeometry.historyRows))
-        let dictating = phase == .connecting || phase == .recording || phase == .finalizing
-        moreHistory = dictating ? [] : Array(older.dropFirst(NotchOverlayGeometry.historyRows))
     }
+
+    /// The previous result and unconfirmed text heard before an error each keep their own labelled line.
+    var showsRetainedLine: Bool { retainedKind != nil }
 
     /// What changes the overlay's layout, so motion follows these changes but not every revision of live text.
     struct LayoutKey: Hashable {
         let phase: Phase
-        let history: [UUID]
         let hasTranscript: Bool
         let hasNote: Bool
         let hasTarget: Bool
     }
     var layoutKey: LayoutKey {
-        LayoutKey(phase: phase, history: history.map(\.id), hasTranscript: !transcript.isEmpty, hasNote: !noteText.isEmpty,
+        LayoutKey(phase: phase, hasTranscript: !transcript.isEmpty, hasNote: !noteText.isEmpty,
                   hasTarget: targetName != nil)
     }
 
@@ -138,7 +125,7 @@ struct DictationDisplayState: Equatable {
     var isDictating: Bool { phase == .connecting || phase == .recording || phase == .finalizing }
     var followsTail: Bool { phase == .recording || phase == .finalizing }
     var isExpanded: Bool {
-        !message.isEmpty || !transcript.isEmpty || !retained.isEmpty || !noteText.isEmpty || !history.isEmpty
+        !message.isEmpty || !transcript.isEmpty || !retained.isEmpty || !noteText.isEmpty
     }
     /// Copy and paste act on `model.transcript`, which is the shown body or retained line in these states.
     var offersTranscriptActions: Bool { phase == .result || !retained.isEmpty }
@@ -152,6 +139,11 @@ struct DictationDisplayState: Equatable {
         case .idle, .result, .notice, .cancelled: [.start, .settings, .dismiss]
         }
     }
+
+    /// When recording ends, Settings takes the slot Finish had; a second click on Finish must not open it.
+    /// A header button ignores clicks until it has been on screen this long.
+    static let pressGuard: Duration = .milliseconds(800)
+    nonisolated static func acceptsPress(shownFor: Duration) -> Bool { shownFor >= pressGuard }
 
     /// Recovery actions shown as labelled buttons below an error message.
     var recoveryActions: [Action] {
@@ -177,14 +169,18 @@ enum NotchOverlayGeometry {
     /// The transcript grows to this many lines of its text style, then scrolls. The view measures the lines,
     /// so the cap follows the system text size.
     static let maxTranscriptLines = 5
-    /// Earlier dictations shown under the current one; older ones stay in `AppModel.history`.
-    static let historyRows = 1
     /// Used only until the five-line sample has been measured.
     static let fallbackMaxTranscriptHeight: CGFloat = 96
     /// Smallest hit area of an overlay button, whatever its visible size.
     static let minimumHitSize: CGFloat = 28
     static let topGap: CGFloat = 8
     static let margin: CGFloat = 12
+    /// Status indicator size. The capsule's side inset equals its top inset to the indicator, (44 - 28) / 2 + 4 = 12,
+    /// so the indicator sits concentric with the rounded end.
+    static let indicatorSize: CGFloat = 20
+    static let sideInset: CGFloat = 12
+    static let verticalInset: CGFloat = 8
+    static let rowHeight: CGFloat = 28
 
     static func width(screenWidth: CGFloat, expanded: Bool) -> CGFloat {
         let preferred = expanded ? min(max(screenWidth * 0.3, 420), 520) : compactWidth
@@ -220,30 +216,37 @@ enum NotchOverlayGeometry {
     }
 }
 
-/// Motion values for the overlay. See DESIGN.md, "모션".
+/// Spacing scale shared by the overlay and Settings: multiples of 4, with 2 only for hairline gaps.
+enum Spacing {
+    static let xxs: CGFloat = 2
+    static let xs: CGFloat = 4
+    static let s: CGFloat = 8
+    static let m: CGFloat = 12
+}
+
+/// Motion values for the overlay and Settings. See DESIGN.md, "모션".
 enum OverlayMotion {
-    /// Critically damped: it settles without overshoot, because nothing the user threw is moving.
-    /// The overlay sits where the Dynamic Island would: it morphs with a slightly underdamped spring, like the
-    /// island, so a change of state reads as one surface reshaping rather than content swapping.
-    static let appear = Animation.spring(response: 0.34, dampingFraction: 0.86)
-    static let disappear = Animation.easeIn(duration: 0.14)
-    static let layout = Animation.spring(response: 0.38, dampingFraction: 0.82)
-    /// Pressing a control: quick to go down, a little bounce coming back.
-    static let press = Animation.spring(response: 0.2, dampingFraction: 0.6)
+    /// One curve and duration for every layout change, animated by SwiftUI alone; the panel window waits this long
+    /// before it gives up height. A strong ease-out, quick while the user watches and soft as it settles.
+    static let duration = 0.24
+    static let layout = Animation.timingCurve(0.23, 1, 0.32, 1, duration: duration)
+    /// Critically damped: nothing the user threw is moving, so it settles without overshoot. A spring starts
+    /// from where the panel is, so showing it again during its exit turns around without a jump.
+    static let appear = Animation.spring(duration: duration, bounce: 0)
+    /// Leaves a little faster than it came, still easing out; ease-in would hold still while the user watches.
+    static let disappear = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.16)
+    /// Pressing a control answers at once and comes back without a bounce.
+    static let press = Animation.spring(duration: 0.12, bounce: 0)
+    static let pressedScale: CGFloat = 0.96
     /// Live words settle into place instead of popping in.
     static let liveText = Animation.smooth(duration: 0.2)
+    /// The level meter follows the voice closely without wobbling past it.
+    static let meter = Animation.smooth(duration: 0.12)
     /// Reduce Motion keeps only a short cross-fade.
     static let reduced = Animation.easeOut(duration: 0.15)
-    /// The panel frame follows the content with a fast start and a soft settle, close to `layout`.
-    static let resizeDuration = 0.28
-    static var resizeCurve: CAMediaTimingFunction { CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1) }
     /// The entrance grows out of the notch: slightly smaller and higher, anchored at the top edge.
     static let hiddenScale: CGFloat = 0.94
     static let hiddenOffset: CGFloat = -6
-    /// Each step down the history list is dimmer and a little smaller.
-    static func historyOpacity(depth: Int) -> Double { max(0.38, 0.72 - Double(depth) * 0.14) }
-    /// Smaller by one system text style per step, so the sizes still follow the user's text size.
-    static func historyFont(depth: Int) -> Font { [Font.callout, .subheadline, .footnote][min(max(depth, 0), 2)] }
 }
 
 /// Runs an action once a time limit passes without another `restart`.
@@ -295,6 +298,8 @@ final class NotchOverlayController: NSObject {
     private var selectedScreen: NSScreen?
     private var expanded = false
     private var contentHeight = NotchOverlayGeometry.compactHeight
+    /// Each placement replaces any resize still waiting for the content's animation to end.
+    private var resizeGeneration = 0
     private var announcedPhase: DictationDisplayState.Phase?
     /// Top-left corner the user dragged the panel to. Kept in memory only and forgotten when the user
     /// closes the overlay, so reopening or relaunching starts at the default position below the notch.
@@ -318,10 +323,15 @@ final class NotchOverlayController: NSObject {
         observe()
     }
 
+    /// The display a demo recording puts the overlay on instead of the one under the pointer (`--demo-screen`).
+    static var demoScreenID: CGDirectDisplayID?
+
     /// Shows the overlay on the display under the pointer. Never activates the app.
     func present() {
         guard running else { return }
-        selectedScreen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
+        selectedScreen = Self.demoScreenID.flatMap { id in
+            NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id }
+        } ?? NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
             ?? NSScreen.main ?? NSScreen.screens.first
         model.overlayVisible = true
         synchronize()
@@ -531,15 +541,31 @@ final class NotchOverlayController: NSObject {
                                                auxiliaryTop: auxiliaryTop, expanded: expanded,
                                                contentHeight: contentHeight)
         }
+        resizeGeneration += 1
         guard panel.frame != frame else { return }
-        if animated {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = OverlayMotion.resizeDuration
-                context.timingFunction = OverlayMotion.resizeCurve
-                panel.animator().setFrame(frame, display: true)
-            }
-        } else {
+        // SwiftUI alone animates the visible height; the clear window only has to hold it. Animating the window frame
+        // as well made a second, unsynchronized owner: AppKit applied the new height a frame before the new origin, so
+        // the whole panel jumped up and back as the panel grew (recorded 2026-10-25). The window takes a taller
+        // frame at once and gives up a shorter one only after the content has finished shrinking into it.
+        guard animated else {
             panel.setFrame(frame, display: true)
+            return
+        }
+        let generation = resizeGeneration
+        let shrinking = frame.height < panel.frame.height
+        if !shrinking { panel.setFrame(frame, display: true) }
+        // A clear window's shadow is drawn from its content once; redraw it while the content changes shape.
+        let start = ContinuousClock.now
+        Task { @MainActor [weak self, weak panel] in
+            while let self, let panel, self.resizeGeneration == generation {
+                panel.invalidateShadow()
+                guard ContinuousClock.now - start < .seconds(OverlayMotion.duration) else {
+                    if shrinking { panel.setFrame(frame, display: true) }
+                    panel.invalidateShadow()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(16))
+            }
         }
     }
 }
@@ -558,14 +584,14 @@ struct NotchOverlayView: View {
         let state = DictationDisplayState(model: model)
         let shape = RoundedRectangle(cornerRadius: state.isExpanded ? 18 : NotchOverlayGeometry.compactHeight / 2,
                                      style: .continuous)
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.s) {
             header(state)
             if state.isExpanded { details(state) }
         }
         .animation(reduceMotion ? OverlayMotion.reduced : OverlayMotion.layout, value: state.layoutKey)
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, state.isExpanded ? 12 : 8)
+        .padding(.horizontal, NotchOverlayGeometry.sideInset)
+        .padding(.top, NotchOverlayGeometry.verticalInset)
+        .padding(.bottom, state.isExpanded ? Spacing.m : NotchOverlayGeometry.verticalInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         // Content decides the height; the controller sizes the panel to this measurement.
         .fixedSize(horizontal: false, vertical: true)
@@ -589,33 +615,33 @@ struct NotchOverlayView: View {
     }
 
     private func header(_ state: DictationDisplayState) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Spacing.s) {
             indicator(state)
-                .frame(width: 20, height: 20)
-            HStack(spacing: 6) {
+                .frame(width: NotchOverlayGeometry.indicatorSize, height: NotchOverlayGeometry.indicatorSize)
+            // The destination finishes the status sentence, so it stands a wider gap from the title than its icon
+            // stands from its own words: nearer means more closely related.
+            HStack(spacing: Spacing.m) {
                 Text(state.title)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .contentTransition(.opacity)
+                    // Status words change within a phase too (connecting, then recording); cross-fade them.
+                    .animation(reduceMotion ? OverlayMotion.reduced : OverlayMotion.layout, value: state.title)
                     .help(state.title)
                     .accessibilityIdentifier("notch-status")
                 if let target = state.targetName {
-                    Label(target, systemImage: "arrow.turn.down.right")
-                        .labelStyle(.titleAndIcon)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.5))
-                        .lineLimit(1)
+                    OverlayTargetChip(name: target, icon: model.liveTargetIcon, typed: state.inserted)
                         .layoutPriority(-1)
                         .transition(.opacity)
-                        .accessibilityLabel(String(localized: "입력 중인 앱: \(target)"))
-                        .accessibilityIdentifier("notch-target")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // Buttons carry a transparent margin around their visible circle, so the gap looks like 6 pt.
-            HStack(spacing: 2) {
+            // Buttons carry a 2 pt transparent margin around their visible circle, so circles sit 8 pt apart, and
+            // the row reaches 4 pt into the side inset so the last circle is 10 pt from the edge, as from the top:
+            // concentric with the capsule's rounded end.
+            HStack(spacing: Spacing.xs) {
                 ForEach(state.headerActions, id: \.self) { action in
                     OverlayIconButton(symbol: symbol(for: action), label: label(for: action, state),
                                       id: identifier(for: action), prominent: action == .start) {
@@ -623,8 +649,9 @@ struct NotchOverlayView: View {
                     }
                 }
             }
+            .padding(.trailing, -Spacing.xs)
         }
-        .frame(minHeight: 28)
+        .frame(minHeight: NotchOverlayGeometry.rowHeight)
     }
 
     @ViewBuilder
@@ -657,7 +684,7 @@ struct NotchOverlayView: View {
                 .accessibilityIdentifier("notch-error")
         }
         if !state.recoveryActions.isEmpty {
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.s) {
                 ForEach(state.recoveryActions, id: \.self) { action in
                     OverlayTextButton(title: action == .start ? String(localized: "다시 시도") + shortcutSuffix(.toggleDictation) : String(localized: "설정 확인"),
                                       symbol: action == .start ? "arrow.clockwise" : "gearshape",
@@ -676,23 +703,27 @@ struct NotchOverlayView: View {
             TranscriptViewport(text: state.transcript, followsTail: state.followsTail, uncertain: state.uncertainWords)
                 .transition(entering)
         }
-        if !state.noteText.isEmpty {
-            Text(state.noteText)
-                .font(.subheadline)
-                .foregroundStyle(Color.white.opacity(0.68))
-                .lineLimit(2)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .help(state.noteText)
-                .accessibilityIdentifier("notch-feedback")
+        let showsRetained = state.showsRetainedLine && state.retainedKind != nil
+        let showsActions = !showsRetained && state.phase == .result && !state.inserted
+        if !state.noteText.isEmpty || showsActions {
+            // The feedback line and the result's copy and paste share one row, buttons at the trailing edge under
+            // the header buttons, so the panel spends no extra row on two small circles.
+            HStack(alignment: .center, spacing: Spacing.s) {
+                if !state.noteText.isEmpty {
+                    Text(state.noteText)
+                        .font(.subheadline)
+                        .foregroundStyle(Color.white.opacity(0.68))
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .help(state.noteText)
+                        .accessibilityIdentifier("notch-feedback")
+                }
+                Spacer(minLength: 0)
+                if showsActions { transcriptActions }
+            }
         }
-        if let kind = state.retainedKind {
+        if showsRetained, let kind = state.retainedKind {
             retainedLine(state.retained, kind: kind)
-        } else if state.offersTranscriptActions, !state.inserted {
-            transcriptActions
-        }
-        if !state.history.isEmpty {
-            HistoryList(records: state.history, more: state.moreHistory, entering: entering) { model.copyHistory($0) }
         }
     }
 
@@ -703,20 +734,25 @@ struct NotchOverlayView: View {
 
 
     private var transcriptActions: some View {
-        HStack(spacing: 8) {
-            OverlayTextButton(title: String(localized: "복사"), symbol: "doc.on.doc", id: "notch-copy") { model.copyTranscript() }
-            OverlayTextButton(title: String(localized: "붙여넣기") + shortcutSuffix(.pasteTranscript), symbol: "arrow.down.doc",
-                              id: "notch-paste") {
+        // Small round buttons (owner request 2026-10-25), so every copy
+        // and paste in the overlay is one control; like the header row, the row reaches into the side inset so the
+        // last circle lines up with the close button above.
+        HStack(spacing: Spacing.xs) {
+            OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "복사"), id: "notch-copy", prominent: false) {
+                model.copyTranscript()
+            }
+            OverlayIconButton(symbol: "arrow.down.doc", label: String(localized: "붙여넣기") + shortcutHint(.pasteTranscript),
+                              id: "notch-paste", prominent: false) {
                 model.pasteTranscript()
             }
-            Spacer(minLength: 0)
         }
+        .padding(.trailing, -Spacing.xs)
     }
 
     /// Older or unconfirmed text: labelled, dimmed, one line, with compact copy and paste.
     private func retainedLine(_ text: String, kind: DictationDisplayState.RetainedKind) -> some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(alignment: .center, spacing: Spacing.s) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(kind == .previous ? String(localized: "이전 받아쓰기") : String(localized: "중단 전 받은 텍스트 · 확정 아님"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white.opacity(0.5))
@@ -738,7 +774,7 @@ struct NotchOverlayView: View {
                 model.pasteTranscript()
             }
         }
-        .padding(.top, 2)
+        .padding(.trailing, -Spacing.xxs)
     }
 
     private func perform(_ action: DictationDisplayState.Action) {
@@ -812,99 +848,41 @@ private struct LevelMeter: View {
                         .frame(width: 3, height: 4 + 12 * loudness * Self.shape[index] * wobble)
                 }
             }
-            .animation(reduceMotion ? nil : .spring(response: 0.18, dampingFraction: 0.65), value: loudness)
+            .animation(reduceMotion ? nil : OverlayMotion.meter, value: loudness)
         }
-        .frame(width: 20, height: 20)
+        .frame(width: NotchOverlayGeometry.indicatorSize, height: NotchOverlayGeometry.indicatorSize)
     }
 }
 
-/// Earlier dictations, pushed down by the new one: a labelled inset group, so they never read as the current text,
-/// with each older row dimmer and one text style smaller. "More" opens the rest in a scrolling list.
-private struct HistoryList: View {
-    let records: [DictationRecord]
-    let more: [DictationRecord]
-    let entering: AnyTransition
-    let copy: (DictationRecord) -> Void
-    /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
-    private let showsAll = State(initialValue: false)
-    private let listHeight = State(initialValue: CGFloat(0))
-    static let expandedMaxHeight: CGFloat = 220
+/// Fades the top or bottom edge of a scroll view while there is more content past it, so a list with no scroller still
+/// shows that it continues (HIG Scroll views: show that more content exists; StyleGallery scroll-shadow pattern).
+private struct ScrollEdgeFade: ViewModifier {
+    var enabled = true
+    private let edges = State(initialValue: (top: false, bottom: false))
+    static let length: CGFloat = 24
 
-    var body: some View {
-        let expanded = showsAll.wrappedValue && !more.isEmpty
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center) {
-                Text(String(localized: "받아쓰기 기록"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 0)
-                if !more.isEmpty {
-                    Button {
-                        showsAll.wrappedValue.toggle()
-                    } label: {
-                        Label(expanded ? String(localized: "접기") : String(localized: "더보기 \(more.count)"),
-                              systemImage: expanded ? "chevron.up" : "chevron.down")
-                            .font(.caption.weight(.semibold))
-                            .labelStyle(.titleAndIcon)
-                    }
-                    .buttonStyle(OverlayControlStyle(shape: .capsule, prominent: false))
-                    .accessibilityValue(expanded ? String(localized: "펼침") : String(localized: "접힘"))
-                    .accessibilityIdentifier("notch-history-more")
-                }
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: [Bool].self) { geo in
+                // Measured on the visible part of the content, so content insets and rounding never read as more.
+                [geo.visibleRect.minY > 1, geo.visibleRect.maxY < geo.contentSize.height - 1]
+            } action: { _, now in
+                withAnimation(.easeOut(duration: 0.15)) { edges.wrappedValue = (now[0], now[1]) }
             }
-            if expanded {
-                ScrollView(.vertical) {
-                    rows(records + more)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight.wrappedValue = $0 }
-                }
-                .contentMargins(.trailing, 14, for: .scrollContent)
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(height: min(max(listHeight.wrappedValue, 1), Self.expandedMaxHeight))
-                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            } else {
-                rows(records)
-                    .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-        }
-        .padding(.top, 2)
-        // A new dictation folds the list back to its three newest rows.
-        .onChange(of: more.isEmpty) { _, empty in if empty { showsAll.wrappedValue = false } }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "받아쓰기 기록"))
-        .accessibilityIdentifier("notch-history")
-    }
-
-    private func rows(_ shown: [DictationRecord]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(shown.enumerated()), id: \.element.id) { depth, record in
+            .mask {
                 VStack(spacing: 0) {
-                    if depth > 0 {
-                        Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.leading, 10)
-                    }
-                    HStack(alignment: .center, spacing: 8) {
-                        Text(record.text)
-                            .font(OverlayMotion.historyFont(depth: depth))
-                            .foregroundStyle(.white.opacity(OverlayMotion.historyOpacity(depth: depth)))
-                            .lineLimit(2)
-                            .truncationMode(.tail)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .help(record.text)
-                            .accessibilityLabel(String(localized: "이전 받아쓰기") + ": " + record.text)
-                            .accessibilityIdentifier("notch-history-row")
-                        OverlayIconButton(symbol: "doc.on.doc", label: String(localized: "이 받아쓰기 복사"),
-                                          id: "notch-history-copy", prominent: false) {
-                            copy(record)
-                        }
-                    }
-                    .padding(.leading, 10)
-                    .padding(.trailing, 2)
-                    .padding(.vertical, 3)
+                    LinearGradient(colors: [.black.opacity(enabled && edges.wrappedValue.top ? 0 : 1), .black],
+                                   startPoint: .top, endPoint: .bottom).frame(height: Self.length)
+                    Color.black
+                    LinearGradient(colors: [.black, .black.opacity(enabled && edges.wrappedValue.bottom ? 0 : 1)],
+                                   startPoint: .top, endPoint: .bottom).frame(height: Self.length)
                 }
-                .transition(entering)
             }
-        }
     }
+}
+
+extension View {
+    func scrollEdgeFade(enabled: Bool = true) -> some View { modifier(ScrollEdgeFade(enabled: enabled)) }
 }
 
 /// Scrolls only when the measured text exceeds the viewport, so short text leaves no gutter.
@@ -916,6 +894,11 @@ private struct TranscriptViewport: View {
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
     private let textHeight = State(initialValue: CGFloat(19))
     private let maxHeight = State(initialValue: NotchOverlayGeometry.fallbackMaxTranscriptHeight)
+    private let position = State(initialValue: ScrollPosition(edge: .bottom))
+    /// The newest words are in view. Changed only by the user's own scrolling, so the view keeps following the tail
+    /// until they scroll up to read, and follows again once they scroll back to the bottom.
+    private let pinned = State(initialValue: true)
+    private let userScrolling = State(initialValue: false)
     /// Underlines, with dots, each word Soniox was unsure of, found in reading order.
     static func marked(_ text: String, uncertain: [String]) -> AttributedString {
         var result = AttributedString(text)
@@ -932,6 +915,11 @@ private struct TranscriptViewport: View {
     private static let lineSample = Array(repeating: "Ag", count: NotchOverlayGeometry.maxTranscriptLines)
         .joined(separator: "\n")
 
+    private func followTail() {
+        guard followsTail, pinned.wrappedValue, !userScrolling.wrappedValue else { return }
+        position.wrappedValue.scrollTo(edge: .bottom)
+    }
+
     private func styled(_ text: Text) -> some View {
         text.font(.title3.weight(.medium)).lineSpacing(2)
     }
@@ -947,12 +935,31 @@ private struct TranscriptViewport: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { textHeight.wrappedValue = $0 }
                 .accessibilityIdentifier("notch-transcript")
         }
-        // The overlay scroller draws over content; a trailing gutter keeps it off the text.
-        .contentMargins(.trailing, 14, for: .scrollContent)
+        // No scroller (owner report 2026-10-25): with a mouse attached the legacy scroller took a column of its own
+        // beside the header buttons and the text stopped short of them. The text now runs to the same edge as the
+        // header buttons; a line cut at the bottom edge shows there is more, and the view follows the newest words.
         .scrollBounceBehavior(.basedOnSize)
-        .scrollIndicators(.automatic)
+        .scrollIndicators(.never)
+        .scrollEdgeFade()
         .defaultScrollAnchor(followsTail ? .bottom : .top)
         .defaultScrollAnchor(followsTail ? .bottom : .top, for: .sizeChanges)
+        // The size-change anchor alone lost the tail when the text grew while the viewport itself was still growing to
+        // its five-line cap, or while a wrapped line re-measured (owner report 2026-10-25: a long dictation stopped
+        // following the newest line). Every new height now scrolls to the bottom explicitly unless the user is reading
+        // further up.
+        .scrollPosition(position.projectedValue)
+        .onScrollPhaseChange { old, new, context in
+            userScrolling.wrappedValue = new == .interacting || new == .decelerating || new == .tracking
+            if new == .idle, old == .interacting || old == .decelerating || old == .tracking {
+                let geo = context.geometry
+                pinned.wrappedValue = geo.visibleRect.maxY >= geo.contentSize.height - 4
+            }
+        }
+        .onChange(of: textHeight.wrappedValue) { followTail() }
+        .onChange(of: followsTail) { _, follows in
+            if follows { pinned.wrappedValue = true }
+            followTail()
+        }
         .frame(height: NotchOverlayGeometry.transcriptViewportHeight(textHeight: textHeight.wrappedValue,
                                                                      maxHeight: maxHeight.wrappedValue))
         // Five invisible lines in the same style measure the scroll cap at the current text size.
@@ -966,15 +973,56 @@ private struct TranscriptViewport: View {
     }
 }
 
+/// Where the dictated text goes: the app's own icon and a short sentence naming it ("Typing in Discord"), so the
+/// destination reads without a symbol to decode.
+///
+/// It is a label, not a control, so it wears no capsule: in this overlay a filled capsule or circle means "press me"
+/// (HIG Buttons, Layout: differentiate controls from content). It continues the title's sentence at the title's size,
+/// one step down in hierarchy through weight and the secondary label color (HIG Labels, Typography), and the icon is
+/// sized to the 16 pt body line like a Finder row.
+struct OverlayTargetChip: View {
+    let name: String
+    let icon: NSImage?
+    /// The text is already in the field, so the sentence moves to the past tense.
+    let typed: Bool
+
+    static let iconSize: CGFloat = 16
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            if let icon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: Self.iconSize, height: Self.iconSize)
+                    .accessibilityHidden(true)
+            }
+            Text(typed ? String(localized: "\(name)에 입력됨") : String(localized: "\(name)에 입력 중"))
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .help(String(localized: "입력 중인 앱: \(name)"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "입력 중인 앱: \(name)"))
+        .accessibilityIdentifier("notch-target")
+    }
+}
+
 private struct OverlayIconButton: View {
     let symbol: String
     let label: String
     let id: String
     let prominent: Bool
     let action: () -> Void
+    /// Kept per action, so a button that replaces another in the same slot starts its own wait.
+    private let appearedState = State(initialValue: ContinuousClock.now)
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            if DictationDisplayState.acceptsPress(shownFor: ContinuousClock.now - appearedState.wrappedValue) { action() }
+        } label: {
             Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
         }
         .buttonStyle(OverlayControlStyle(shape: .circle, prominent: prominent))
@@ -1022,14 +1070,15 @@ struct OverlayControlStyle: ButtonStyle {
                     .frame(width: NotchOverlayGeometry.minimumHitSize, height: NotchOverlayGeometry.minimumHitSize)
                     .contentShape(Rectangle())
             case .capsule:
-                label.padding(.horizontal, 10).frame(minHeight: 26)
+                // As tall as the 24 pt circles, with the 28 pt hit area around it.
+                label.padding(.horizontal, Spacing.m).frame(minHeight: 24)
                     .background(fill, in: Capsule())
                     .frame(minHeight: NotchOverlayGeometry.minimumHitSize)
                     .contentShape(Rectangle())
             }
         }
         // The press is answered at once by the control itself; a scale this small needs no Reduce Motion variant.
-        .scaleEffect(pressed ? 0.92 : 1)
+        .scaleEffect(pressed ? OverlayMotion.pressedScale : 1)
         .animation(OverlayMotion.press, value: pressed)
     }
 }

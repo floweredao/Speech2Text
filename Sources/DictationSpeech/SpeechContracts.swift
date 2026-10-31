@@ -8,6 +8,8 @@ struct TimedText: Sendable, Equatable {
     let startMs: Int?
     /// Soniox's 0-1 certainty for this token.
     var confidence: Double? = nil
+    /// When the token's sound ended, on the same scale as `startMs`.
+    var endMs: Int? = nil
 }
 struct TranscriptUpdate: Sendable, Equatable {
     let turnID: String
@@ -22,7 +24,8 @@ enum TranscriptEvent: Sendable, Equatable {
 }
 protocol STTSession: Sendable {
     /// `translateTo` (a language code) makes the stream carry that translation instead of the spoken language.
-    func open(apiKey: String, terms: [String], translateTo: String?) async throws -> AsyncThrowingStream<TranscriptEvent, Error>
+    /// `text` is free-form context (example sentences) sent with `terms`; nil for none.
+    func open(apiKey: String, terms: [String], text: String?, translateTo: String?) async throws -> AsyncThrowingStream<TranscriptEvent, Error>
     func sendAudio(_ pcm: Data) async throws
     /// Sends EOF after the caller has drained audio. Completion arrives on the event stream.
     func finish() async throws
@@ -30,7 +33,7 @@ protocol STTSession: Sendable {
 }
 extension STTSession {
     func open(apiKey: String, terms: [String] = []) async throws -> AsyncThrowingStream<TranscriptEvent, Error> {
-        try await open(apiKey: apiKey, terms: terms, translateTo: nil)
+        try await open(apiKey: apiKey, terms: terms, text: nil, translateTo: nil)
     }
 }
 @MainActor protocol AudioCapturing: AnyObject {

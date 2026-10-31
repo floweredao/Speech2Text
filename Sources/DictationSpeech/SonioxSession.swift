@@ -66,7 +66,7 @@ actor SonioxSession: STTSession {
         self.connectTimeout = connectTimeout
     }
 
-    func open(apiKey: String, terms: [String], translateTo target: String?) async throws
+    func open(apiKey: String, terms: [String], text contextText: String?, translateTo target: String?) async throws
         -> AsyncThrowingStream<TranscriptEvent, Error> {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw AppError.missingCredential(.soniox) }
@@ -86,7 +86,10 @@ actor SonioxSession: STTSession {
                 "enable_endpoint_detection": true, "endpoint_latency_adjustment_level": 2,
                 "endpoint_sensitivity": 0.3, "max_endpoint_delay_ms": 1500
             ]
-            if !terms.isEmpty { config["context"] = ["terms": terms] }
+            var context: [String: Any] = [:]
+            if !terms.isEmpty { context["terms"] = terms }
+            if let contextText, !contextText.isEmpty { context["text"] = contextText }
+            if !context.isEmpty { config["context"] = context }
             if let target { config["translation"] = ["type": "one_way", "target_language": target] }
             let text = String(decoding: try JSONSerialization.data(withJSONObject: config), as: UTF8.self)
             try await sendWithTimeout(.text(text), limit: connectTimeout)

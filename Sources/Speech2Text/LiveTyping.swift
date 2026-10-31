@@ -53,6 +53,8 @@ final class LiveTyper {
     private(set) var userActedAt: TimeInterval?
     private let isShortcut: (KeyChord) -> Bool
     private var inputMonitor: Any?
+    /// The user pressed Return themselves: what is in the field was sent, so the dictation ends there.
+    var onReturn: (() -> Void)?
 
     /// Tags our own key events so the input guard can tell them from the user's.
     nonisolated static let eventMarker: Int64 = 0x5332_5420
@@ -77,6 +79,12 @@ final class LiveTyper {
         }
     }
 
+    /// Return or keypad Enter with no modifier sends in chat boxes and terminals; Shift-Return only breaks the line.
+    nonisolated static func isPlainReturn(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
+        (keyCode == 36 || keyCode == 76)
+            && modifiers.intersection([.shift, .option, .command, .control]).isEmpty
+    }
+
     private func installInputGuard() {
         guard inputMonitor == nil else { return }
         inputMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]) {
@@ -99,6 +107,9 @@ final class LiveTyper {
         stopped = true
         userEdited = true
         removeInputGuard()
+        if event.type == .keyDown, Self.isPlainReturn(keyCode: event.keyCode, modifiers: event.modifierFlags) {
+            onReturn?()
+        }
     }
 
     func sync(_ recognized: String) -> Outcome {

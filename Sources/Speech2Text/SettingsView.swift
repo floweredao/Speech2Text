@@ -72,23 +72,16 @@ struct SettingsView: View {
     @Bindable var model: AppModel
     /// `State` struct instead of the `@State` macro: the CLT toolchain ships no SwiftUIMacros plugin.
     private let microphoneState = State(initialValue: MicrophoneAccess(AVCaptureDevice.authorizationStatus(for: .audio)))
-    private var microphone: MicrophoneAccess { microphoneState.wrappedValue }
-    private let confirmDeleteState = State(initialValue: false)
+    private var microphone: MicrophoneAccess { model.microphoneAccessOverride ?? microphoneState.wrappedValue }
     private let recorderState = State(initialValue: ShortcutRecorder())
     private var recorder: ShortcutRecorder { recorderState.wrappedValue }
     private let newTermState = State(initialValue: "")
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Rows a switch or picker reveals slide in with the overlay's layout curve; Reduce Motion shows them at once.
+    private var rowMotion: Animation? { reduceMotion ? nil : OverlayMotion.layout }
 
     private let pane = ControlPermissionPane.current
     private var state: DictationDisplayState { DictationDisplayState(model: model) }
-    private var keyBusy: Bool { model.speech.keyActivity != .idle }
-    private var keyActivityText: String? {
-        switch model.speech.keyActivity {
-        case .idle: nil
-        case .saving: String(localized: "Keychain에 저장하는 중…")
-        case .loading: String(localized: "Keychain에서 불러오는 중…")
-        case .deleting: String(localized: "Keychain에서 지우는 중…")
-        }
-    }
     private var hasKey: Bool { !model.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var readiness: SetupReadiness {
         SetupReadiness(hasKey: hasKey, microphone: microphone, controlGranted: model.accessibilityGranted)
@@ -99,8 +92,10 @@ struct SettingsView: View {
             statusSection
             setupSection
             inputSection
+            voiceEditSection
             vocabularySection
             shortcutSection
+            voiceStartSection
             experimentalSection
         }
         .formStyle(.grouped)
@@ -119,13 +114,13 @@ struct SettingsView: View {
 
     private var statusSection: some View {
         Section {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Spacing.m) {
                 Image(systemName: statusSymbol)
                     .font(.title2)
                     .foregroundStyle(statusTint)
                     .frame(width: 28)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(state.phase == .error ? state.title : model.status)
                         .font(.headline)
                         .accessibilityIdentifier("settings-status")
@@ -146,7 +141,7 @@ struct SettingsView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .trailing, spacing: 6) {
+                VStack(alignment: .trailing, spacing: Spacing.s) {
                     Button(recordButtonTitle, systemImage: model.isRecording ? "stop.fill" : "mic.fill") {
                         model.toggleRecording()
                     }
@@ -176,54 +171,17 @@ struct SettingsView: View {
 
     private var setupSection: some View {
         Section("준비") {
-            SecureField("Soniox API 키", text: $model.apiKey, prompt: Text("키를 붙여넣으세요"))
-                .textContentType(.password)
-                .disabled(keyBusy)
-                .accessibilityIdentifier("settings-api-key")
-            HStack {
-                Button("저장") { model.saveKey() }
-                    .disabled(!hasKey || keyBusy)
-                    .help("이 앱 전용 Keychain 항목에 저장해요.")
-                    .accessibilityIdentifier("settings-save-key")
-                Button("불러오기") { model.loadKey() }
-                    .disabled(keyBusy)
-                    .help("이 앱의 Keychain 항목에서 불러와요.")
-                    .accessibilityIdentifier("settings-load-key")
-                Spacer()
-                Button("저장된 키 삭제", role: .destructive) { confirmDeleteState.wrappedValue = true }
-                    .disabled(keyBusy)
-                    .help("이 Mac의 Keychain에서 Soniox API 키를 지워요.")
-                    .accessibilityIdentifier("settings-delete-key")
-            }
-            .confirmationDialog("저장된 API 키를 지울까요?", isPresented: confirmDeleteState.projectedValue) {
-                Button("삭제", role: .destructive) { model.deleteKey() }
-                    .accessibilityIdentifier("settings-confirm-delete-key")
-            } message: {
-                Text("다시 받아쓰려면 키를 새로 붙여넣고 저장해야 해요.")
-            }
-            if let activity = keyActivityText {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text(activity)
+            LabeledContent {
+                fitting {
+                    statusBadge(hasKey ? String(localized: "저장됨") : String(localized: "필요함"), granted: hasKey)
+                        .accessibilityIdentifier("settings-key-status")
+                    Button("키 관리 열기") { model.openKeyManagement() }
+                        .accessibilityIdentifier("settings-open-keys")
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("settings-key-activity")
-            } else if !model.speech.keyMessage.isEmpty {
-                Text(model.speech.keyMessage)
-                    .font(.caption)
-                    .foregroundStyle(model.speech.keyFailed ? Color.warningText : Color.secondary)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("settings-key-message")
-            }
-            if !hasKey {
-                Text("키를 저장해야 받아쓰기를 시작할 수 있어요.")
-                    .font(.caption)
-                    .foregroundStyle(Color.warningText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("settings-key-status")
+            } label: {
+                Text("Soniox API 키")
+                Text(hasKey ? String(localized: "키는 키 관리에서 바꾸거나 지워요.")
+                            : String(localized: "키를 저장해야 받아쓰기를 시작할 수 있어요."))
             }
 
             LabeledContent {
@@ -292,26 +250,24 @@ struct SettingsView: View {
                 Text("선택한 칸에 실시간으로 쓰고, 인식이 고쳐지면 바로 고쳐요.")
             }
             .accessibilityIdentifier("settings-auto-insert")
-            Toggle(isOn: $model.spokenEnterEnabled) {
-                Text("말로 엔터 누르기")
-                Text("끝에 명령어를 말하고 잠깐 멈추면 엔터를 눌러요.")
+            Picker(selection: $model.punctuationStyle) {
+                Text("그대로").tag(PunctuationStyle.asIs)
+                Text("쉼표 빼기").tag(PunctuationStyle.noCommas)
+                Text("모두 빼기").tag(PunctuationStyle.none)
+            } label: {
+                Text("문장부호")
+                switch model.punctuationStyle {
+                case .asIs: Text("인식된 문장부호를 그대로 써요.")
+                case .noCommas: Text("쉼표만 빼고 마침표·물음표·느낌표는 남겨요. 1,000 같은 숫자 속 쉼표는 남겨요.")
+                case .none: Text("쉼표와 마침표·물음표·느낌표를 모두 빼요. 3.14 같은 숫자는 그대로예요.")
+                }
             }
-            .accessibilityIdentifier("settings-spoken-enter")
-            if model.spokenEnterEnabled {
-                TextField("명령어", text: $model.spokenEnterPhrase, prompt: Text("엔터 보내기"))
-                    .multilineTextAlignment(.trailing)
-                    .accessibilityIdentifier("settings-spoken-enter-phrase")
-            }
-            Toggle(isOn: $model.voiceEditingEnabled) {
-                Text("말로 고치기")
-                Text("잠깐 멈춘 뒤 ‘지워’, ‘되돌려’, ‘A를 B로 바꿔’만 따로 말하면 고쳐요.")
-            }
-            .accessibilityIdentifier("settings-voice-editing")
+            .accessibilityIdentifier("settings-punctuation")
             Picker(selection: $model.silenceStopSeconds) {
                 timeoutChoices
             } label: {
                 Text("말이 없으면 받아쓰기 마치기")
-                Text("새로 인식된 말이 없으면 들은 데까지 마쳤요.")
+                Text("새로 인식된 말이 없으면 들은 데까지 마쳐요.")
             }
             .accessibilityIdentifier("settings-silence-stop")
             Picker(selection: $model.overlayAutoCloseSeconds) {
@@ -325,6 +281,153 @@ struct SettingsView: View {
                 Button("열기") { model.showOverlay() }
                     .accessibilityIdentifier("settings-show-overlay")
             }
+        }
+    }
+
+    /// Jev judges whether words are a command; the user picks which actions a command may do.
+    private var voiceEditSection: some View {
+        Section {
+            Toggle(isOn: voiceEditingBinding.animation(rowMotion)) {
+                Text("Jev로 명령 알아듣기")
+                Text("명령처럼 들리면 Jev가 앞 글을 보고 고칠 말인지 받아쓸 말인지 판단해 아래 동작을 해요. 애매하면 글로 써요. 그 말과 앞 글 일부를 TypeSafe로 보내요.")
+            }
+            .accessibilityIdentifier("settings-command-judge")
+            if model.commandJudge == .jev {
+                ForEach(VoiceAction.allCases, id: \.self) { action in
+                    Toggle(isOn: actionBinding(action).animation(rowMotion)) {
+                        Text(Self.actionTitle(action))
+                        Text(actionExample(action))
+                    }
+                    .toggleStyle(.checkbox)
+                    .accessibilityIdentifier("settings-action-\(action.rawValue)")
+                    if action == .enter, model.spokenEnterEnabled {
+                        LabeledContent {
+                            TextField("명령어", text: $model.spokenEnterPhrase, prompt: Text("엔터 보내기"))
+                                .labelsHidden()
+                                .multilineTextAlignment(.trailing)
+                                .accessibilityIdentifier("settings-spoken-enter-phrase")
+                        } label: {
+                            Text("엔터 명령어")
+                        }
+                    }
+                }
+                if model.jevKey.isEmpty {
+                    LabeledContent {
+                        Button("키 관리 열기") { model.openKeyManagement() }
+                            .accessibilityIdentifier("settings-open-keys-jev")
+                    } label: {
+                        Label {
+                            Text("Jev 키가 없어 명령처럼 들린 말도 모두 글로 써요.")
+                                .foregroundStyle(Color.warningText)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        }
+                        .font(.callout)
+                    }
+                    .accessibilityIdentifier("settings-jev-key-missing")
+                }
+            }
+        } header: {
+            Text("말로 고치기")
+        }
+    }
+
+    private var voiceEditingBinding: Binding<Bool> {
+        Binding { model.commandJudge == .jev } set: { model.commandJudge = $0 ? .jev : .off }
+    }
+
+    private func actionBinding(_ action: VoiceAction) -> Binding<Bool> {
+        Binding { model.isOn(action) } set: { model.set(action, on: $0) }
+    }
+
+    static func actionTitle(_ action: VoiceAction) -> String {
+        switch action {
+        case .delete: String(localized: "지우기")
+        case .clearAll: String(localized: "모두 지우기")
+        case .replace: String(localized: "고치기")
+        case .undo: String(localized: "되돌리기")
+        case .mark: String(localized: "문장부호 넣기")
+        case .enter: String(localized: "엔터 누르기")
+        }
+    }
+
+    private func actionExample(_ action: VoiceAction) -> String {
+        switch action {
+        case .delete: String(localized: "‘지워’, ‘한 단어 지워’, ‘A 지워’")
+        case .clearAll: String(localized: "‘다 지워’")
+        case .replace: String(localized: "‘A를 B로 바꿔’, ‘A 아니고 B’")
+        case .undo: String(localized: "‘되돌려’")
+        case .mark: String(localized: "‘물음표’, ‘쉼표 찍어’")
+        case .enter: String(localized: "끝에 ‘\(model.spokenEnterPhrase)’라고 말하면 엔터를 눌러요.")
+        }
+    }
+
+    private var voiceStartSection: some View {
+        Section {
+            Toggle(isOn: $model.wakeListeningEnabled.animation(rowMotion)) {
+                Text("호출어로 시작·끝내기")
+                Text("‘\(model.wakePhrase)’라고 말하면 받아쓰기를 시작하고, 받아쓰다 끝에 다시 말하면 마쳐요.")
+            }
+            .accessibilityIdentifier("settings-wake-word")
+            if model.wakeListeningEnabled {
+                LabeledContent {
+                    TextField("호출어", text: $model.wakePhrase, prompt: Text(AppModel.defaultWakePhrase))
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("settings-wake-phrase")
+                } label: {
+                    Text("호출어")
+                    Text("영어 글자로 적어요.")
+                }
+                Picker(selection: $model.wakeSensitivity) {
+                    Text("낮음").tag(WakeSensitivity.low)
+                    Text("보통").tag(WakeSensitivity.standard)
+                    Text("높음").tag(WakeSensitivity.high)
+                } label: {
+                    Text("민감도")
+                    Text("높일수록 작게 말해도 알아듣지만, 비슷한 말에도 켜질 수 있어요.")
+                }
+                .accessibilityIdentifier("settings-wake-sensitivity")
+                if let problem = model.wakeProblem {
+                    Text(problem)
+                        .font(.caption)
+                        .foregroundStyle(Color.warningText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("settings-wake-problem")
+                }
+            }
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("음성 제어")
+                Text("1. 단축어 앱에서 새 단축어를 만들고 Speech2Text의 '받아쓰기 시작' 동작을 넣어요.\n2. 시스템 설정 › 손쉬운 사용 › 음성 제어 › 명령에서 +를 눌러 말할 문구를 적고, 동작은 '단축어 실행'으로 골라 그 단축어를 지정해요.\n3. '받아쓰기 끝내기'도 같은 방법으로 만들어요.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("음성 제어는 켜져 있는 동안 계속 듣고, 말한 내용을 직접 입력하기도 해요. 글이 두 번 들어가면 음성 제어를 명령 모드로 바꿔 주세요.")
+                    .font(.caption)
+                    .foregroundStyle(Color.warningText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("settings-voice-control")
+            Button("단축어 앱 열기") {
+                if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.shortcuts") {
+                    NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration())
+                }
+            }
+            .accessibilityIdentifier("settings-open-shortcuts")
+        } header: {
+            Text("음성으로 시작")
+        } footer: {
+            Group {
+                if model.wakeListeningEnabled {
+                    Text("호출어를 듣는 동안 마이크가 켜져 있어요(메뉴 막대에 주황색 점). 들은 소리는 이 맥 안에서만 처리하고 저장하거나 보내지 않아요. 블루투스 이어폰 마이크로 들으면 그동안 이어폰 음질이 낮아질 수 있어요.")
+                } else {
+                    Text("이 앱은 받아쓰는 동안에만 마이크를 켜요.")
+                }
+            }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -372,10 +475,10 @@ struct SettingsView: View {
     private var vocabularySection: some View {
         Section {
             if !model.dictionary.isEmpty {
-                FlowLayout(spacing: 6) {
+                FlowLayout(spacing: Spacing.s) {
                     ForEach(model.dictionary, id: \.self) { termChip($0) }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, Spacing.xxs)
                 .accessibilityIdentifier("settings-dictionary")
             }
             TextField("단어 추가", text: newTermState.projectedValue, prompt: Text("입력 후 Return"))
@@ -395,7 +498,7 @@ struct SettingsView: View {
     }
 
     private func termChip(_ term: String) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: Spacing.xs) {
             Text(term)
                 .lineLimit(1)
             Button("'\(term)' 지우기", systemImage: "xmark") { model.removeDictionaryTerm(term) }
@@ -405,9 +508,10 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
         }
         .font(.callout)
-        .padding(.leading, 10)
-        .padding(.trailing, 7)
-        .padding(.vertical, 4)
+        // The remove button carries its own few points of padding, so the trailing side needs less.
+        .padding(.leading, Spacing.s)
+        .padding(.trailing, Spacing.xs)
+        .padding(.vertical, Spacing.xs)
         .background(.quaternary, in: Capsule())
     }
 
@@ -416,6 +520,11 @@ struct SettingsView: View {
             ForEach(ShortcutAction.allCases, id: \.self) { action in
                 shortcutRow(action)
             }
+            Text("기록할 때 키 대신 마우스 옆 버튼이나 가운데 버튼을 눌러도 돼요.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("settings-shortcut-mouse-hint")
             if !model.shortcutNote.isEmpty {
                 Text(model.shortcutNote)
                     .font(.caption)
@@ -452,7 +561,7 @@ struct SettingsView: View {
         let recording = model.capturingShortcut == action
         let shortcut = model.shortcuts[action]
         return LabeledContent {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.s) {
                 Button {
                     if recording { recorder.cancel() } else { recorder.begin(action, model: model) }
                 } label: {
@@ -466,14 +575,18 @@ struct SettingsView: View {
                 .accessibilityLabel(recording ? String(localized: "단축키 기록 중") : (shortcut?.spokenLabel ?? String(localized: "단축키 없음")))
                 .accessibilityHint("눌러서 새 단축키를 기록해요.")
                 .accessibilityIdentifier("settings-shortcut-\(action.rawValue)")
-                if shortcut != nil && !recording {
-                    Button("단축키 끄기", systemImage: "xmark.circle.fill") { model.shortcuts[action] = nil }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.secondary)
-                        .help("이 단축키를 꺼요.")
-                        .accessibilityIdentifier("settings-shortcut-clear-\(action.rawValue)")
-                }
+                // The clear button keeps its place when there is nothing to clear, so every row's shortcut
+                // button lines up with the rows above and below it.
+                let clearable = shortcut != nil && !recording
+                Button("단축키 끄기", systemImage: "xmark.circle.fill") { model.shortcuts[action] = nil }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help("이 단축키를 꺼요.")
+                    .opacity(clearable ? 1 : 0)
+                    .disabled(!clearable)
+                    .accessibilityHidden(!clearable)
+                    .accessibilityIdentifier("settings-shortcut-clear-\(action.rawValue)")
             }
         } label: {
             Text(action.title)
@@ -523,7 +636,7 @@ struct SettingsView: View {
         let content = content()
         return ViewThatFits(in: .horizontal) {
             HStack { content }
-            VStack(alignment: .trailing, spacing: 6) { content }
+            VStack(alignment: .trailing, spacing: Spacing.s) { content }
         }
     }
 
@@ -574,6 +687,7 @@ struct SettingsView: View {
     }
 
     private func refreshPermissions() {
+        guard model.microphoneAccessOverride == nil else { return }
         model.accessibilityGranted = AXIsProcessTrusted()
         microphoneState.wrappedValue = MicrophoneAccess(AVCaptureDevice.authorizationStatus(for: .audio))
         model.refreshInputDevices()

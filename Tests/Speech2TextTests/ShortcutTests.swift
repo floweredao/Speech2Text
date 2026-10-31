@@ -115,11 +115,36 @@ import Testing
         #expect(loaded[.cancelDictation] == nil)
     }
 
+    @Test func mouseButtonShortcutIsSavedAndRuns() throws {
+        let defaults = try #require(UserDefaults(suiteName: "ShortcutTests-\(UUID().uuidString)"))
+        var settings = ShortcutSettings.standard
+        settings[.toggleDictation] = Shortcut(trigger: .mouse(3), taps: 1)
+        settings.save(to: defaults)
+        let loaded = ShortcutSettings.load(from: defaults)
+        #expect(loaded == settings)
+        #expect(loaded.usesMouseTrigger && !loaded.usesModifierOnlyTrigger)
+        var recognizer = TapSequenceRecognizer(bindings: loaded.bindings)
+        #expect(recognizer.press(.mouse(3), at: 0) == [.toggleDictation])
+        #expect(recognizer.press(.mouse(4), at: 1) == [])
+    }
+
     @Test func sameShortcutOnAnotherActionIsReported() {
         let settings = ShortcutSettings.standard
         let toggle = settings[.toggleDictation]!
         #expect(settings.action(using: toggle, except: .pasteTranscript) == .toggleDictation)
         #expect(settings.action(using: toggle, except: .toggleDictation) == nil)
         #expect(settings.action(using: Shortcut(trigger: toggle.trigger, taps: 2), except: .pasteTranscript) == nil)
+    }
+}
+
+@Suite struct DictationRequestTests {
+    /// Shortcuts and Voice Control requests are not a toggle: a repeated "start" must not end the dictation.
+    @Test func spokenStartNeverEndsADictationAndSpokenFinishNeverStartsOne() {
+        #expect(DictationRequest.start.effect(isRecording: false, isBusy: false) == .start)
+        #expect(DictationRequest.start.effect(isRecording: true, isBusy: true) == .none)
+        #expect(DictationRequest.start.effect(isRecording: false, isBusy: true) == .none)
+        #expect(DictationRequest.finish.effect(isRecording: true, isBusy: true) == .finish)
+        #expect(DictationRequest.finish.effect(isRecording: false, isBusy: false) == .none)
+        #expect(DictationRequest.finish.effect(isRecording: false, isBusy: true) == .none)
     }
 }

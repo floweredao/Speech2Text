@@ -83,3 +83,13 @@ import Testing
         #expect(LiveTextEdit.sanitize("첫 줄\n둘째 줄\r\n끝") == "첫 줄 둘째 줄  끝")
     }
 }
+
+@Suite struct TypedReturnTests {
+    @Test func onlyAPlainReturnEndsTheDictation() {
+        #expect(LiveTyper.isPlainReturn(keyCode: 36, modifiers: []))
+        #expect(LiveTyper.isPlainReturn(keyCode: 76, modifiers: [.numericPad]))
+        #expect(!LiveTyper.isPlainReturn(keyCode: 36, modifiers: [.shift]))
+        #expect(!LiveTyper.isPlainReturn(keyCode: 36, modifiers: [.command]))
+        #expect(!LiveTyper.isPlainReturn(keyCode: 0, modifiers: []))
+    }
+}
