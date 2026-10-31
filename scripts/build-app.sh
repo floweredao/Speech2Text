@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Library/Developer/CommandLineTools}"
-SIGNING_IDENTITY="${SPEECH2TEXT_SIGNING_IDENTITY:-Apple Development}"
+SIGNING_IDENTITY="$(bash scripts/signing-identity.sh)"
 ensure_stopped() {
   if pgrep -x Speech2Text >/dev/null; then
     printf '%s\n' 'Quit Speech2Text before replacing its signed app bundle.' >&2
