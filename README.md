@@ -146,6 +146,7 @@ The Settings window, light and then dark.
 - Audio goes to Soniox only while you dictate.
 - No recordings are saved.
 - Wake phrase audio never leaves your Mac.
+- The words in your Dictionary and the words a command may use are sent with every session, so the provider recognizes them as written.
 
 </details>
 
@@ -160,11 +161,21 @@ bash scripts/build-app.sh   # builds build/Speech2Text.app
 ```
 
 - The wake phrase model is downloaded into `Vendor/` before building.
-- Ad-hoc signing: `SPEECH2TEXT_SIGNING_IDENTITY=-`.
+- Without an Apple Development certificate the app is signed ad hoc, which is enough to run your own build. macOS then asks for Accessibility again after every rebuild, because an ad-hoc signature changes with the binary.
 - `bash scripts/capture-readme-images.sh` redraws the pictures in this README.
 - `bash scripts/record-demo-video.sh` films the demo video: it runs the app on a virtual display of its own and records it at 60 fps, so nothing appears on the screens you are working on. It needs Screen Recording permission.
 
+| Variable | Default | What it sets |
+| --- | --- | --- |
+| `DEVELOPER_DIR` | `/Library/Developer/CommandLineTools` | The toolchain `scripts/test.sh` and `scripts/build-app.sh` use. Point it at `/Applications/Xcode.app/Contents/Developer` to build with Xcode's toolchain. |
+| `SPEECH2TEXT_SIGNING_IDENTITY` | an installed `Apple Development` certificate, otherwise `-` (ad hoc) | The identity `scripts/build-app.sh` signs the app with. |
+| `SPEECH2TEXT_XCODE_TOOLCHAIN` | `/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain` | Where the build looks for Xcode's App Intents metadata processor. Set it to make a missing processor fail the build instead of leaving the Shortcuts and Voice Control actions out. |
+
 </details>
+
+## Contributing
+
+Bug reports and pull requests are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) says what to run and what a change needs.
 
 ## License
 
