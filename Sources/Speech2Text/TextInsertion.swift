@@ -6,6 +6,10 @@ struct InsertionPolicy {
         textSettable && !inWebContent
     }
 
+    /// What a manual insertion sends: the same single-line payload live typing sends, because a line break
+    /// presses Return in a terminal and sends the message in a chat box.
+    static func payload(_ text: String) -> String { LiveTextEdit.sanitize(text) }
+
     static func allows(text: String, trusted: Bool, sameTarget: Bool, editable: Bool) -> Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && trusted && sameTarget && editable
@@ -93,24 +97,25 @@ final class TextInsertion {
     }
 
     func insert(_ text: String, expected: Target?) -> String {
+        let payload = InsertionPolicy.payload(text)
         guard isTrusted else { return String(localized: "'\(ControlPermissionPane.current.title)' 권한이 필요해요. 복사해서 직접 붙여넣을 수 있어요.") }
         guard let current = currentTarget() else { return String(localized: "입력 칸을 선택한 다음 붙여넣기를 눌러 주세요.") }
         let same = expected.map { $0.pid == current.pid && CFEqual($0.element, current.element) } ?? true
-        guard InsertionPolicy.allows(text: text, trusted: isTrusted, sameTarget: same, editable: isEditable(current)) else {
+        guard InsertionPolicy.allows(text: payload, trusted: isTrusted, sameTarget: same, editable: isEditable(current)) else {
             return String(localized: "입력 위치가 바뀌었거나 입력할 수 없어요. 텍스트는 여기에 보관했어요.")
         }
         var settable: DarwinBoolean = false
         if AXUIElementIsAttributeSettable(current.element, kAXSelectedTextAttribute as CFString, &settable) == .success,
            InsertionPolicy.allowsAccessibilityWrite(inWebContent: isWebContent(current.element),
                                                    textSettable: settable.boolValue),
-           AXUIElementSetAttributeValue(current.element, kAXSelectedTextAttribute as CFString, text as CFString) == .success {
+           AXUIElementSetAttributeValue(current.element, kAXSelectedTextAttribute as CFString, payload as CFString) == .success {
             return String(localized: "선택한 입력 칸에 입력했어요.")
         }
         // Paste as one literal payload; never synthesize Return (notably in terminals).
         guard let source = CGEventSource(stateID: .combinedSessionState),
               let down = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
               let up = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false),
-              copy(text) else { return String(localized: "붙여넣기를 보내지 못했어요. 복사 버튼을 사용해 주세요.") }
+              copy(payload) else { return String(localized: "붙여넣기를 보내지 못했어요. 복사 버튼을 사용해 주세요.") }
         down.flags = .maskCommand
         up.flags = .maskCommand
         down.post(tap: .cghidEventTap)
